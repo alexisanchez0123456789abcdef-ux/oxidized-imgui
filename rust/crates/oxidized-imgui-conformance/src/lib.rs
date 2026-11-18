@@ -59,6 +59,7 @@ pub const SCENARIOS: &[&str] = &[
     "window_autosize",
     "window_autosize_change",
     "window_wheel_lock",
+    "window_hscrollbar",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -2247,6 +2248,90 @@ pub fn window_wheel_lock_dump() -> String {
     out
 }
 
+/// The `window_hscrollbar` scenario: a window whose content is wider than itself, so the horizontal
+/// scrollbar appears, takes its height off the bottom of the interior, and can be dragged.
+pub fn window_hscrollbar_dump() -> String {
+    use oxidized_imgui::{Context, Vec2};
+
+    let mut ctx = Context::new();
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario window_hscrollbar\n");
+
+    let frame = |ctx: &mut Context,
+                 out: &mut String,
+                 scroll_x: Option<f32>,
+                 mx: f32,
+                 my: f32,
+                 down: bool| {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: mx, y: my });
+        ctx.io_mut().mouse_down[0] = down;
+        ctx.begin_frame();
+        if let Some(x) = scroll_x {
+            ctx.set_next_window_scroll(Vec2 { x, y: 0.0 });
+        }
+        ctx.set_next_window_scrollbar(true);
+        ctx.set_next_window_horizontal_scrollbar(true);
+        ctx.begin_window(
+            "H",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        ctx.dummy(Vec2 { x: 400.0, y: 100.0 });
+        let window = ctx.window();
+        let (inner_min, inner_max) = window.inner_rect;
+        let border = 1.0;
+        let bar_min = Vec2 {
+            x: inner_min.x + border,
+            y: window.pos.y + window.size.y - border - if window.scrollbar_x { 14.0 } else { 0.0 },
+        };
+        let bar_max = Vec2 {
+            x: inner_max.x - border,
+            y: window.pos.y + window.size.y - border,
+        };
+        let text = format!(
+            "frame scroll {:08x} max {:08x} {:08x} inner {:08x} {:08x} {:08x} {:08x} bar {:08x} {:08x} {:08x} {:08x} sb {} {}\n",
+            window.scroll.x.to_bits(),
+            window.scroll_max.x.to_bits(),
+            window.scroll_max.y.to_bits(),
+            inner_min.x.to_bits(),
+            inner_min.y.to_bits(),
+            inner_max.x.to_bits(),
+            inner_max.y.to_bits(),
+            bar_min.x.to_bits(),
+            bar_min.y.to_bits(),
+            bar_max.x.to_bits(),
+            bar_max.y.to_bits(),
+            window.scrollbar_x as u8,
+            window.scrollbar_y as u8,
+        );
+        let body = dump("window_hscrollbar", ctx.draw_list());
+        ctx.end_window();
+        out.push_str(&text);
+        for line in body.lines().skip(2) {
+            out.push_str(line);
+            out.push('\n');
+        }
+        ctx.end_frame();
+    };
+
+    // No content size on the first frame, so the bar appears on the second.
+    frame(&mut ctx, &mut out, None, 0.0, 0.0, false);
+    frame(&mut ctx, &mut out, None, 0.0, 0.0, false);
+    // Scrolled by API: the grab moves right.
+    frame(&mut ctx, &mut out, Some(60.0), 0.0, 0.0, false);
+    // Grab the bar and drag it, then release.
+    frame(&mut ctx, &mut out, None, 100.0, 253.0, false);
+    frame(&mut ctx, &mut out, None, 100.0, 253.0, true);
+    frame(&mut ctx, &mut out, None, 140.0, 253.0, true);
+    frame(&mut ctx, &mut out, None, 140.0, 253.0, false);
+    frame(&mut ctx, &mut out, None, 0.0, 0.0, false);
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -2277,6 +2362,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "window_autosize" => Some(window_autosize_dump()),
         "window_autosize_change" => Some(window_autosize_change_dump()),
         "window_wheel_lock" => Some(window_wheel_lock_dump()),
+        "window_hscrollbar" => Some(window_hscrollbar_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),
