@@ -1,0 +1,8 @@
+# Rust build output
+/target/
+
+# Oracle build artifacts (the probe is built on demand)
+/tools/oracle/*.obj
+/tools/oracle/*.exe
+/tools/oracle/*.pdb
+/tools/oracle/*.ilk
