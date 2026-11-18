@@ -29,6 +29,7 @@ pub const SCENARIOS: &[&str] = &[
     "io_keyboard_events",
     "font_metrics",
     "clip_stack",
+    "text_draw",
 ];
 
 const COL: u32 = 0xFFFF_0000; // IM_COL32(0, 0, 255, 255)
@@ -342,7 +343,7 @@ pub fn font_metrics_dump() -> String {
         bits(font.descent)
     ));
 
-    for c in ['H', 'i', 'W', ' ', 'o'] {
+    for c in ['H', 'i', 'e', 'l', 'o'] {
         let advance = font.glyph(c).map(|g| g.advance_x).unwrap_or(0.0);
         out.push_str(&format!("glyph '{c}' advance {:08x}\n", bits(advance)));
     }
@@ -422,6 +423,52 @@ pub fn clip_stack_dump() -> String {
     out
 }
 
+/// The `text_draw` scenario: glyph quads for a short string.
+///
+/// UVs are **omitted on purpose**: the atlas coordinates depend on the reference's internal
+/// packer and differ between runs of the same driver, so they cannot be a stable contract. What is
+/// compared is the geometry (positions, colours, indices), which is what text layout decides.
+pub fn text_draw_dump() -> String {
+    use oxidized_imgui::{DrawList, Font, Vec2};
+
+    let font = Font::reference_default();
+    let mut list = DrawList::new();
+    list.white_uv = WHITE_UV;
+    list.add_text(&font, 13.0, Vec2 { x: 10.0, y: 20.0 }, 0xFFFF_FFFF, "Hi");
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario text_draw\n");
+    out.push_str("uv omitted: atlas packing is not reproducible across runs\n");
+    out.push_str(&format!("cmd_count {}\n", list.cmd_buffer.len()));
+    for (i, cmd) in list.cmd_buffer.iter().enumerate() {
+        out.push_str(&format!(
+            "cmd {i} clip {:08x} {:08x} {:08x} {:08x} elems {}\n",
+            bits(cmd.clip_rect[0]),
+            bits(cmd.clip_rect[1]),
+            bits(cmd.clip_rect[2]),
+            bits(cmd.clip_rect[3]),
+            cmd.elem_count
+        ));
+    }
+    out.push_str(&format!("vtx_count {}\n", list.vtx_buffer.len()));
+    for (i, v) in list.vtx_buffer.iter().enumerate() {
+        out.push_str(&format!(
+            "vtx {i} pos {:08x} {:08x} col {:08x}\n",
+            bits(v.pos.x),
+            bits(v.pos.y),
+            v.col
+        ));
+    }
+    out.push_str(&format!("idx_count {}\n", list.idx_buffer.len()));
+    for idx in &list.idx_buffer {
+        out.push_str(&format!("idx {idx}\n"));
+    }
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -430,6 +477,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "io_keyboard_events" => Some(io_keyboard_dump()),
         "font_metrics" => Some(font_metrics_dump()),
         "clip_stack" => Some(clip_stack_dump()),
+        "text_draw" => Some(text_draw_dump()),
         _ => scene(name).map(|list| dump(name, &list)),
     }
 }

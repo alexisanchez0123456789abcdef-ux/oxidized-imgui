@@ -3,8 +3,8 @@ scenario font_metrics
 font size 41500000 ascent 41200000 descent c0800000
 glyph 'H' advance 40e00000
 glyph 'i' advance 40e00000
-glyph 'W' advance 40e00000
-glyph ' ' advance 40e00000
+glyph 'e' advance 40e00000
+glyph 'l' advance 40e00000
 glyph 'o' advance 40e00000
 text "" at 41500000 size 00000000 41500000
 text "Hello" at 41500000 size 420c0000 41500000
