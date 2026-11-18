@@ -1,0 +1,17 @@
+header imgui 1.93.1 WIP 19303
+scenario window_bg
+white_uv 3a800000 3b800000
+cmd_count 1
+cmd 0 clip 00000000 00000000 44a00000 44340000 elems 6 vtxoff 0 idxoff 0
+vtx_count 4
+vtx 0 pos 42700000 42700000 uv 3a800000 3b800000 col ff262626
+vtx 1 pos 43b40000 42700000 uv 3a800000 3b800000 col ff262626
+vtx 2 pos 43b40000 43820000 uv 3a800000 3b800000 col ff262626
+vtx 3 pos 42700000 43820000 uv 3a800000 3b800000 col ff262626
+idx_count 6
+idx 0
+idx 1
+idx 2
+idx 0
+idx 2
+idx 3

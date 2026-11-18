@@ -759,6 +759,29 @@ static void DumpButtonDraw()
     ImGui::End();
     ImGui::EndFrame();
 }
+// window_bg: a window background with no border.
+static void DumpWindowBg()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario window_bg\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    ImGui::GetStyle().WindowBorderSize = 0.0f;
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
+    ImGui::Begin("W", NULL, flags);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImGui::End();
+    DumpDrawListBody(*dl);
+    ImGui::EndFrame();
+}
+
 // Explicit UVs: no atlas involved.
 static void ScenePrimRectUV(ImDrawList& list)
 {
@@ -814,6 +837,13 @@ int main(int argc, char** argv)
     }
 
     io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
+    if (strcmp(name, "window_bg") == 0)
+    {
+        DumpWindowBg();
+        ImGui::DestroyContext();
+        return 0;
+    }
 
     if (strcmp(name, "button_draw") == 0)
     {
