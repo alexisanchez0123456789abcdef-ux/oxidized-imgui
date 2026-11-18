@@ -311,9 +311,16 @@ impl Context {
         };
 
         let pad = self.style.window_padding;
+        // With a title bar the content starts below it, which is why the settled reference lays a
+        // window out 19 pixels lower than its first frame does.
+        let title_offset = if title.is_some() {
+            self.frame_height()
+        } else {
+            0.0
+        };
         let content_origin = Vec2 {
             x: pos.x + pad.x,
-            y: pos.y + pad.y,
+            y: pos.y + title_offset + pad.y,
         };
         // The background is painted before the window clip is applied, with the fullscreen clip.
         if background {

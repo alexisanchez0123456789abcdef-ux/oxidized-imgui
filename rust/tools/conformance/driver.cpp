@@ -856,6 +856,60 @@ static void DumpCmdOffsets()
     ImGui::EndFrame();
 }
 
+// scene_window_button: a titled window with a button inside, compared as one draw list.
+//
+// A window does not know its title bar height during its first frame, so its content is laid out
+// as if there were no band and moves down afterwards. The scene settles for a fixed number of
+// frames and then compares one, printing the settled title height so a mismatch can be explained.
+static void FrameSceneWindowButton(bool dump, ImDrawList** out_list, float* title_height)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
+    ImGui::Begin("W", NULL, flags);
+    if (title_height != NULL)
+        *title_height = ImGui::GetCurrentWindow()->TitleBarHeight;
+    ImGui::Button("Hi");
+    if (dump && out_list != NULL)
+        *out_list = ImGui::GetWindowDrawList();
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpSceneWindowButtonScenario()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario scene_window_button\n");
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[6] = { 'W', 'H', 'i', 'e', 'l', 'o' };
+    for (char ch : bake_order)
+        baked->FindGlyph((ImWchar)ch);
+    WriteGlyphFixture(font, bake_order, 6);
+
+    const int settle_frames = 12;
+    for (int i = 0; i < settle_frames; i++)
+        FrameSceneWindowButton(false, NULL, NULL);
+    ImDrawList* dl = NULL;
+    float title_height = 0.0f;
+    FrameSceneWindowButton(true, &dl, &title_height);
+    fprintf(stderr, "settle %d title_height %08x\n", settle_frames, Bits(title_height));
+    if (dl != NULL)
+        DumpDrawListBody(*dl);
+}
+
 // Explicit UVs: no atlas involved.
 static void ScenePrimRectUV(ImDrawList& list)
 {
@@ -911,6 +965,13 @@ int main(int argc, char** argv)
     }
 
     io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
+    if (strcmp(name, "scene_window_button") == 0)
+    {
+        DumpSceneWindowButtonScenario();
+        ImGui::DestroyContext();
+        return 0;
+    }
 
     if (strcmp(name, "cmd_offsets") == 0)
     {
