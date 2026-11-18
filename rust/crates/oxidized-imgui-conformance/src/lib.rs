@@ -44,6 +44,7 @@ pub const SCENARIOS: &[&str] = &[
     "aa_border",
     "button_draw",
     "window_bg",
+    "window_border",
 ];
 
 const COL: u32 = 0xFFFF_0000; // IM_COL32(0, 0, 255, 255)
@@ -896,6 +897,7 @@ pub fn window_bg_dump() -> String {
     use oxidized_imgui::{Context, Vec2};
 
     let mut ctx = Context::new();
+    ctx.style_mut().window_border_size = 0.0;
     ctx.begin_frame();
     ctx.begin_window(
         "W",
@@ -904,6 +906,21 @@ pub fn window_bg_dump() -> String {
     );
     ctx.end_window();
     dump("window_bg", ctx.draw_list())
+}
+
+/// The `window_border` scenario: a window with its background and one-pixel border.
+pub fn window_border_dump() -> String {
+    use oxidized_imgui::{Context, Vec2};
+
+    let mut ctx = Context::new();
+    ctx.begin_frame();
+    ctx.begin_window(
+        "W",
+        Some(Vec2 { x: 60.0, y: 60.0 }),
+        Some(Vec2 { x: 300.0, y: 200.0 }),
+    );
+    ctx.end_window();
+    dump("window_border", ctx.draw_list())
 }
 
 /// The dump for a scenario, whichever family it belongs to.
@@ -921,6 +938,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "style_defaults" => Some(style_defaults_dump()),
         "aa_round_rect" => Some(aa_round_rect_dump()),
         "window_bg" => Some(window_bg_dump()),
+        "window_border" => Some(window_border_dump()),
         "button_draw" => Some(button_draw_dump()),
         "arc_steps" => Some(arc_steps_dump()),
         "bezier_points" => Some(bezier_points_dump()),
