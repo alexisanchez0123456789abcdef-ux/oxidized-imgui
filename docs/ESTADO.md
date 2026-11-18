@@ -2,9 +2,9 @@
 
 _Actualizado: 2026-11-18. Generado desde `docs/progress.json`: no editar a mano._
 
-## Reescritura a Rust: **32.2 %**
+## Reescritura a Rust: **33.0 %**
 
-Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 39.0 %.
+Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 39.6 %.
 
 Qué cuenta como hecho: solo lo que tiene una prueba que lo compara con el código C++ original.
 Un cambio de estado sin evidencia no sube el porcentaje.
@@ -12,7 +12,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 | Área | Peso | Avance |
 | --- | ---: | ---: |
 | Núcleo: contexto, IO, ventanas, identificadores, layout | 30 | 53 % |
-| Listas de dibujo y primitivas | 8 | 75 % |
+| Listas de dibujo y primitivas | 9 | 78 % |
 | Widgets | 22 | 27 % |
 | Fuentes y texto | 12 | 8 % |
 | Docking y viewports | 10 | 0 % |
@@ -33,6 +33,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **PrimRectUV con paridad exacta** — golden prim_rect_uv + prueba negativa
 - **PrimRect con el UV del píxel blanco fijado** — golden prim_rect
 - **Formas alineadas a píxel: AddRectFilled sin redondeo y AddLineH** — golden rect_filled y line_h
+- **Relleno AA de rectángulo (miters)** — golden aa_rect
 - **Estilo: colores, redondeos y bordes por defecto** — golden style_defaults
 - **Texto dibujado en la lista (geometría, sin UVs)** — golden text_draw (geometría; UVs omitidos por no ser reproducibles)
 - **Botón: geometría, hover, estado activo y valor de retorno** — golden button

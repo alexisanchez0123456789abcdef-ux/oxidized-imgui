@@ -96,6 +96,8 @@ pub struct DrawList {
     pub white_uv: Vec2,
     /// Clip used when the clip stack is empty (`ImDrawListSharedData::ClipRectFullscreen`).
     pub fullscreen_clip: [f32; 4],
+    /// `_FringeScale`: 1 / pixel density. Drives the width of the anti-aliased fringe.
+    pub fringe_scale: f32,
     clip_stack: Vec<[f32; 4]>,
     current_clip: [f32; 4],
 }
@@ -199,7 +201,7 @@ impl DrawList {
     }
 
     /// `ImDrawList::PrimQuadUV`: four vertices with explicit UVs and six indices.
-    // One argument per corner and per UV: the reference's signature, kept on purpose.
+    // One argument per corner per UV: the reference's signature, kept on purpose.
     #[allow(clippy::too_many_arguments)]
     pub fn prim_quad_uv(
         &mut self,
@@ -276,6 +278,121 @@ impl DrawList {
             pen_x += glyph.advance_x * scale;
         }
     }
+    /// `ImDrawList::AddConvexPolyFilled` with anti-aliasing, miter joins only (the branch a
+    /// rectangle takes). Returns the index count emitted.
+    ///
+    /// Layout matches the reference: the inner ring first, then one outer vertex per edge, with the
+    /// first edge's two triangles patched to wrap onto the last outer vertex.
+    pub fn add_convex_poly_filled_aa(&mut self, points: &[Vec2], col: ImU32) -> u32 {
+        const MITER_ANGLE_LIMIT: f32 = -0.999_961_9;
+        const A_MASK: u32 = 0xFF00_0000;
+
+        let n = points.len();
+        if n < 3 || (col & A_MASK) == 0 {
+            return 0;
+        }
+
+        let half_aa = self.fringe_scale * 0.5;
+        let col_trans = col & !A_MASK;
+
+        // Perimeter normals, one per point, oriented by the incoming edge.
+        let mut normals = vec![Vec2 { x: 0.0, y: 0.0 }; n];
+        for i1 in 0..n {
+            let i0 = (i1 + n - 1) % n;
+            let (p0, p1) = (points[i0], points[i1]);
+            let mut dx = p1.x - p0.x;
+            let mut dy = p1.y - p0.y;
+            let d2 = dx * dx + dy * dy;
+            if d2 > 0.0 {
+                let inv = rsqrt_precise(d2);
+                dx *= inv;
+                dy *= inv;
+            }
+            normals[i0] = Vec2 { x: dy, y: -dx };
+        }
+
+        let inner_base = self.vtx_buffer.len() as u32;
+        self.vtx_buffer.resize(
+            self.vtx_buffer.len() + n,
+            DrawVert {
+                pos: Vec2 { x: 0.0, y: 0.0 },
+                uv: self.white_uv,
+                col,
+            },
+        );
+        let outer_base = self.vtx_buffer.len() as u32;
+
+        for i1 in 0..n {
+            let i0 = (i1 + n - 1) % n;
+            let n0 = normals[i0];
+            let n1 = normals[i1];
+            let cos_theta = n0.x * n1.x + n0.y * n1.y;
+            let cos_clamped = cos_theta.max(MITER_ANGLE_LIMIT);
+            let miter_scale = (1.0 / (1.0 + cos_clamped)).min(1000.0);
+            let offset_x = (n0.x + n1.x) * miter_scale * half_aa;
+            let offset_y = (n0.y + n1.y) * miter_scale * half_aa;
+            let p1 = points[i1];
+            self.vtx_buffer[inner_base as usize + i1] = DrawVert {
+                pos: Vec2 {
+                    x: p1.x - offset_x,
+                    y: p1.y - offset_y,
+                },
+                uv: self.white_uv,
+                col,
+            };
+            self.vtx_buffer.push(DrawVert {
+                pos: Vec2 {
+                    x: p1.x + offset_x,
+                    y: p1.y + offset_y,
+                },
+                uv: self.white_uv,
+                col: col_trans,
+            });
+        }
+
+        let mut idx_count = 0u32;
+        for i1 in 0..n {
+            let i0 = (i1 + n - 1) % n;
+            let prev_outer = if i1 == 0 {
+                outer_base + n as u32 - 1
+            } else {
+                outer_base + i1 as u32 - 1
+            };
+            let outer = outer_base + i1 as u32;
+            let inner = inner_base + i1 as u32;
+            let prev_inner = inner_base + i0 as u32;
+            for tri in [[prev_outer, outer, inner], [prev_outer, inner, prev_inner]] {
+                for vertex in tri {
+                    self.idx_buffer.push(vertex as ImDrawIdx);
+                }
+                idx_count += 3;
+            }
+        }
+        for i in 2..n {
+            for vertex in [inner_base, inner_base + i as u32 - 1, inner_base + i as u32] {
+                self.idx_buffer.push(vertex as ImDrawIdx);
+            }
+            idx_count += 3;
+        }
+
+        if let Some(cmd) = self.cmd_buffer.last_mut() {
+            cmd.elem_count += idx_count;
+        }
+        idx_count
+    }
+
+    /// `ImDrawList::AddRectFilled` for a rectangle that is not pixel aligned, which is the case
+    /// where the reference takes its anti-aliased convex-polygon path.
+    pub fn add_rect_filled_aa(&mut self, min: Vec2, max: Vec2, col: ImU32) {
+        let points = [
+            min,
+            Vec2 { x: max.x, y: min.y },
+            max,
+            Vec2 { x: min.x, y: max.y },
+        ];
+        self.add_convex_poly_filled_aa(&points, col);
+    }
+
     /// `ImDrawList::PrimRect`: a rectangle filled with the white pixel, no explicit UVs.
     pub fn prim_rect(&mut self, a: Vec2, c: Vec2, col: ImU32) {
         let uv = self.white_uv;
@@ -311,6 +428,25 @@ impl DrawList {
     pub fn indices(&self) -> &[ImDrawIdx] {
         &self.idx_buffer
     }
+}
+
+/// `ImRsqrtPrecise`: on x86_64 the reference uses the SSE reciprocal-square-root estimate followed
+/// by one Newton step, so the last bits matter and a plain `1/sqrt` can differ. Mirror it with the
+/// same intrinsic where it exists, and fall back to `1/sqrt` elsewhere.
+fn rsqrt_precise(x: f32) -> f32 {
+    #[cfg(target_arch = "x86_64")]
+    {
+        if std::is_x86_feature_detected!("sse") {
+            // SAFETY: the SSE intrinsic only computes a value; no memory is touched.
+            unsafe {
+                let estimate = core::arch::x86_64::_mm_cvtss_f32(core::arch::x86_64::_mm_rsqrt_ss(
+                    core::arch::x86_64::_mm_set_ss(x),
+                ));
+                return estimate * (1.5 - x * 0.5 * estimate * estimate);
+            }
+        }
+    }
+    1.0 / x.sqrt()
 }
 
 #[cfg(test)]
