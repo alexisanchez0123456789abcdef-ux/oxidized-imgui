@@ -88,6 +88,9 @@ pub struct Io {
     /// io.MouseWheel / io.MouseWheelH: filled from the wheel events of the frame.
     pub mouse_wheel: f32,
     pub mouse_wheel_h: f32,
+    /// io.ConfigScrollbarScrollByPage: a click on a scrollbar's track scrolls a page instead of
+    /// jumping to the clicked position.
+    pub config_scrollbar_scroll_by_page: bool,
     pub mouse_drag_threshold: f32,
     /// `ImGuiIO::MouseDragMaxDistanceSqr`: the furthest the mouse went since it was pressed,
     /// squared. It is what turns a held button into a drag.
@@ -126,6 +129,7 @@ impl Default for Io {
             mouse_clicked_count: [0; BUTTONS],
             mouse_double_click_time: 0.30,
             mouse_double_click_max_dist: 6.0,
+            config_scrollbar_scroll_by_page: false,
             mouse_wheel: 0.0,
             mouse_wheel_h: 0.0,
             mouse_drag_threshold: 6.0,

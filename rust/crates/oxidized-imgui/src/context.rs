@@ -92,6 +92,8 @@ pub struct Context {
     next_scroll: Option<Vec2>,
     /// g.ScrollbarClickDeltaToGrabCenter: where inside the grab the seek started.
     scrollbar_click_delta: f32,
+    /// g.ScrollbarSeekMode: 0 seeks to the click, +-1 scrolls a page in that direction.
+    scrollbar_seek_mode: i32,
     /// g.ActiveIdIsJustActivated, as far as the scrollbar needs it.
     active_id_just_activated: bool,
     /// g.WheelingWindow: the window the wheel is locked to, so it keeps scrolling while the
@@ -159,6 +161,7 @@ impl Default for Context {
             wheeling_ref_mouse: Vec2::default(),
             wheeling_release_timer: 0.0,
             scrollbar_click_delta: 0.0,
+            scrollbar_seek_mode: 0,
             active_id_just_activated: false,
             display_order: Vec::new(),
             last_frame_windows: Vec::new(),
@@ -1496,18 +1499,30 @@ impl Context {
                 0.0
             };
             if self.active_id_just_activated {
-                // `ScrollbarSeekMode` is always absolute here, so only the distance to the grab's
-                // centre is kept: it is zero unless the press landed inside the grab.
-                self.scrollbar_click_delta = if held_dir == 0.0 {
+                // `ConfigScrollbarScrollByPage` off means a click always goes to where it landed;
+                // with it on, a click outside the grab scrolls a page, and Shift forces that too.
+                let seek_to_click = !self.io.config_scrollbar_scroll_by_page
+                    || self.io.key_shift
+                    || held_dir == 0.0;
+                self.scrollbar_seek_mode = if seek_to_click { 0 } else { held_dir as i32 };
+                self.scrollbar_click_delta = if held_dir == 0.0 && !self.io.key_shift {
                     clicked_v_norm - grab_v_norm - grab_h_norm * 0.5
                 } else {
                     0.0
                 };
             }
-            let scroll_v_norm = ((clicked_v_norm - self.scrollbar_click_delta - grab_h_norm * 0.5)
-                / (1.0 - grab_h_norm))
-                .clamp(0.0, 1.0);
-            let seeked = (scroll_v_norm * scroll_max).trunc();
+            let seeked = if self.scrollbar_seek_mode == 0 {
+                let scroll_v_norm =
+                    ((clicked_v_norm - self.scrollbar_click_delta - grab_h_norm * 0.5)
+                        / (1.0 - grab_h_norm))
+                        .clamp(0.0, 1.0);
+                (scroll_v_norm * scroll_max).trunc()
+            } else {
+                // Page by page: a page is the visible size. The reference repeats while the button
+                // is held; key repeat is not modelled, so this is the click that started the press.
+                let page_dir = self.scrollbar_seek_mode as f32;
+                (get(scroll) + page_dir * visible).clamp(0.0, scroll_max)
+            };
             if seeked != get(scroll) {
                 let mut value = scroll;
                 if horizontal {

@@ -1678,6 +1678,63 @@ static void DumpWindowHScrollbar()
     FrameHScrollWindow(-1.0f, 0.0f, 0.0f, false);
 }
 
+// window_scrollbar_page: `ConfigScrollbarScrollByPage` makes a click on the bar's track scroll a
+// page instead of jumping to the clicked point. Shift forces the same with the option off.
+//
+// The content is 1000 tall in a 200 tall window, so the grab is short (38 px out of 194) and a click
+// below it lands far from the bottom: a page is 200, the absolute seek would be 542.
+static void FramePageWindow(int scroll_y, bool by_page, bool shift, float my, bool down)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(352.0f, my);
+    io.MouseDown[0] = down;
+    io.ConfigScrollbarScrollByPage = by_page;
+    io.AddKeyEvent(ImGuiMod_Shift, shift);
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    if (scroll_y >= 0)
+        ImGui::SetNextWindowScroll(ImVec2(0.0f, (float)scroll_y));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
+    ImGui::Begin("P", NULL, flags);
+    ImGuiWindow* w = ImGui::GetCurrentWindow();
+    ImGui::Dummy(ImVec2(100.0f, 1000.0f));
+    printf("frame scroll %08x max %08x\n", Bits(w->Scroll.y), Bits(w->ScrollMax.y));
+    DumpDrawListBody(*w->DrawList);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpWindowScrollbarPage()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario window_scrollbar_page\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
+    for (int i = 0; i < 4; i++)
+        FramePageWindow(-1, false, false, 0.0f, false);
+
+    // By page, click below the grab: one page down (200), not the absolute 542.
+    FramePageWindow(-1, true, false, 200.0f, false);
+    FramePageWindow(-1, true, false, 200.0f, true);
+    FramePageWindow(-1, true, false, 200.0f, false);
+    FramePageWindow(-1, true, false, 200.0f, false);
+    // Again from the same place: another page (400).
+    FramePageWindow(-1, true, false, 200.0f, true);
+    FramePageWindow(-1, true, false, 200.0f, false);
+    // Shift forces the page mode with the option off: 400 + 200.
+    FramePageWindow(-1, false, true, 200.0f, false);
+    FramePageWindow(-1, false, true, 200.0f, true);
+    FramePageWindow(-1, false, true, 200.0f, false);
+    // Option and Shift both off: the click seeks to where it landed (542).
+    FramePageWindow(0, false, false, 200.0f, false);
+    FramePageWindow(0, false, false, 200.0f, true);
+    FramePageWindow(0, false, false, 200.0f, false);
+}
+
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 
 static void DumpCmdOffsets()
@@ -1927,6 +1984,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_icons") == 0)
     {
         DumpWindowIcons();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "window_scrollbar_page") == 0)
+    {
+        DumpWindowScrollbarPage();
         ImGui::DestroyContext();
         return 0;
     }
