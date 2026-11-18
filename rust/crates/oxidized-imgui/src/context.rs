@@ -258,7 +258,20 @@ impl Context {
     /// `ImGui::Begin` with `SetNextWindowPos`/`SetNextWindowSize` already applied.
     ///
     /// `None` keeps the position or size the window had in a previous frame, as the reference does.
+    /// Starts a window and paints its background, like `ImGui::Begin` with default flags.
     pub fn begin_window(&mut self, name: &str, pos: Option<Vec2>, size: Option<Vec2>) {
+        self.begin_window_ex(name, pos, size, true);
+    }
+
+    /// Starts a window, choosing whether the background is painted
+    /// (`ImGuiWindowFlags_NoBackground` when false).
+    pub fn begin_window_ex(
+        &mut self,
+        name: &str,
+        pos: Option<Vec2>,
+        size: Option<Vec2>,
+        background: bool,
+    ) {
         let remembered = self
             .remembered
             .iter()
@@ -276,6 +289,20 @@ impl Context {
             x: pos.x + pad.x,
             y: pos.y + pad.y,
         };
+        // The background is painted before the window clip is applied, with the fullscreen clip.
+        if background {
+            self.draw_list
+                .set_current_clip(self.draw_list.fullscreen_clip);
+            self.draw_list.prim_rect(
+                pos,
+                Vec2 {
+                    x: pos.x + size.x,
+                    y: pos.y + size.y,
+                },
+                self.style.color_u32(crate::style::Col::WindowBg),
+            );
+        }
+
         // The window's draw list is clipped to its rectangle, inset by the window border.
         self.draw_list.push_clip_rect(
             Vec2 {
@@ -309,6 +336,7 @@ impl Context {
 
     /// `ImGui::End`: the window remembers its position and size for the next frame.
     pub fn end_window(&mut self) {
+        self.draw_list.drop_empty_trailing_commands();
         if let Some(window) = self.windows.pop() {
             let entry = (window.name.clone(), window.pos, window.size);
             match self

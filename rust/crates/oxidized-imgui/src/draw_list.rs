@@ -149,6 +149,29 @@ impl DrawList {
         self.on_changed_clip_rect();
     }
 
+    /// Sets the current clip on the command being built, without opening a new one. The window
+    /// draw list starts with the fullscreen clip before its background is drawn.
+    pub fn set_current_clip(&mut self, rect: [f32; 4]) {
+        self.current_clip = rect;
+        if let Some(cmd) = self.cmd_buffer.last_mut() {
+            cmd.clip_rect = rect;
+        }
+    }
+
+    /// Drops trailing commands that never received geometry, which is what the reference's
+    /// `PrimUnreserve` does when a window closes.
+    pub fn drop_empty_trailing_commands(&mut self) {
+        while self.cmd_buffer.len() > 1
+            && self
+                .cmd_buffer
+                .last()
+                .map(|c| c.elem_count == 0)
+                .unwrap_or(false)
+        {
+            self.cmd_buffer.pop();
+        }
+    }
+
     /// `ImDrawList::_OnChangedClipRect`.
     fn on_changed_clip_rect(&mut self) {
         let last_has_geometry = self
