@@ -35,3 +35,6 @@ jobs:
 
       - name: Tests
         run: cargo test
+
+      - name: Status panel is up to date
+        run: pwsh -NoProfile -File tools/progress/report.ps1 -Check
