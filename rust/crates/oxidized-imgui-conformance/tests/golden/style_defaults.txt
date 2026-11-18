@@ -1,0 +1,21 @@
+header imgui 1.93.1 WIP 19303
+scenario style_defaults
+col Text ffffffff
+col TextDisabled ff949494
+col WindowBg ff262626
+col FrameBg ff1a1a1a
+col FrameBgHovered ff4f4030
+col FrameBgActive ff785436
+col Button 66fa9642
+col ButtonHovered fffa9642
+col ButtonActive fffa870f
+col CheckMark fffa9642
+col SliderGrab ffe0853d
+col SliderGrabActive fffa9642
+col Border 80806e6e
+col Separator 80806e6e
+col Header 4ffa9642
+col HeaderHovered ccfa9642
+col HeaderActive fffa9642
+round frame 00000000 window 00000000 grab 00000000 child 00000000 popup 00000000 scrollbar 41100000 tab 40a00000
+border window 3f800000 frame 00000000 child 3f800000 popup 3f800000

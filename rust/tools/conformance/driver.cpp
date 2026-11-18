@@ -522,6 +522,37 @@ static void DumpSlider()
     }
 }
 
+// style_defaults: the default style's colours, roundings and border sizes.
+static void DumpStyleDefaults()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario style_defaults\n");
+
+    ImGuiStyle& style = ImGui::GetStyle();
+    const ImGuiCol cols[17] = {
+        ImGuiCol_Text, ImGuiCol_TextDisabled, ImGuiCol_WindowBg, ImGuiCol_FrameBg,
+        ImGuiCol_FrameBgHovered, ImGuiCol_FrameBgActive, ImGuiCol_Button, ImGuiCol_ButtonHovered,
+        ImGuiCol_ButtonActive, ImGuiCol_CheckMark, ImGuiCol_SliderGrab, ImGuiCol_SliderGrabActive,
+        ImGuiCol_Border, ImGuiCol_Separator, ImGuiCol_Header, ImGuiCol_HeaderHovered,
+        ImGuiCol_HeaderActive,
+    };
+    const char* names[17] = {
+        "Text", "TextDisabled", "WindowBg", "FrameBg", "FrameBgHovered", "FrameBgActive",
+        "Button", "ButtonHovered", "ButtonActive", "CheckMark", "SliderGrab", "SliderGrabActive",
+        "Border", "Separator", "Header", "HeaderHovered", "HeaderActive",
+    };
+    for (int i = 0; i < 17; i++)
+        printf("col %s %08x\n", names[i], ImGui::GetColorU32(cols[i]));
+
+    printf("round frame %08x window %08x grab %08x child %08x popup %08x scrollbar %08x tab %08x\n",
+        Bits(style.FrameRounding), Bits(style.WindowRounding), Bits(style.GrabRounding),
+        Bits(style.ChildRounding), Bits(style.PopupRounding), Bits(style.ScrollbarRounding),
+        Bits(style.TabRounding));
+    printf("border window %08x frame %08x child %08x popup %08x\n",
+        Bits(style.WindowBorderSize), Bits(style.FrameBorderSize), Bits(style.ChildBorderSize),
+        Bits(style.PopupBorderSize));
+}
+
 // Explicit UVs: no atlas involved.
 static void ScenePrimRectUV(ImDrawList& list)
 {
@@ -599,6 +630,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "slider_basic") == 0)
     {
         DumpSlider();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "style_defaults") == 0)
+    {
+        DumpStyleDefaults();
         ImGui::DestroyContext();
         return 0;
     }
