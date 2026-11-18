@@ -15,16 +15,18 @@ use crate::style::Style;
 /// `g_ImGuiDirCosSin[ImGuiDir_Down]`: the arrow a window shows while it is open.
 const ARROW_DOWN_COS: f32 = 0.0;
 const ARROW_DOWN_SIN: f32 = 1.0;
+/// `g_ImGuiDirCosSin[ImGuiDir_Right]`: the arrow a collapsed window shows.
+const ARROW_RIGHT_COS: f32 = 1.0;
+const ARROW_RIGHT_SIN: f32 = 0.0;
 
 /// What `begin_window` has to know about the window it is opening.
-#[derive(Clone, Copy)]
 struct WindowOptions<'a> {
     /// `None` for a window without a title bar.
     title: Option<&'a str>,
     /// `ImGuiWindowFlags_NoBackground` when false.
     background: bool,
-    /// `p_open != NULL`: the title bar gets a close button.
-    closable: bool,
+    /// `p_open != NULL`: the title bar gets a close button, and a press turns it off.
+    open: Option<&'a mut bool>,
     /// `!(flags & ImGuiWindowFlags_NoCollapse)`: the title bar gets a collapse arrow.
     collapsible: bool,
 }
@@ -34,7 +36,12 @@ struct WindowOptions<'a> {
 pub struct Window {
     pub name: String,
     pub pos: Vec2,
+    /// The size the window displays: the title bar alone while it is collapsed.
     pub size: Vec2,
+    /// `SizeFull`: what the window is when it is not collapsed.
+    pub size_full: Vec2,
+    pub collapsed: bool,
+    pub want_collapse_toggle: bool,
     /// `pos + style.WindowPadding`.
     pub content_origin: Vec2,
     /// `size - style.WindowPadding * 2`, what `GetContentRegionAvail` returns inside the window.
@@ -61,7 +68,8 @@ pub struct Context {
     /// `g.Time`: the reference keeps it as a `double` and `GetTime()` returns it as such.
     time: f64,
     windows: Vec<Window>,
-    remembered: Vec<(String, Vec2, Vec2)>,
+    /// (name, pos, size_full, collapsed, want_collapse_toggle) per window, between frames.
+    remembered: Vec<(String, Vec2, Vec2, bool, bool)>,
     active_id: Option<ImGuiID>,
     /// The window's draw list: what this frame has drawn so far.
     draw_list: crate::draw_list::DrawList,
@@ -297,7 +305,10 @@ impl Context {
     ///
     /// `None` keeps the position or size the window had in a previous frame, as the reference does.
     /// Starts a window and paints its background, like `ImGui::Begin` with default flags.
-    pub fn begin_window(&mut self, name: &str, pos: Option<Vec2>, size: Option<Vec2>) {
+    ///
+    /// Returns what the reference returns: `false` once the window is collapsed, so callers skip
+    /// its contents.
+    pub fn begin_window(&mut self, name: &str, pos: Option<Vec2>, size: Option<Vec2>) -> bool {
         self.begin_window_impl(
             name,
             pos,
@@ -305,10 +316,10 @@ impl Context {
             WindowOptions {
                 title: None,
                 background: true,
-                closable: false,
+                open: None,
                 collapsible: false,
             },
-        );
+        )
     }
 
     /// Starts a window with a title bar: background, title band, border and the title text.
@@ -318,7 +329,7 @@ impl Context {
         title: &str,
         pos: Option<Vec2>,
         size: Option<Vec2>,
-    ) {
+    ) -> bool {
         self.begin_window_impl(
             name,
             pos,
@@ -326,30 +337,33 @@ impl Context {
             WindowOptions {
                 title: Some(title),
                 background: true,
-                closable: false,
+                open: None,
                 collapsible: false,
             },
-        );
+        )
     }
 
     /// Starts a titled window that also carries the window icons: a collapse arrow on the title
-    /// bar's left and, when `closable`, a close cross on its right.
+    /// bar's left and, when `open` is `Some`, a close cross on its right.
     ///
     /// This mirrors `ImGui::Begin("W", &open, flags)` with neither `NoCollapse` nor a null
     /// `p_open`. The icons shift the title text, so the bar is laid out the way the reference's
     /// `RenderWindowTitleBarContents` does. Only `Style::WindowMenuButtonPosition == Left`, the
     /// default, is modelled.
     ///
-    /// Not modelled yet: clicking the icons. The arrow does not collapse the window and the cross
-    /// does not close it; only their geometry and hover highlight are here.
+    /// The arrow toggles the collapsed state from the next frame on; the cross sets `*open` to
+    /// `false` when it is released inside. Returns `false` while the window is collapsed.
+    ///
+    /// Not modelled yet: dragging the title bar with the arrow (the reference starts moving the
+    /// window when the arrow is dragged past the threshold).
     pub fn begin_window_titled_with_icons(
         &mut self,
         name: &str,
         title: &str,
         pos: Option<Vec2>,
         size: Option<Vec2>,
-        closable: bool,
-    ) {
+        open: Option<&mut bool>,
+    ) -> bool {
         self.begin_window_impl(
             name,
             pos,
@@ -357,10 +371,10 @@ impl Context {
             WindowOptions {
                 title: Some(title),
                 background: true,
-                closable,
+                open,
                 collapsible: true,
             },
-        );
+        )
     }
 
     /// Starts a window, choosing whether the background is painted
@@ -371,7 +385,7 @@ impl Context {
         pos: Option<Vec2>,
         size: Option<Vec2>,
         background: bool,
-    ) {
+    ) -> bool {
         self.begin_window_impl(
             name,
             pos,
@@ -379,10 +393,10 @@ impl Context {
             WindowOptions {
                 title: None,
                 background,
-                closable: false,
+                open: None,
                 collapsible: false,
             },
-        );
+        )
     }
 
     fn begin_window_impl(
@@ -391,47 +405,86 @@ impl Context {
         pos: Option<Vec2>,
         size: Option<Vec2>,
         opts: WindowOptions,
-    ) {
+    ) -> bool {
         let title = opts.title;
         let background = opts.background;
         let remembered = self
             .remembered
             .iter()
             .rev()
-            .find(|(known, _, _)| known == name)
-            .map(|(_, p, s)| (*p, *s));
-        let (pos, size) = match (pos, size, remembered) {
-            (Some(p), Some(s), _) => (p, s),
-            (p, s, Some((rp, rs))) => (p.unwrap_or(rp), s.unwrap_or(rs)),
-            (p, s, None) => (p.unwrap_or_default(), s.unwrap_or_default()),
+            .find(|(known, ..)| known == name)
+            .map(|(_, p, s, c, w)| (*p, *s, *c, *w));
+        let (pos, size_full, mut collapsed, mut want_collapse_toggle) = match remembered {
+            Some((rp, rs, rc, rw)) => (pos.unwrap_or(rp), size.unwrap_or(rs), rc, rw),
+            None => (
+                pos.unwrap_or_default(),
+                size.unwrap_or_default(),
+                false,
+                false,
+            ),
         };
 
+        // The arrow asks for the toggle; Begin applies it at the start of the next frame.
+        if opts.collapsible && want_collapse_toggle {
+            collapsed = !collapsed;
+        }
+        want_collapse_toggle = false;
+
         let pad = self.style.window_padding;
-        // With a title bar the content starts below it, which is why the settled reference lays a
-        // window out 19 pixels lower than its first frame does.
-        let title_offset = if title.is_some() {
+        let title_height = if title.is_some() {
             self.frame_height()
         } else {
             0.0
         };
+        // A collapsed window shrinks to its title bar: the reference keeps `SizeFull` and displays
+        // `(Size.x, TitleBarHeight)`.
+        let size = if collapsed {
+            Vec2 {
+                x: size_full.x,
+                y: title_height,
+            }
+        } else {
+            size_full
+        };
+        // With a title bar the content starts below it, which is why the settled reference lays a
+        // window out 19 pixels lower than its first frame does.
         let content_origin = Vec2 {
             x: pos.x + pad.x,
-            y: pos.y + title_offset + pad.y,
+            y: pos.y + title_height + pad.y,
         };
+
         // The background is painted before the window clip is applied, with the fullscreen clip.
-        if background {
-            self.draw_list
-                .set_current_clip(self.draw_list.fullscreen_clip);
-            // With a title bar the background starts below it: the band covers the top.
-            let bg_top = if title.is_some() {
-                self.frame_height()
-            } else {
-                0.0
+        self.draw_list
+            .set_current_clip(self.draw_list.fullscreen_clip);
+        if collapsed {
+            // A collapsed window draws its title bar as a frame and nothing else: no background,
+            // no band, no outer border, no resize grips.
+            let bar_max = Vec2 {
+                x: pos.x + size.x,
+                y: pos.y + title_height,
             };
+            self.draw_list.prim_rect(
+                pos,
+                bar_max,
+                self.style.color_u32(crate::style::Col::TitleBgCollapsed),
+            );
+            // `RenderFrame` outlines the bar with `Style::FrameBorderSize`, which the reference
+            // temporarily sets to the window border size. The border shadow it draws first has a
+            // transparent colour, so the reference's `AddRect` drops it.
+            if self.style.window_border_size > 0.0 {
+                self.draw_list.add_aligned_rect_border(
+                    pos,
+                    bar_max,
+                    self.style.color_u32(crate::style::Col::Border),
+                    self.style.window_border_size,
+                );
+            }
+        } else if background {
+            // With a title bar the background starts below it: the band covers the top.
             self.draw_list.prim_rect(
                 Vec2 {
                     x: pos.x,
-                    y: pos.y + bg_top,
+                    y: pos.y + title_height,
                 },
                 Vec2 {
                     x: pos.x + size.x,
@@ -441,50 +494,61 @@ impl Context {
             );
         }
 
-        // The title band, between the background and the border.
-        if title.is_some() {
-            let title_height = self.frame_height();
-            self.draw_list.prim_rect(
-                pos,
-                Vec2 {
-                    x: pos.x + size.x,
-                    y: pos.y + title_height,
-                },
-                self.style.color_u32(crate::style::Col::TitleBgActive),
-            );
+        if !collapsed {
+            // The title band, between the background and the border.
+            if title.is_some() {
+                self.draw_list.prim_rect(
+                    pos,
+                    Vec2 {
+                        x: pos.x + size.x,
+                        y: pos.y + title_height,
+                    },
+                    self.style.color_u32(crate::style::Col::TitleBgActive),
+                );
+            }
+
+            // The window border, inside the rectangle. A pixel-aligned window takes the two-ring
+            // frame; fractional coordinates would take the miter stroke, not wired up here.
+            // The reference draws the border only when the window has a background.
+            if background && self.style.window_border_size > 0.0 {
+                self.draw_list.add_aligned_rect_border(
+                    pos,
+                    Vec2 {
+                        x: pos.x + size.x,
+                        y: pos.y + size.y,
+                    },
+                    self.style.color_u32(crate::style::Col::Border),
+                    self.style.window_border_size,
+                );
+            }
         }
 
-        // The window border, inside the rectangle. A pixel-aligned window takes the two-ring frame;
-        // fractional coordinates would take the miter stroke, which is not wired up here.
-        // The reference draws the border only when the window has a background.
-        if background && self.style.window_border_size > 0.0 {
-            self.draw_list.add_aligned_rect_border(
-                pos,
-                Vec2 {
-                    x: pos.x + size.x,
-                    y: pos.y + size.y,
-                },
-                self.style.color_u32(crate::style::Col::Border),
-                self.style.window_border_size,
-            );
-        }
-
-        // The title text goes last, after the border, indented by the border width on top of the
-        // frame padding: the reference draws it inside the window's inner rectangle.
         // The title bar's contents: the icons first, then the text. This is the reference's
         // `RenderWindowTitleBarContents`, and the order matters because it changes the vertex
         // order of the list.
         if let Some(title) = title {
-            self.render_title_bar_contents(title, pos, size, opts.closable, opts.collapsible);
+            let (pressed_collapse, pressed_close) = self.render_title_bar_contents(
+                title,
+                pos,
+                size,
+                opts.open.is_some(),
+                opts.collapsible,
+                collapsed,
+            );
+            if pressed_collapse {
+                want_collapse_toggle = true;
+            }
+            if pressed_close {
+                if let Some(open) = opts.open {
+                    *open = false;
+                }
+            }
         }
 
         // The window's draw list is clipped to its rectangle, inset by the window border.
-        // The clip starts below the title band when there is one.
-        let clip_top = self.style.window_border_size.max(if title.is_some() {
-            self.frame_height()
-        } else {
-            0.0
-        });
+        // The clip starts below the title band when there is one. A collapsed window gets an
+        // empty clip here, which is what the reference gets too.
+        let clip_top = self.style.window_border_size.max(title_height);
         self.draw_list.push_clip_rect(
             Vec2 {
                 x: pos.x + self.style.window_border_size,
@@ -504,6 +568,9 @@ impl Context {
             name: name.to_string(),
             pos,
             size,
+            size_full,
+            collapsed,
+            want_collapse_toggle,
             content_origin,
             content_size,
             cursor: content_origin,
@@ -513,6 +580,9 @@ impl Context {
             last_max: Vec2::default(),
             has_item: false,
         });
+
+        // `Begin` reports false while the window is collapsed, so callers skip its contents.
+        !collapsed
     }
 
     /// `ImGui::RenderWindowTitleBarContents`: the collapse arrow, the close cross and the title,
@@ -524,7 +594,8 @@ impl Context {
         size: Vec2,
         closable: bool,
         collapsible: bool,
-    ) {
+        collapsed: bool,
+    ) -> (bool, bool) {
         use crate::style::Col;
 
         let border = self.style.window_border_size;
@@ -572,27 +643,43 @@ impl Context {
         }
 
         let text_color = self.style.color_u32(Col::Text);
+        let mut pressed_collapse = false;
+        let mut pressed_close = false;
 
         if let Some(min) = collapse_pos {
-            let hovered = self.icon_hovered(min, button_sz);
-            if hovered {
-                // Not verified by a golden: the scenario never hovers an icon.
+            let (pressed, hovered, held) =
+                self.icon_button(self.get_id("#COLLAPSE"), min, button_sz, pos, size);
+            pressed_collapse = pressed;
+            // `(held && hovered) ? ButtonActive : hovered ? ButtonHovered : Button`, and the
+            // background is drawn whenever the button is hovered or held.
+            if hovered || held {
+                let colour = if held && hovered {
+                    Col::ButtonActive
+                } else if hovered {
+                    Col::ButtonHovered
+                } else {
+                    Col::Button
+                };
                 self.draw_list.add_rect_filled(
                     min,
                     Vec2 {
                         x: min.x + button_sz,
                         y: min.y + button_sz,
                     },
-                    self.style.color_u32(Col::ButtonHovered),
+                    self.style.color_u32(colour),
                 );
             }
-            // Down while the window is open, right once it is collapsed; collapsing is not
-            // modelled, so this is always the open state.
+            // Down while the window is open, right once it is collapsed.
+            let (cos_a, sin_a) = if collapsed {
+                (ARROW_RIGHT_COS, ARROW_RIGHT_SIN)
+            } else {
+                (ARROW_DOWN_COS, ARROW_DOWN_SIN)
+            };
             self.draw_list.add_arrow(
                 min,
                 text_color,
-                ARROW_DOWN_COS,
-                ARROW_DOWN_SIN,
+                cos_a,
+                sin_a,
                 1.0,
                 self.font.size,
                 self.style.symbol_arrow_size_factor,
@@ -601,16 +688,23 @@ impl Context {
         }
 
         if let Some(min) = close_pos {
-            let hovered = self.icon_hovered(min, button_sz);
+            let (pressed, hovered, held) =
+                self.icon_button(self.get_id("#CLOSE"), min, button_sz, pos, size);
+            pressed_close = pressed;
+            // The reference chooses the colour from `held` alone but only fills while hovered.
             if hovered {
-                // Not verified by a golden: the scenario never hovers an icon.
+                let colour = if held {
+                    Col::ButtonActive
+                } else {
+                    Col::ButtonHovered
+                };
                 self.draw_list.add_rect_filled(
                     min,
                     Vec2 {
                         x: min.x + button_sz,
                         y: min.y + button_sz,
                     },
-                    self.style.color_u32(Col::ButtonHovered),
+                    self.style.color_u32(colour),
                 );
             }
             let center = Vec2 {
@@ -664,23 +758,53 @@ impl Context {
             text_color,
             title,
         );
+
+        (pressed_collapse, pressed_close)
     }
 
-    /// Whether the mouse is over an icon: inside the window and inside its square.
+    /// `ButtonBehavior` for one icon: hover, hold and press, with the reference's rule that the
+    /// press only counts when the button is released inside.
     ///
-    /// The reference also tracks press and release for the icons, which does not exist yet: a
-    /// click does nothing here.
-    fn icon_hovered(&self, min: Vec2, button_sz: f32) -> bool {
-        let Some(window) = self.windows.last() else {
-            return false;
-        };
+    /// The icons do not call `ItemSize`, so unlike every other widget they leave the cursor alone.
+    /// The window rectangle is passed in because the window is not on the stack yet while its
+    /// title bar is being drawn.
+    fn icon_button(
+        &mut self,
+        id: ImGuiID,
+        min: Vec2,
+        button_sz: f32,
+        window_pos: Vec2,
+        window_size: Vec2,
+    ) -> (bool, bool, bool) {
+        let hovered = self.icon_hovered(min, button_sz, window_pos, window_size);
+
+        if hovered && self.io.mouse_clicked[0] && self.active_id != Some(id) {
+            self.active_id = Some(id);
+        }
+
+        let mut pressed = false;
+        let mut held = false;
+        if self.active_id == Some(id) {
+            if self.io.mouse_down[0] {
+                held = true;
+            } else {
+                // Releasing inside presses; releasing anywhere clears the active id.
+                pressed = hovered;
+                self.active_id = None;
+            }
+        }
+        (pressed, hovered, held)
+    }
+
+    /// Whether the mouse is over an icon: inside the window's rectangle and inside its square.
+    fn icon_hovered(&self, min: Vec2, button_sz: f32, window_pos: Vec2, window_size: Vec2) -> bool {
         let Some(mouse) = self.io.mouse_pos else {
             return false;
         };
-        let inside_window = mouse.x >= window.pos.x
-            && mouse.x < window.pos.x + window.size.x
-            && mouse.y >= window.pos.y
-            && mouse.y < window.pos.y + window.size.y;
+        let inside_window = mouse.x >= window_pos.x
+            && mouse.x < window_pos.x + window_size.x
+            && mouse.y >= window_pos.y
+            && mouse.y < window_pos.y + window_size.y;
         inside_window
             && mouse.x >= min.x
             && mouse.x < min.x + button_sz
@@ -688,15 +812,21 @@ impl Context {
             && mouse.y < min.y + button_sz
     }
 
-    /// `ImGui::End`: the window remembers its position and size for the next frame.
+    /// `ImGui::End`: the window remembers its position, its full size and its collapsed state.
     pub fn end_window(&mut self) {
         self.draw_list.finish_clip_scope();
         if let Some(window) = self.windows.pop() {
-            let entry = (window.name.clone(), window.pos, window.size);
+            let entry = (
+                window.name.clone(),
+                window.pos,
+                window.size_full,
+                window.collapsed,
+                window.want_collapse_toggle,
+            );
             match self
                 .remembered
                 .iter_mut()
-                .find(|(name, _, _)| *name == window.name)
+                .find(|(name, ..)| *name == window.name)
             {
                 Some(slot) => *slot = entry,
                 None => self.remembered.push(entry),
@@ -732,6 +862,10 @@ impl Context {
         let Some(window) = self.windows.last_mut() else {
             return;
         };
+        // `SkipItems`: a collapsed window does not lay anything out.
+        if window.collapsed {
+            return;
+        }
         let min = window.cursor;
         let max = Vec2 {
             x: min.x + size.x,

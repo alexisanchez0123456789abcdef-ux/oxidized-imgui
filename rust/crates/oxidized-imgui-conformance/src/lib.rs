@@ -48,6 +48,7 @@ pub const SCENARIOS: &[&str] = &[
     "window_border",
     "window_title",
     "window_icons",
+    "window_icons_states",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -1192,6 +1193,7 @@ pub fn window_icons_dump() -> String {
     ctx.set_font_for_drawing(font);
     ctx.set_line_uv_lines(line_uvs);
 
+    let mut open = true;
     // The reference settles first: a window does not know its title bar height during its first
     // frame. The port computes it directly, but runs the same frames so both sides are compared
     // after the same history.
@@ -1206,7 +1208,7 @@ pub fn window_icons_dump() -> String {
             "W",
             Some(Vec2 { x: 60.0, y: 60.0 }),
             Some(Vec2 { x: 300.0, y: 200.0 }),
-            true,
+            Some(&mut open),
         );
         ctx.end_window();
         if frame == 13 {
@@ -1216,6 +1218,210 @@ pub fn window_icons_dump() -> String {
         ctx.end_frame();
     }
     out
+}
+
+/// The `window_icons_states` scenario: the same window hovered, held, released inside and outside,
+/// collapsed and expanded. Each state is one dumped section taken right after its frame, and each
+/// prints the flags the frame produced: `open`, `collapsed` and what `Begin` returned.
+pub fn window_icons_states_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/window_icons_states.fixture.txt"
+    );
+    let text = std::fs::read_to_string(path).expect("window icons fixture");
+    let font = Font::from_pinned(&text).expect("font fixture");
+    let line_uvs = parse_line_uvs(&text);
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    ctx.set_line_uv_lines(line_uvs);
+    let mut open = true;
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario window_icons_states\n");
+
+    // Settle, then one extra frame that wires the atlas tables, like the reference does.
+    for _ in 0..14 {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+        ctx.io_mut().mouse_down[0] = false;
+        ctx.begin_frame();
+        ctx.begin_window_titled_with_icons(
+            "W",
+            "W",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+            Some(&mut open),
+        );
+        ctx.end_window();
+        ctx.end_frame();
+    }
+
+    // The two icon squares: the arrow at (65, 63) and the cross at (342, 63), 13x13 each.
+    let (arrow_x, arrow_y) = (70.0f32, 69.0f32);
+    let (close_x, close_y) = (348.0f32, 69.0f32);
+
+    let s = |ctx: &mut oxidized_imgui::Context,
+             out: &mut String,
+             open: &mut bool,
+             name: &str,
+             mx: f32,
+             my: f32,
+             down: bool| {
+        icons_state_section(ctx, out, open, name, mx, my, down);
+    };
+
+    s(&mut ctx, &mut out, &mut open, "resting", 0.0, 0.0, false);
+    s(
+        &mut ctx,
+        &mut out,
+        &mut open,
+        "hover_arrow",
+        arrow_x,
+        arrow_y,
+        false,
+    );
+    s(
+        &mut ctx,
+        &mut out,
+        &mut open,
+        "hover_close",
+        close_x,
+        close_y,
+        false,
+    );
+    s(
+        &mut ctx,
+        &mut out,
+        &mut open,
+        "held_close",
+        close_x,
+        close_y,
+        true,
+    );
+    s(
+        &mut ctx,
+        &mut out,
+        &mut open,
+        "released_close",
+        close_x,
+        close_y,
+        false,
+    );
+
+    // The same press, released away from the button: it must not close.
+    open = true;
+    s(
+        &mut ctx,
+        &mut out,
+        &mut open,
+        "held_close_again",
+        close_x,
+        close_y,
+        true,
+    );
+    s(
+        &mut ctx,
+        &mut out,
+        &mut open,
+        "released_outside",
+        100.0,
+        150.0,
+        false,
+    );
+
+    // Collapse with the arrow, then expand again.
+    s(
+        &mut ctx,
+        &mut out,
+        &mut open,
+        "held_arrow",
+        arrow_x,
+        arrow_y,
+        true,
+    );
+    s(
+        &mut ctx,
+        &mut out,
+        &mut open,
+        "released_arrow",
+        arrow_x,
+        arrow_y,
+        false,
+    );
+    s(&mut ctx, &mut out, &mut open, "collapsed", 0.0, 0.0, false);
+    s(
+        &mut ctx,
+        &mut out,
+        &mut open,
+        "collapsed_hover_arrow",
+        arrow_x,
+        arrow_y,
+        false,
+    );
+    s(
+        &mut ctx,
+        &mut out,
+        &mut open,
+        "held_arrow_collapsed",
+        arrow_x,
+        arrow_y,
+        true,
+    );
+    s(
+        &mut ctx,
+        &mut out,
+        &mut open,
+        "released_arrow_collapsed",
+        arrow_x,
+        arrow_y,
+        false,
+    );
+    s(&mut ctx, &mut out, &mut open, "expanded", 0.0, 0.0, false);
+    out
+}
+
+/// One frame of the `window_icons_states` scenario, dumped with the flags it produced.
+fn icons_state_section(
+    ctx: &mut oxidized_imgui::Context,
+    out: &mut String,
+    open: &mut bool,
+    name: &str,
+    mx: f32,
+    my: f32,
+    down: bool,
+) {
+    use oxidized_imgui::Vec2;
+
+    ctx.io_mut().delta_time = 0.1;
+    ctx.io_mut().mouse_pos = Some(Vec2 { x: mx, y: my });
+    ctx.io_mut().mouse_down[0] = down;
+    ctx.begin_frame();
+    let began = ctx.begin_window_titled_with_icons(
+        "W",
+        "W",
+        Some(Vec2 { x: 60.0, y: 60.0 }),
+        Some(Vec2 { x: 300.0, y: 200.0 }),
+        Some(open),
+    );
+    let collapsed = ctx.window().collapsed;
+    ctx.end_window();
+    out.push_str(&format!(
+        "state {name} open {} collapsed {} began {}\n",
+        *open as u8, collapsed as u8, began as u8
+    ));
+    // The reference dumps right after the frame, before the next one resets the list.
+    let body = dump("window_icons_states", ctx.draw_list());
+    for line in body.lines().skip(2) {
+        out.push_str(line);
+        out.push('\n');
+    }
+    ctx.end_frame();
 }
 
 /// The dump for a scenario, whichever family it belongs to.
@@ -1237,6 +1443,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "window_border" => Some(window_border_dump()),
         "window_title" => Some(window_title_dump()),
         "window_icons" => Some(window_icons_dump()),
+        "window_icons_states" => Some(window_icons_states_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),
