@@ -26,7 +26,7 @@
     {
       "id": "draw",
       "title": "Listas de dibujo y primitivas",
-      "weight": 11,
+      "weight": 12,
       "infra": false,
       "items": [
         { "id": "layout_parity", "label": "Estructuras con el layout exacto de C++", "weight": 1, "done": true, "evidence": "draw_list::tests::layouts_match_reference" },
@@ -36,6 +36,7 @@
         { "id": "aa_rect", "label": "Relleno AA de rectángulo (miters)", "weight": 1, "done": true, "evidence": "golden aa_rect" },
         { "id": "aa_round", "label": "AA: rectángulo redondeado (arcos de esquina)", "weight": 1, "done": true, "evidence": "golden aa_round_rect" },
         { "id": "aa_line", "label": "AA: líneas de cualquier grosor", "weight": 1, "done": true, "evidence": "golden aa_line" },
+        { "id": "aa_bevel", "label": "AA: uniones en bisel (esquinas agudas)", "weight": 1, "done": true, "evidence": "golden aa_bevel" },
         { "id": "aa_curves", "label": "AA: círculos y béziers", "weight": 1, "done": false, "evidence": "" },
         { "id": "style_colors", "label": "Estilo: colores, redondeos y bordes por defecto", "weight": 1, "done": true, "evidence": "golden style_defaults" },
         { "id": "text_draw", "label": "Texto dibujado en la lista (geometría, sin UVs)", "weight": 1, "done": true, "evidence": "golden text_draw (geometría; UVs omitidos por no ser reproducibles)" },

@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 $cargoBin = Join-Path $env:USERPROFILE '.cargo\bin'
 if (Test-Path $cargoBin) { $env:PATH = "$cargoBin;$env:PATH" }
 
-$scenarios = @('prim_rect_uv', 'prim_rect', 'rect_filled', 'line_h', 'window_layout', 'io_mouse_events', 'io_keyboard_events', 'font_metrics', 'clip_stack', 'text_draw', 'button', 'widgets_basic', 'slider_basic', 'style_defaults', 'aa_rect', 'aa_round_rect', 'aa_line')
+$scenarios = @('prim_rect_uv', 'prim_rect', 'rect_filled', 'line_h', 'window_layout', 'io_mouse_events', 'io_keyboard_events', 'font_metrics', 'clip_stack', 'text_draw', 'button', 'widgets_basic', 'slider_basic', 'style_defaults', 'aa_rect', 'aa_round_rect', 'aa_line', 'aa_bevel')
 
 $conformance = $PSScriptRoot
 $root   = (Resolve-Path "$conformance\..\..\..").Path
@@ -25,7 +25,7 @@ $bat = Join-Path $outDir 'build.bat'
 @echo off
 call "$vcvars" >nul 2>&1
 cd /d "$outDir"
-cl /nologo /std:c++17 /EHsc /I"$root" "$conformance\driver.cpp" "$root\imgui.cpp" "$root\imgui_draw.cpp" "$root\imgui_tables.cpp" "$root\imgui_widgets.cpp" /Fe:driver.exe
+cl /nologo /std:c++17 /EHsc /DIMGUI_DISABLE_SSE /I"$root" "$conformance\driver.cpp" "$root\imgui.cpp" "$root\imgui_draw.cpp" "$root\imgui_tables.cpp" "$root\imgui_widgets.cpp" /Fe:driver.exe
 "@ | Set-Content -Path $bat -Encoding ascii
 
 & cmd /c $bat 2>&1 | Select-Object -Last 2
