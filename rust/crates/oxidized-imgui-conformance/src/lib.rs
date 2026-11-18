@@ -48,6 +48,7 @@ pub const SCENARIOS: &[&str] = &[
     "window_title",
     "cmd_offsets",
     "scene_window_button",
+    "button_states",
 ];
 
 const COL: u32 = 0xFFFF_0000; // IM_COL32(0, 0, 255, 255)
@@ -1001,6 +1002,56 @@ pub fn scene_window_button_dump() -> String {
     ctx.end_frame();
     out
 }
+/// The `button_states` scenario: the same button resting, hovered and held down. The frames run in
+/// order so the press registers, and each state is dumped right after its frame.
+pub fn button_states_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/button_states.glyphs.txt"
+    );
+    let glyphs = std::fs::read_to_string(path).expect("glyph fixture");
+    let font = Font::from_pinned(&glyphs).expect("glyph fixture");
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario button_states\n");
+
+    let run = |ctx: &mut Context, label: &str, mx: f32, my: f32, down: bool, out: &mut String| {
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: mx, y: my });
+        ctx.io_mut().mouse_down[0] = down;
+        ctx.begin_frame();
+        ctx.begin_window_ex(
+            "W",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+            false,
+        );
+        ctx.set_cursor_screen_pos(Vec2 { x: 80.0, y: 80.0 });
+        let _ = ctx.button("Hi");
+        // The reference's list is dumped after the window closes, which is why it carries the
+        // trailing empty command the clip pop opens.
+        ctx.end_window();
+        let section = dump(label, ctx.draw_list());
+        out.push_str(&format!("state {label}\n"));
+        for line in section.lines().skip(2) {
+            out.push_str(line);
+            out.push('\n');
+        }
+        ctx.end_frame();
+    };
+
+    run(&mut ctx, "resting", 0.0, 0.0, false, &mut out);
+    run(&mut ctx, "hovered", 85.0, 85.0, false, &mut out);
+    run(&mut ctx, "active", 85.0, 85.0, true, &mut out);
+    out
+}
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -1020,6 +1071,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "window_title" => Some(window_title_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
+        "button_states" => Some(button_states_dump()),
         "button_draw" => Some(button_draw_dump()),
         "arc_steps" => Some(arc_steps_dump()),
         "bezier_points" => Some(bezier_points_dump()),
