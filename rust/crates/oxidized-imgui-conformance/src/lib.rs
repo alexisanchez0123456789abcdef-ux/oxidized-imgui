@@ -41,6 +41,7 @@ pub const SCENARIOS: &[&str] = &[
     "arc_steps",
     "bezier_points",
     "aa_polyline",
+    "aa_border",
 ];
 
 const COL: u32 = 0xFFFF_0000; // IM_COL32(0, 0, 255, 255)
@@ -66,7 +67,17 @@ pub fn scene(name: &str) -> Option<DrawList> {
         }
         // Public API: horizontal line, default inside stroke, one pixel thick.
         "line_h" => list.add_line_h(10.0, 30.0, 20.0, COL, 1.0),
-        // Open polyline with miter joins: a mitered body between two simple caps.
+        // Closed path with the inside stroke: a one-pixel border around a rectangle.
+        "aa_border" => {
+            list.white_uv = WHITE_UV;
+            list.fringe_scale = 1.0;
+            list.add_rect_border_inside_aa(
+                Vec2 { x: 10.5, y: 10.25 },
+                Vec2 { x: 60.5, y: 45.75 },
+                COL,
+                1.0,
+            );
+        }
         "aa_polyline" => {
             list.white_uv = WHITE_UV;
             list.fringe_scale = 1.0;

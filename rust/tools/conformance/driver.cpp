@@ -670,6 +670,14 @@ static void SceneAaPolyline(ImDrawList& list)
     list.AddPolyline(points, 3, COL, 3.0f, ImDrawFlags_JoinMiter);
 }
 
+// Closed path with the inside stroke: a one-pixel border around a rectangle.
+static void SceneAaBorder(ImDrawList& list)
+{
+    // No AntiAliasedLines flag: the untextured stroke path.
+    list.Flags = 0;
+    list.AddRect(ImVec2(10.5f, 10.25f), ImVec2(60.5f, 45.75f), COL, 0.0f, 0, 1.0f);
+}
+
 // Explicit UVs: no atlas involved.
 static void ScenePrimRectUV(ImDrawList& list)
 {
@@ -788,6 +796,7 @@ int main(int argc, char** argv)
     else if (strcmp(name, "aa_line") == 0) scene = SceneAaLine;
     else if (strcmp(name, "aa_bevel") == 0) scene = SceneAaBevel;
     else if (strcmp(name, "aa_polyline") == 0) scene = SceneAaPolyline;
+    else if (strcmp(name, "aa_border") == 0) scene = SceneAaBorder;
     if (strcmp(name, "clip_stack") == 0)
     {
         ImGui::NewFrame();

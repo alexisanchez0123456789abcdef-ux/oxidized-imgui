@@ -764,6 +764,120 @@ impl DrawList {
         }
     }
 
+    /// `ImDrawList::_AddPolyline` for a **closed** path with miter joins and the inside stroke
+    /// position, which is what a border (`AddRect` with defaults) takes.
+    ///
+    /// The first two vertices are reserved and patched at the end so the loop closes onto itself.
+    pub fn add_closed_polyline_aa_miter_inside(
+        &mut self,
+        points: &[Vec2],
+        col: ImU32,
+        thickness: f32,
+    ) {
+        const A_MASK: u32 = 0xFF00_0000;
+        const MITER_ANGLE_LIMIT: f32 = -0.999_961_9;
+
+        let n = points.len();
+        if n < 3 || (col & A_MASK) == 0 {
+            return;
+        }
+
+        // Normals for every edge, including the closing one.
+        let mut normals = vec![Vec2 { x: 0.0, y: 0.0 }; n];
+        for i1 in 0..n {
+            let i0 = (i1 + n - 1) % n;
+            let dx = points[i1].x - points[i0].x;
+            let dy = points[i1].y - points[i0].y;
+            let d2 = dx * dx + dy * dy;
+            let inv = if d2 > 0.0 { rsqrt_precise(d2) } else { 0.0 };
+            normals[i0] = Vec2 {
+                x: -dy * inv,
+                y: dx * inv,
+            };
+        }
+
+        let fringe = 0.0f32;
+        // Inside stroke: the fringe half is on the path, the rest goes inward.
+        let thickness0 = fringe * 0.5;
+        let thickness1 = (thickness + fringe) - thickness0;
+        let uv = self.white_uv;
+
+        // Reserved pair for the closing quad.
+        let reserved = self.vtx_buffer.len() as u32;
+        self.vtx_buffer.push(DrawVert {
+            pos: Vec2 { x: 0.0, y: 0.0 },
+            uv,
+            col,
+        });
+        self.vtx_buffer.push(DrawVert {
+            pos: Vec2 { x: 0.0, y: 0.0 },
+            uv,
+            col,
+        });
+        let mut base = reserved;
+        let mut idx_count = 0u32;
+
+        for i in 0..n {
+            let i0 = (i + n - 1) % n;
+            let n0 = normals[i0];
+            let n1 = normals[i];
+            let p = points[i];
+            let cos_theta = n0.x * n1.x + n0.y * n1.y;
+            let cos_clamped = cos_theta.max(MITER_ANGLE_LIMIT);
+            let miter_scale = (1.0 / (1.0 + cos_clamped)).min(1000.0);
+            let mx = (n0.x + n1.x) * miter_scale;
+            let my = (n0.y + n1.y) * miter_scale;
+
+            let next_base = self.vtx_buffer.len() as u32;
+            self.vtx_buffer.push(DrawVert {
+                pos: Vec2 {
+                    x: p.x - mx * thickness0,
+                    y: p.y - my * thickness0,
+                },
+                uv,
+                col,
+            });
+            self.vtx_buffer.push(DrawVert {
+                pos: Vec2 {
+                    x: p.x + mx * thickness1,
+                    y: p.y + my * thickness1,
+                },
+                uv,
+                col,
+            });
+            for tri in [[base, base + 2, base + 3], [base, base + 3, base + 1]] {
+                for vertex in tri {
+                    self.idx_buffer.push(vertex as ImDrawIdx);
+                }
+                idx_count += 3;
+            }
+            base = next_base;
+        }
+
+        // Close the path: the reserved pair takes the last pair's positions.
+        let last_positions = [
+            self.vtx_buffer[(base) as usize].pos,
+            self.vtx_buffer[(base + 1) as usize].pos,
+        ];
+        self.vtx_buffer[reserved as usize].pos = last_positions[0];
+        self.vtx_buffer[(reserved + 1) as usize].pos = last_positions[1];
+
+        if let Some(cmd) = self.cmd_buffer.last_mut() {
+            cmd.elem_count += idx_count;
+        }
+    }
+
+    /// `ImDrawList::AddRect` with defaults: a closed miter stroke placed inside the rectangle.
+    pub fn add_rect_border_inside_aa(&mut self, min: Vec2, max: Vec2, col: ImU32, thickness: f32) {
+        let points = [
+            min,
+            Vec2 { x: max.x, y: min.y },
+            max,
+            Vec2 { x: min.x, y: max.y },
+        ];
+        self.add_closed_polyline_aa_miter_inside(&points, col, thickness);
+    }
+
     /// `ImDrawList::PrimRect`: a rectangle filled with the white pixel, no explicit UVs.
     pub fn prim_rect(&mut self, a: Vec2, c: Vec2, col: ImU32) {
         let uv = self.white_uv;
