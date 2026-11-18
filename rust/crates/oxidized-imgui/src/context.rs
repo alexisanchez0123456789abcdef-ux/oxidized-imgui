@@ -123,6 +123,9 @@ pub struct Window {
     pub scrollbar_x: bool,
     /// `window->InnerRect`: the window rectangle without its decorations.
     pub inner_rect: (Vec2, Vec2),
+    /// `ImGuiWindowFlags_ChildWindow`: a region inside another window. A child has its own draw
+    /// list and keeps no state between frames.
+    pub is_child: bool,
     /// `pos + style.WindowPadding`, minus the scroll.
     pub content_origin: Vec2,
     /// `size - style.WindowPadding * 2`, what `GetContentRegionAvail` returns inside the window.
@@ -191,6 +194,12 @@ pub struct Context {
     resize_grip_cols: [u32; 2],
     /// `window->DC.StateStorage`: the open or closed state of every tree node and collapsing header.
     item_states: Vec<(ImGuiID, bool)>,
+    /// The host each closed list belongs to, so a child's list follows its host's.
+    list_parents: Vec<Option<String>>,
+    /// The host window's list, set aside while a child owns the current one.
+    parent_list: Option<crate::draw_list::DrawList>,
+    /// While a child is open, the name of the window hosting it.
+    pending_child_host: Option<String>,
     /// `g.HoveredIdTimer`: how long the border under the mouse has been hovered. The reference
     /// waits WINDOWS_RESIZE_FROM_EDGES_FEEDBACK_TIMER before it reports a border, so brushing past
     /// an edge on the way to a widget does not light it up.
@@ -242,6 +251,9 @@ impl Default for Context {
             active_id: None,
             active_click_offset: Vec2::default(),
             item_states: Vec::new(),
+            list_parents: Vec::new(),
+            parent_list: None,
+            pending_child_host: None,
             resize_grip_cols: [0; 2],
             resize_hover_timer: 0.0,
             resize_border_prev: -1,
@@ -374,14 +386,31 @@ impl Context {
     /// A window that drew nothing is left out, exactly like `AddDrawListToDrawDataEx` does.
     pub fn render_lists(&self) -> Vec<(String, crate::draw_list::DrawList)> {
         let mut out = Vec::new();
-        for name in &self.display_order {
-            let Some((_, list)) = self.frame_lists.iter().find(|(known, _)| known == name) else {
-                continue;
-            };
-            if list.is_empty() {
-                continue;
+        // A child's list is submitted right after the list of the window hosting it, which is the
+        // order the reference's draw data ends up in.
+        let mut queue = self.display_order.clone();
+        let mut guard = 0;
+        while !queue.is_empty() {
+            guard += 1;
+            if guard > 1024 {
+                break;
             }
-            out.push((name.clone(), list.clone()));
+            let name = queue.remove(0);
+            if let Some((_, list)) = self.frame_lists.iter().find(|(known, _)| *known == name) {
+                if !list.is_empty() {
+                    let mut list = list.clone();
+                    // `_PopUnusedDrawCmd`: a presented list never ends with an empty command.
+                    list.pop_unused_draw_cmd();
+                    out.push((name.clone(), list));
+                }
+            }
+            for (index, host) in self.list_parents.iter().enumerate() {
+                if host.as_deref() == Some(name.as_str()) {
+                    if let Some((child, _)) = self.frame_lists.get(index) {
+                        queue.push(child.clone());
+                    }
+                }
+            }
         }
         out
     }
@@ -1145,6 +1174,9 @@ impl Context {
             x: size.x - pad.x * 2.0,
             y: size.y - pad.y * 2.0,
         };
+        // window->ID = ImHashStr(name) and the id stack starts from it, which is what makes an
+        // item's id depend on its window and a child's name carry the host's hash.
+        self.id_stack.push(crate::id::hash_str_utf8(name, 0));
         self.windows.push(Window {
             name: name.to_string(),
             pos,
@@ -1159,6 +1191,7 @@ impl Context {
             scrollbar_y,
             scrollbar_x,
             inner_rect,
+            is_child: false,
             content_origin,
             content_size,
             cursor: content_origin,
@@ -1435,6 +1468,119 @@ impl Context {
     }
 
     /// `ImGui::End`: the window remembers its position, its full size and its collapsed state.
+    /// `ImGui::BeginChild`: a region inside the current window, with its own layout, its own padding
+    /// and **its own draw list**, as the reference gives it. That is what makes a child cheap to
+    /// submit and what keeps its content out of its host's list.
+    ///
+    /// Scrolling inside a child is not wired up yet: its content is clipped by culling against its
+    /// own rectangle, but the wheel and the scrollbars are still the parent's.
+    pub fn begin_child(&mut self, id: &str, size: Vec2, borders: bool) {
+        let pad = self.style.window_padding;
+        let Some(parent) = self.windows.last() else {
+            return;
+        };
+        let host = parent.name.clone();
+        let pos = parent.cursor;
+        // BeginChild names the window %s/%s_%08X: the host's name, the child's and its id.
+        let child_name = format!("{host}/{id}_{:08X}", self.get_id(id));
+        let inner_rect = (
+            pos,
+            Vec2 {
+                x: pos.x + size.x,
+                y: pos.y + size.y,
+            },
+        );
+        let content_origin = Vec2 {
+            x: pos.x + pad.x,
+            y: pos.y + pad.y,
+        };
+        let content_size = Vec2 {
+            x: size.x - pad.x * 2.0,
+            y: size.y - pad.y * 2.0,
+        };
+
+        // `RenderWindowOuterBorders` runs while the host still owns the list, so a child's border is
+        // part of the host's draw list and not of the child's own.
+        if borders && self.style.child_border_size > 0.0 {
+            self.draw_list.add_aligned_rect_border(
+                inner_rect.0,
+                inner_rect.1,
+                self.style.color_u32(crate::style::Col::Border),
+                self.style.child_border_size,
+            );
+        }
+        // The child takes over the current list; the host's list waits until `end_child`.
+        let child_list = self.new_window_draw_list();
+        let host_list = core::mem::replace(&mut self.draw_list, child_list);
+        self.parent_list = Some(host_list);
+
+        self.windows.push(Window {
+            name: child_name,
+            pos,
+            size,
+            size_full: size,
+            collapsed: false,
+            want_collapse_toggle: false,
+            flags: WindowFlags::NONE,
+            scroll: Vec2::default(),
+            scroll_max: Vec2::default(),
+            content_extent: Vec2::default(),
+            scrollbar_y: false,
+            scrollbar_x: false,
+            inner_rect,
+            is_child: true,
+            content_origin,
+            content_size,
+            cursor: content_origin,
+            cursor_start: content_origin,
+            cursor_max: content_origin,
+            line_start_x: content_origin.x,
+            line_height: 0.0,
+            last_min: Vec2::default(),
+            last_max: Vec2::default(),
+            has_item: false,
+        });
+        self.push_id(id);
+        // `InnerClipRect`: the child's own list starts clipped to its rectangle, shrunk by half a
+        // border and floored, which is what the reference's first command carries.
+        let border = self.style.child_border_size;
+        let clip = (
+            Vec2 {
+                x: (0.5 + inner_rect.0.x + border * 0.5).floor(),
+                y: (0.5 + inner_rect.0.y + border * 0.5).floor(),
+            },
+            Vec2 {
+                x: (inner_rect.1.x - border * 0.5).floor(),
+                y: (inner_rect.1.y - border * 0.5).floor(),
+            },
+        );
+        // A fresh list starts from the full screen, so this clip is absolute, not intersected.
+        self.draw_list.push_clip_rect(clip.0, clip.1, false);
+        self.pending_child_host = Some(host);
+    }
+
+    /// `ImGui::EndChild`: close the region's list, hand the host's list back, and advance the host
+    /// past the region as an item of its size.
+    pub fn end_child(&mut self) {
+        let Some(child) = self.windows.pop() else {
+            return;
+        };
+        if !child.is_child {
+            self.windows.push(child);
+            return;
+        }
+        self.pop_id();
+        self.draw_list.pop_clip_rect();
+        let child_list = core::mem::take(&mut self.draw_list);
+        self.frame_lists.push((child.name.clone(), child_list));
+        self.list_parents.push(self.pending_child_host.take());
+        self.draw_list = self
+            .parent_list
+            .take()
+            .unwrap_or_else(|| self.new_window_draw_list());
+        self.dummy(child.size);
+    }
+
     pub fn end_window(&mut self) {
         self.draw_list.finish_clip_scope();
         if let Some(window) = self.windows.pop() {
@@ -1467,7 +1613,9 @@ impl Context {
             // The frame's list for this window, kept for `render_lists`.
             let list = core::mem::take(&mut self.draw_list);
             self.frame_lists.push((window.name.clone(), list.clone()));
+            self.list_parents.push(None);
             self.last_list = list;
+            self.id_stack.pop();
         }
     }
 

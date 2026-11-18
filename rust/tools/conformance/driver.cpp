@@ -2161,6 +2161,65 @@ static void DumpTreeNode()
     FrameTreeNode(100.0f, 74.0f, false);
 }
 
+// child_region: BeginChild gives a region its own layout, padding, border and draw list. The child's
+// list is submitted right after its host's, so the two are dumped in that order.
+static void FrameChildRegion()
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("P", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar);
+    ImGui::Button("AA");
+    ImGui::BeginChild("Inside", ImVec2(150.0f, 60.0f), ImGuiChildFlags_Borders);
+    ImGui::Button("BB");
+    ImGui::Button("CC");
+    ImGui::EndChild();
+    ImGui::Button("EE");
+    ImGui::End();
+}
+
+static void DumpChildRegion()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario child_region\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[5] = { 'A', 'B', 'C', 'E', 'i' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    WriteGlyphFixture(font, bake_order, 5);
+
+    for (int f = 0; f < 4; f++)
+    {
+        FrameChildRegion();
+        ImGui::Render();
+        ImDrawData* dd = ImGui::GetDrawData();
+        ImGuiContext& g = *GImGui;
+        printf("frame %d lists %d\n", f, dd->CmdListsCount);
+        for (int i = 0; i < dd->CmdListsCount; i++)
+        {
+            const ImDrawList* list = dd->CmdLists[i];
+            const char* name = "?";
+            for (int w = 0; w < g.Windows.Size; w++)
+                if (g.Windows[w]->DrawList == list)
+                    name = g.Windows[w]->Name;
+            printf("list %d %s\n", i, name);
+            DumpDrawListBody(*list);
+        }
+    }
+}
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 
 static void DumpCmdOffsets()
@@ -2410,6 +2469,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_icons") == 0)
     {
         DumpWindowIcons();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "child_region") == 0)
+    {
+        DumpChildRegion();
         ImGui::DestroyContext();
         return 0;
     }
