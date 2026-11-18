@@ -28,6 +28,7 @@ pub const SCENARIOS: &[&str] = &[
     "io_mouse_events",
     "io_keyboard_events",
     "font_metrics",
+    "clip_stack",
 ];
 
 const COL: u32 = 0xFFFF_0000; // IM_COL32(0, 0, 255, 255)
@@ -359,6 +360,68 @@ pub fn font_metrics_dump() -> String {
     out
 }
 
+/// The `clip_stack` scenario: the clip stack of a draw list and the command splits it causes.
+pub fn clip_stack_dump() -> String {
+    use oxidized_imgui::{DrawList, Vec2};
+
+    fn dump_list(out: &mut String, name: &str, list: &DrawList) {
+        out.push_str(&format!(
+            "{name} cmds {} vtx {} idx {}\n",
+            list.cmd_buffer.len(),
+            list.vtx_buffer.len(),
+            list.idx_buffer.len()
+        ));
+        for (i, cmd) in list.cmd_buffer.iter().enumerate() {
+            out.push_str(&format!(
+                "  cmd {i} clip {:08x} {:08x} {:08x} {:08x} elems {}\n",
+                bits(cmd.clip_rect[0]),
+                bits(cmd.clip_rect[1]),
+                bits(cmd.clip_rect[2]),
+                bits(cmd.clip_rect[3]),
+                cmd.elem_count
+            ));
+        }
+    }
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario clip_stack\n");
+
+    let mut simple = DrawList::new();
+    simple.white_uv = WHITE_UV;
+    simple.push_clip_rect(
+        Vec2 { x: 70.0, y: 70.0 },
+        Vec2 { x: 170.0, y: 170.0 },
+        false,
+    );
+    simple.prim_rect(Vec2 { x: 60.0, y: 60.0 }, Vec2 { x: 200.0, y: 200.0 }, COL);
+    simple.pop_clip_rect();
+    simple.prim_rect(
+        Vec2 { x: 210.0, y: 210.0 },
+        Vec2 { x: 250.0, y: 250.0 },
+        COL,
+    );
+    dump_list(&mut out, "clip_simple", &simple);
+
+    let mut intersect = DrawList::new();
+    intersect.white_uv = WHITE_UV;
+    intersect.push_clip_rect(
+        Vec2 { x: 60.0, y: 60.0 },
+        Vec2 { x: 200.0, y: 200.0 },
+        false,
+    );
+    intersect.push_clip_rect(Vec2 { x: 70.0, y: 70.0 }, Vec2 { x: 300.0, y: 300.0 }, true);
+    intersect.prim_rect(Vec2 { x: 65.0, y: 65.0 }, Vec2 { x: 290.0, y: 290.0 }, COL);
+    intersect.pop_clip_rect();
+    intersect.prim_rect(Vec2 { x: 65.0, y: 65.0 }, Vec2 { x: 190.0, y: 190.0 }, COL);
+    intersect.pop_clip_rect();
+    dump_list(&mut out, "clip_intersect", &intersect);
+
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -366,6 +429,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "io_mouse_events" => Some(io_mouse_dump()),
         "io_keyboard_events" => Some(io_keyboard_dump()),
         "font_metrics" => Some(font_metrics_dump()),
+        "clip_stack" => Some(clip_stack_dump()),
         _ => scene(name).map(|list| dump(name, &list)),
     }
 }

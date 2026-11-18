@@ -94,6 +94,10 @@ pub struct DrawList {
     /// `ImDrawListSharedData::TexUvWhitePixel`: the UV a solid fill samples. The reference takes it
     /// from the font atlas; here it is an explicit input so the harness can pin it.
     pub white_uv: Vec2,
+    /// Clip used when the clip stack is empty (`ImDrawListSharedData::ClipRectFullscreen`).
+    pub fullscreen_clip: [f32; 4],
+    clip_stack: Vec<[f32; 4]>,
+    current_clip: [f32; 4],
 }
 
 impl DrawList {
@@ -102,7 +106,55 @@ impl DrawList {
     pub fn new() -> Self {
         Self {
             cmd_buffer: vec![DrawCmd::default()],
+            fullscreen_clip: [0.0, 0.0, 1280.0, 720.0],
             ..Self::default()
+        }
+    }
+
+    /// `ImDrawList::PushClipRect`: intersects with the current clip when asked, then starts a new
+    /// command if the current one already has geometry.
+    pub fn push_clip_rect(&mut self, min: Vec2, max: Vec2, intersect_with_current: bool) {
+        let mut cr = [min.x, min.y, max.x, max.y];
+        if intersect_with_current {
+            let current = self.current_clip;
+            cr[0] = cr[0].max(current[0]);
+            cr[1] = cr[1].max(current[1]);
+            cr[2] = cr[2].min(current[2]);
+            cr[3] = cr[3].min(current[3]);
+        }
+        cr[2] = cr[2].max(cr[0]);
+        cr[3] = cr[3].max(cr[1]);
+        self.clip_stack.push(cr);
+        self.current_clip = cr;
+        self.on_changed_clip_rect();
+    }
+
+    /// `ImDrawList::PopClipRect`: back to the enclosing clip, or the fullscreen one if none.
+    pub fn pop_clip_rect(&mut self) {
+        self.clip_stack.pop();
+        self.current_clip = self
+            .clip_stack
+            .last()
+            .copied()
+            .unwrap_or(self.fullscreen_clip);
+        self.on_changed_clip_rect();
+    }
+
+    /// `ImDrawList::_OnChangedClipRect`.
+    fn on_changed_clip_rect(&mut self) {
+        let last_has_geometry = self
+            .cmd_buffer
+            .last()
+            .map(|cmd| cmd.elem_count > 0)
+            .unwrap_or(false);
+        if last_has_geometry {
+            let cmd = DrawCmd {
+                clip_rect: self.current_clip,
+                ..DrawCmd::default()
+            };
+            self.cmd_buffer.push(cmd);
+        } else if let Some(cmd) = self.cmd_buffer.last_mut() {
+            cmd.clip_rect = self.current_clip;
         }
     }
 

@@ -1,0 +1,9 @@
+header imgui 1.93.1 WIP 19303
+scenario clip_stack
+clip_simple cmds 2 vtx 8 idx 12
+  cmd 0 clip 428c0000 428c0000 432a0000 432a0000 elems 6
+  cmd 1 clip 00000000 00000000 44a00000 44340000 elems 6
+clip_intersect cmds 3 vtx 8 idx 12
+  cmd 0 clip 428c0000 428c0000 43480000 43480000 elems 6
+  cmd 1 clip 42700000 42700000 43480000 43480000 elems 6
+  cmd 2 clip 00000000 00000000 44a00000 44340000 elems 0

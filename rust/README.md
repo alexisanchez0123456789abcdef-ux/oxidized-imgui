@@ -19,6 +19,7 @@ instead of against our own expectations:
 | Mouse input | rounded position, delta, click/release from the down duration, double-click counter | `io_mouse_events` golden |
 | Keyboard input | queued events with duplicate filtering, down durations, `IsKeyPressed`, modifiers from `ImGuiMod_*` | `io_keyboard_events` golden |
 | Text measurement | `CalcTextSize` over a pinned advance table (the atlas is **not** built: see `font.rs`) | `font_metrics` golden |
+| Clip stack | `PushClipRect`/`PopClipRect`, intersection, fullscreen fallback, command splitting | `clip_stack` golden |
 
 Provisional, **not** parity-checked: everything else. In particular the anti-aliased and rounded
 paths, the diagonal `AddLine` (stroke joins), circles and any text are not implemented yet; the
