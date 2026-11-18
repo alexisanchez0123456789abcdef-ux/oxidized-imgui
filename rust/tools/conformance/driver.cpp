@@ -1493,6 +1493,42 @@ static void DumpWindowWheel()
     FrameWheelWindow(200.0f, 150.0f, 0.0f);
 }
 
+// window_autosize: a window that takes the size its content needs. The size follows the content of
+// the previous frame, which is why shrinking or growing takes one frame to show up.
+static void FrameAutoSizeWindow(float content_h)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar |
+        ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
+    ImGui::Begin("A", NULL, flags);
+    ImGuiWindow* w = ImGui::GetCurrentWindow();
+    ImGui::Dummy(ImVec2(100.0f, content_h));
+    printf("frame size %08x %08x sizefull %08x %08x inner %08x %08x %08x %08x content %08x %08x\n",
+        Bits(w->Size.x), Bits(w->Size.y), Bits(w->SizeFull.x), Bits(w->SizeFull.y),
+        Bits(w->InnerRect.Min.x), Bits(w->InnerRect.Min.y), Bits(w->InnerRect.Max.x),
+        Bits(w->InnerRect.Max.y), Bits(w->ContentSize.x), Bits(w->ContentSize.y));
+    DumpDrawListBody(*w->DrawList);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpWindowAutoSize()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario window_autosize\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
+    // A settled window: the size follows the content of the previous frame.
+    for (int i = 0; i < 6; i++)
+        FrameAutoSizeWindow(300.0f);
+}
+
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 static void DumpCmdOffsets()
 {
@@ -1741,6 +1777,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_icons") == 0)
     {
         DumpWindowIcons();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "window_autosize") == 0)
+    {
+        DumpWindowAutoSize();
         ImGui::DestroyContext();
         return 0;
     }
