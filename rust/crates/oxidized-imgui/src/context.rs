@@ -185,8 +185,10 @@ pub struct Context {
     /// `g.HoveredId`: the widget under the mouse, which blocks the click-to-raise.
     hovered_id: Option<ImGuiID>,
     active_id: Option<ImGuiID>,
-    /// `ActiveIdClickOffset`: where inside the window the move drag started.
+    /// `ActiveIdClickOffset`: where inside the window (or the grip) the drag started.
     active_click_offset: Vec2,
+    /// `resize_grip_col[2]`: the colour each lower corner grip paints this frame, zero when hidden.
+    resize_grip_cols: [u32; 2],
     /// `g.MovingWindow`: the window that follows the mouse while the move drag lasts.
     moving_window: Option<String>,
     /// The window's draw list: what this frame has drawn so far.
@@ -228,6 +230,7 @@ impl Default for Context {
             hovered_id: None,
             active_id: None,
             active_click_offset: Vec2::default(),
+            resize_grip_cols: [0; 2],
             moving_window: None,
             draw_list: crate::draw_list::DrawList::new(),
             slider_just_activated: false,
@@ -262,6 +265,7 @@ impl Context {
         // which turn on anti-aliased fills, lines and (textured) corners.
         self.draw_list = self.new_window_draw_list();
         self.frame_lists.clear();
+        self.resize_grip_cols = [0; 2];
         self.hovered_id = None;
         self.time += self.io.delta_time as f64;
         self.update_keyboard_inputs();
@@ -831,6 +835,14 @@ impl Context {
                 y: (content.y + pad.y * 2.0 + decoration).min(self.io.display_size.y),
             };
         }
+        // `UpdateWindowManualResize` for the two lower grips: the input pass runs before the
+        // interior is computed, so a drag changes the size the same frame draws with. The drawing
+        // happens later, in the decoration pass, and only reads the colours this pass decided.
+        if !flags.contains(WindowFlags::NO_RESIZE) && !window_just_created {
+            if let Some(resized) = self.update_resize_grips(name, pos, size_full, always_auto) {
+                size_full = resized;
+            }
+        }
         // A collapsed window shrinks to its title bar: the reference keeps `SizeFull` and displays
         // `(Size.x, TitleBarHeight)`.
         let size = if collapsed {
@@ -1019,7 +1031,7 @@ impl Context {
             // `RenderResizeGrips`: between the scrollbars and the border, so the border draws over
             // them and they never sit on top of the frame.
             if !flags.contains(WindowFlags::NO_RESIZE) && !window_just_created {
-                self.draw_resize_grips(name, pos, size);
+                self.draw_resize_grips(pos, size);
             }
 
             // The window border, inside the rectangle. A pixel-aligned window takes the two-ring
@@ -1651,10 +1663,16 @@ impl Context {
 
     /// The work area is the whole display here, inset by `max(DisplayWindowPadding,
     /// DisplaySafeAreaPadding)` on each side.
-    /// `ImGui::RenderResizeGrips` drawing half: the two lower corner grips, the lower-right one
-    /// always visible and the lower-left one only while it is hovered or held. Resizing itself is
-    /// not wired up yet, so only the colours react.
-    fn draw_resize_grips(&mut self, name: &str, pos: Vec2, size: Vec2) {
+    /// `UpdateWindowManualResize` for the two lower grips: hover, press, and while the lower-right
+    /// one is held it resizes the window. The colour it decides is drawn later, in the decoration
+    /// pass, so a drag has no frame of latency.
+    fn update_resize_grips(
+        &mut self,
+        name: &str,
+        pos: Vec2,
+        size: Vec2,
+        always_auto: bool,
+    ) -> Option<Vec2> {
         use crate::style::Col;
 
         // `resize_grip_draw_size`: `ImTrunc(ImMax(FontSize * 1.10, WindowRounding + 1.0))`.
@@ -1663,8 +1681,6 @@ impl Context {
             .trunc();
         let grip_hover_inner = (draw_size * 0.75).trunc();
         let grip_hover_outer = self.style.window_border_hover_padding * 3.0;
-        let border_inner = (self.style.window_border_size * 0.5).round();
-        let rounding = self.style.window_rounding;
         let count = if self.io.config_windows_resize_from_edges {
             2
         } else {
@@ -1676,6 +1692,7 @@ impl Context {
         ];
         let base_id = self.get_id("#RESIZE");
         let mouse = self.io.mouse_pos.unwrap_or_default();
+        let mut resized = None;
 
         for (index, (corner_n, inner_dir)) in grip_defs.iter().enumerate().take(count) {
             let corner = Vec2 {
@@ -1711,33 +1728,83 @@ impl Context {
             }
             if hovered && self.io.mouse_clicked[0] {
                 self.active_id = Some(grip_id);
+                // `ButtonBehavior`: the offset inside the handle, so a drag is a delta.
+                self.active_click_offset = Vec2 {
+                    x: mouse.x - rect_min.x,
+                    y: mouse.y - rect_min.y,
+                };
             }
             let held = self.active_id == Some(grip_id) && self.io.mouse_down[0];
+            if held && index == 0 {
+                // `CalcResizePosSizeFromAnyCorner` for the lower-right corner: the corner the mouse
+                // asks for becomes `Pos + Size`, then the size constraint applies.
+                let corner_target = Vec2 {
+                    x: mouse.x - self.active_click_offset.x + grip_hover_inner,
+                    y: mouse.y - self.active_click_offset.y + grip_hover_inner,
+                };
+                let wanted = Vec2 {
+                    x: corner_target.x - pos.x,
+                    y: corner_target.y - pos.y,
+                };
+                let min_size = if always_auto {
+                    1.0
+                } else {
+                    self.style.window_min_size.x
+                };
+                resized = Some(Vec2 {
+                    x: wanted.x.max(min_size),
+                    y: wanted.y.max(min_size),
+                });
+            }
             if self.active_id == Some(grip_id) && !self.io.mouse_down[0] {
                 self.active_id = None;
             }
 
             // Only the lower-right grip is visible at rest.
-            if !(held || hovered || index == 0) {
+            if held || hovered || index == 0 {
+                let col = if held {
+                    self.style.color_u32(Col::ResizeGripActive)
+                } else if hovered {
+                    self.style.color_u32(Col::ResizeGripHovered)
+                } else {
+                    self.style.color_u32(Col::ResizeGrip)
+                };
+                if col & 0xFF00_0000 != 0 {
+                    self.resize_grip_cols[index] = col;
+                }
+            }
+        }
+        resized
+    }
+
+    /// `ImGui::RenderResizeGrips`: the two lower corner grips, painted with the colours the input
+    /// pass decided. Resizing from the lower-left grip is not wired up yet.
+    fn draw_resize_grips(&mut self, pos: Vec2, size: Vec2) {
+        let draw_size = (self.font.size * 1.10)
+            .max(self.style.window_rounding + 1.0)
+            .trunc();
+        let border_inner = (self.style.window_border_size * 0.5).round();
+        let rounding = self.style.window_rounding;
+        let grip_defs = [
+            (Vec2 { x: 1.0, y: 1.0 }, Vec2 { x: -1.0, y: -1.0 }),
+            (Vec2 { x: 0.0, y: 1.0 }, Vec2 { x: 1.0, y: -1.0 }),
+        ];
+        for (index, (corner_n, inner_dir)) in grip_defs.iter().enumerate() {
+            let col = self.resize_grip_cols[index];
+            if col == 0 {
                 continue;
             }
-            let col = if held {
-                self.style.color_u32(Col::ResizeGripActive)
-            } else if hovered {
-                self.style.color_u32(Col::ResizeGripHovered)
-            } else {
-                self.style.color_u32(Col::ResizeGrip)
+            let corner = Vec2 {
+                x: pos.x + size.x * corner_n.x,
+                y: pos.y + size.y * corner_n.y,
             };
-            if col & 0xFF00_0000 == 0 {
-                continue;
-            }
             // Two points along the corner's edges, then the arc of the window rounding, which at
             // rounding 0 collapses onto the corner itself.
             let along = |a: f32, b: f32| Vec2 {
                 x: corner.x + inner_dir.x * a,
                 y: corner.y + inner_dir.y * b,
             };
-            let mut points = Vec::with_capacity(6);
+            let mut points = Vec::with_capacity(3);
             if index & 1 == 1 {
                 points.push(along(border_inner, draw_size));
                 points.push(along(draw_size, border_inner));
@@ -1745,13 +1812,12 @@ impl Context {
                 points.push(along(draw_size, border_inner));
                 points.push(along(border_inner, draw_size));
             }
-            let centre = Vec2 {
-                x: corner.x + inner_dir.x * (rounding + border_inner),
-                y: corner.y + inner_dir.y * (rounding + border_inner),
-            };
             // PathArcToFast with a zero radius pushes the centre once, so the shape is a
             // triangle rather than a fan.
-            points.push(centre);
+            points.push(Vec2 {
+                x: corner.x + inner_dir.x * (rounding + border_inner),
+                y: corner.y + inner_dir.y * (rounding + border_inner),
+            });
             self.draw_list.add_convex_poly_filled_aa(&points, col);
         }
     }
