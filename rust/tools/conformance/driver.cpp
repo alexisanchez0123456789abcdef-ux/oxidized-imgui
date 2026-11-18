@@ -1834,6 +1834,46 @@ static void DumpWindowResizeGrips()
     FrameGripWindow(0.0f, 0.0f, false);
 }
 
+// window_resize_drag: dragging the lower-right resize grip changes the window size. The size is
+// computed from the mouse position and the offset inside the handle, so a drag is a delta and the
+// size constraint applies.
+static void FrameResizeDrag(float mx, float my, bool down)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = down;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("R", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar);
+    ImGuiWindow* w = ImGui::GetCurrentWindow();
+    printf("frame size %08x %08x pos %08x %08x\n", Bits(w->Size.x), Bits(w->Size.y),
+        Bits(w->Pos.x), Bits(w->Pos.y));
+    DumpDrawListBody(*w->DrawList);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpWindowResizeDrag()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario window_resize_drag\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
+    for (int i = 0; i < 4; i++)
+        FrameResizeDrag(0.0f, 0.0f, false);
+    // The window ends at (360, 260); the handle reaches 12 pixels out and 10 in.
+    FrameResizeDrag(357.0f, 257.0f, false);
+    FrameResizeDrag(357.0f, 257.0f, true);
+    FrameResizeDrag(377.0f, 277.0f, true);
+    FrameResizeDrag(397.0f, 297.0f, true);
+    FrameResizeDrag(397.0f, 297.0f, false);
+    FrameResizeDrag(0.0f, 0.0f, false);
+}
+
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 
 static void DumpCmdOffsets()
@@ -2083,6 +2123,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_icons") == 0)
     {
         DumpWindowIcons();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "window_resize_drag") == 0)
+    {
+        DumpWindowResizeDrag();
         ImGui::DestroyContext();
         return 0;
     }

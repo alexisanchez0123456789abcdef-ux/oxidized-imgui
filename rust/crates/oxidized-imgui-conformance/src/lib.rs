@@ -64,6 +64,7 @@ pub const SCENARIOS: &[&str] = &[
     "window_scrollbar_page",
     "window_min_size",
     "window_resize_grips",
+    "window_resize_drag",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -2553,6 +2554,62 @@ pub fn window_resize_grips_dump() -> String {
     out
 }
 
+/// The `window_resize_drag` scenario: dragging the lower-right resize grip changes the window size.
+///
+/// The size comes from the mouse position and the offset inside the handle, so a drag is a delta; the
+/// scenario asks for the same size every frame, which is why the size springs back on release.
+pub fn window_resize_drag_dump() -> String {
+    use oxidized_imgui::{Context, Vec2};
+
+    let mut ctx = Context::new();
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario window_resize_drag\n");
+
+    let frame = |ctx: &mut Context, out: &mut String, mx: f32, my: f32, down: bool| {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: mx, y: my });
+        ctx.io_mut().mouse_down[0] = down;
+        ctx.begin_frame();
+        ctx.set_next_window_flags(WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR);
+        ctx.begin_window(
+            "R",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        let window = ctx.window();
+        let text = format!(
+            "frame size {:08x} {:08x} pos {:08x} {:08x}\n",
+            window.size.x.to_bits(),
+            window.size.y.to_bits(),
+            window.pos.x.to_bits(),
+            window.pos.y.to_bits(),
+        );
+        let body = dump("window_resize_drag", ctx.draw_list());
+        ctx.end_window();
+        out.push_str(&text);
+        for line in body.lines().skip(2) {
+            out.push_str(line);
+            out.push('\n');
+        }
+        ctx.end_frame();
+    };
+
+    for _ in 0..4 {
+        frame(&mut ctx, &mut out, 0.0, 0.0, false);
+    }
+    // The window ends at (360, 260); the handle reaches 12 pixels out and 10 in.
+    frame(&mut ctx, &mut out, 357.0, 257.0, false);
+    frame(&mut ctx, &mut out, 357.0, 257.0, true);
+    frame(&mut ctx, &mut out, 377.0, 277.0, true);
+    frame(&mut ctx, &mut out, 397.0, 297.0, true);
+    frame(&mut ctx, &mut out, 397.0, 297.0, false);
+    frame(&mut ctx, &mut out, 0.0, 0.0, false);
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -2587,6 +2644,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "window_scrollbar_page" => Some(window_scrollbar_page_dump()),
         "window_min_size" => Some(window_min_size_dump()),
         "window_resize_grips" => Some(window_resize_grips_dump()),
+        "window_resize_drag" => Some(window_resize_drag_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),

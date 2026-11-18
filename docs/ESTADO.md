@@ -2,16 +2,16 @@
 
 _Actualizado: 2026-11-18. Generado desde `docs/progress.json`: no editar a mano._
 
-## Reescritura a Rust: **52.0 %**
+## Reescritura a Rust: **52.3 %**
 
-Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 55.5 %.
+Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 55.8 %.
 
 Qué cuenta como hecho: solo lo que tiene una prueba que lo compara con el código C++ original.
 Un cambio de estado sin evidencia no sube el porcentaje.
 
 | Área | Peso | Avance |
 | --- | ---: | ---: |
-| Núcleo: contexto, IO, ventanas, identificadores, layout | 53 | 74 % |
+| Núcleo: contexto, IO, ventanas, identificadores, layout | 54 | 74 % |
 | Listas de dibujo y primitivas | 17 | 88 % |
 | Widgets | 26 | 38 % |
 | Fuentes y texto | 13 | 15 % |
@@ -34,6 +34,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Iconos de ventana: flecha de colapso y cruz de cierre** — golden window_icons (flecha, cruz y texto desplazado por los iconos)
 - **Iconos de ventana: hover, pulsación, colapso y cierre** — golden window_icons_states (14 estados: resalte, pulsado, soltar dentro y fuera, colapsada y expandida)
 - **Arrastrar la ventana desde la flecha (umbral de arrastre y desplazamiento)** — golden window_icons_drag (8 estados con la posición de la ventana)
+- **Arrastrar el tirador de la esquina: el tamaño sale de la posición del ratón y su recorte** — golden window_resize_drag (10 frames con tamaño y posición)
 - **Tiradores de redimensionado: el de abajo a la derecha siempre, el otro al pasar por encima, con sus tres colores** — golden window_resize_grips (8 frames: reposo, hover, pulsado y esquina izquierda)
 - **Tamaño mínimo de ventana: recorta el tamaño pedido por API (32), con mínimo duro de 1 px para el auto-tamaño** — golden window_min_size (6 frames: 10, 31, 32, 120 y auto con tamaño pedido)
 - **Barra por páginas: clic en la pista avanza una página, con Shift forzando la búsqueda absoluta** — golden window_scrollbar_page (16 frames: página, página otra vez, Shift y absoluto)
