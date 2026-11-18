@@ -57,6 +57,7 @@ pub const SCENARIOS: &[&str] = &[
     "window_scrollbar_drag",
     "window_wheel",
     "window_autosize",
+    "window_autosize_change",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -2116,6 +2117,67 @@ pub fn window_autosize_dump() -> String {
     out
 }
 
+/// The `window_autosize_change` scenario: an auto-sized window whose content changes.
+///
+/// The size always follows the content of the previous frame, so both shrinking and growing show up
+/// one frame later. That is `CalcWindowAutoFitSize(window, window->ContentSizeIdeal, ...)`: the ideal
+/// content size is measured at the end of a frame and only used by the next one.
+pub fn window_autosize_change_dump() -> String {
+    use oxidized_imgui::{Context, Vec2};
+
+    let mut ctx = Context::new();
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario window_autosize_change\n");
+
+    let frame = |ctx: &mut Context, out: &mut String, content_h: f32| {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+        ctx.io_mut().mouse_down[0] = false;
+        ctx.begin_frame();
+        ctx.set_next_window_auto_resize(true);
+        ctx.begin_window("A", Some(Vec2 { x: 60.0, y: 60.0 }), None);
+        let window = ctx.window();
+        let (inner_min, inner_max) = window.inner_rect;
+        let text = format!(
+            "frame draw {:08x} size {:08x} {:08x} content {:08x} {:08x} inner {:08x} {:08x} {:08x} {:08x}\n",
+            content_h.to_bits(),
+            window.size.x.to_bits(),
+            window.size.y.to_bits(),
+            window.content_extent.x.to_bits(),
+            window.content_extent.y.to_bits(),
+            inner_min.x.to_bits(),
+            inner_min.y.to_bits(),
+            inner_max.x.to_bits(),
+            inner_max.y.to_bits(),
+        );
+        let body = dump("window_autosize_change", ctx.draw_list());
+        out.push_str(&text);
+        for line in body.lines().skip(2) {
+            out.push_str(line);
+            out.push('\n');
+        }
+        ctx.dummy(Vec2 {
+            x: 100.0,
+            y: content_h,
+        });
+        ctx.end_window();
+        ctx.end_frame();
+    };
+
+    frame(&mut ctx, &mut out, 300.0);
+    frame(&mut ctx, &mut out, 300.0);
+    // The content shrinks: the size follows one frame later.
+    frame(&mut ctx, &mut out, 50.0);
+    frame(&mut ctx, &mut out, 50.0);
+    // And grows: same one-frame lag.
+    frame(&mut ctx, &mut out, 200.0);
+    frame(&mut ctx, &mut out, 200.0);
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -2144,6 +2206,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "window_scrollbar_drag" => Some(window_scrollbar_drag_dump()),
         "window_wheel" => Some(window_wheel_dump()),
         "window_autosize" => Some(window_autosize_dump()),
+        "window_autosize_change" => Some(window_autosize_change_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),

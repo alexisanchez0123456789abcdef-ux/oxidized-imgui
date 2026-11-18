@@ -2,16 +2,16 @@
 
 _Actualizado: 2026-11-18. Generado desde `docs/progress.json`: no editar a mano._
 
-## Reescritura a Rust: **49.6 %**
+## Reescritura a Rust: **50.0 %**
 
-Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 53.4 %.
+Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 53.8 %.
 
 Qué cuenta como hecho: solo lo que tiene una prueba que lo compara con el código C++ original.
 Un cambio de estado sin evidencia no sube el porcentaje.
 
 | Área | Peso | Avance |
 | --- | ---: | ---: |
-| Núcleo: contexto, IO, ventanas, identificadores, layout | 47 | 70 % |
+| Núcleo: contexto, IO, ventanas, identificadores, layout | 48 | 71 % |
 | Listas de dibujo y primitivas | 17 | 88 % |
 | Widgets | 26 | 38 % |
 | Fuentes y texto | 13 | 15 % |
@@ -34,6 +34,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Iconos de ventana: flecha de colapso y cruz de cierre** — golden window_icons (flecha, cruz y texto desplazado por los iconos)
 - **Iconos de ventana: hover, pulsación, colapso y cierre** — golden window_icons_states (14 estados: resalte, pulsado, soltar dentro y fuera, colapsada y expandida)
 - **Arrastrar la ventana desde la flecha (umbral de arrastre y desplazamiento)** — golden window_icons_drag (8 estados con la posición de la ventana)
+- **Auto-tamaño con contenido cambiante: el tamaño sigue al contenido con un frame de retraso** — golden window_autosize_change (6 frames: encoger y crecer)
 - **Auto-tamaño: la ventana toma el tamaño que pide su contenido** — golden window_autosize (6 frames con tamaño, área interior y contenido)
 - **Rueda del ratón: paso de cinco tamaños de fuente y desplazamiento simétrico** — golden window_wheel (11 frames: dos muescas abajo, una arriba y media muesca)
 - **Arrastrar el agarre y clicar la pista (búsqueda absoluta, con colores de hover y pulsado)** — golden window_scrollbar_drag (16 frames: hover, agarre, arrastre, clic en pista)
