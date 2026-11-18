@@ -1874,6 +1874,56 @@ static void DumpWindowResizeDrag()
     FrameResizeDrag(0.0f, 0.0f, false);
 }
 
+// window_resize_edges: the lower-left grip, which moves the window as well as resizing it, and the
+// four borders as grab areas. Each drag is a single axis, so the position and size changes are easy
+// to read in the dump.
+static void FrameResizeEdge(float mx, float my, bool down)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = down;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("E", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar);
+    ImGuiWindow* w = ImGui::GetCurrentWindow();
+    printf("frame size %08x %08x pos %08x %08x\n", Bits(w->Size.x), Bits(w->Size.y),
+        Bits(w->Pos.x), Bits(w->Pos.y));
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpWindowResizeEdges()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario window_resize_edges\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
+    for (int i = 0; i < 4; i++)
+        FrameResizeEdge(0.0f, 0.0f, false);
+
+    // Lower-left grip (the window is 60,60 to 360,260): drag left by twenty.
+    FrameResizeEdge(63.0f, 257.0f, false);
+    FrameResizeEdge(63.0f, 257.0f, true);
+    FrameResizeEdge(43.0f, 257.0f, true);
+    FrameResizeEdge(43.0f, 257.0f, false);
+
+    // Right border: drag right by twenty, which only grows the width.
+    FrameResizeEdge(362.0f, 150.0f, false);
+    FrameResizeEdge(362.0f, 150.0f, true);
+    FrameResizeEdge(382.0f, 150.0f, true);
+    FrameResizeEdge(382.0f, 150.0f, false);
+
+    // Bottom border: drag down by twenty, which only grows the height.
+    FrameResizeEdge(200.0f, 262.0f, false);
+    FrameResizeEdge(200.0f, 262.0f, true);
+    FrameResizeEdge(200.0f, 282.0f, true);
+    FrameResizeEdge(200.0f, 282.0f, false);
+}
+
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 
 static void DumpCmdOffsets()
@@ -2123,6 +2173,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_icons") == 0)
     {
         DumpWindowIcons();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "window_resize_edges") == 0)
+    {
+        DumpWindowResizeEdges();
         ImGui::DestroyContext();
         return 0;
     }
