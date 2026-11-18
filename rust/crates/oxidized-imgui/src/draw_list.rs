@@ -180,8 +180,11 @@ impl DrawList {
             .map(|cmd| cmd.elem_count > 0)
             .unwrap_or(false);
         if last_has_geometry {
+            // A new command carries the index offset of the buffer when it opens, as
+            // `ImDrawList::AddDrawCmd` does. `VtxOffset` stays 0 until a backend asks for it.
             let cmd = DrawCmd {
                 clip_rect: self.current_clip,
+                idx_offset: self.idx_buffer.len() as u32,
                 ..DrawCmd::default()
             };
             self.cmd_buffer.push(cmd);
