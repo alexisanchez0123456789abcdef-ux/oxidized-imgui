@@ -69,6 +69,7 @@ pub const SCENARIOS: &[&str] = &[
     "window_resize_cursor",
     "window_resize_autofit",
     "collapsing_header",
+    "tree_node",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -2874,6 +2875,81 @@ pub fn collapsing_header_dump() -> String {
     out
 }
 
+/// The `tree_node` scenario: unframed tree nodes. A click on the arrow opens on press and a click on
+/// the label on release, children move right by `IndentSpacing`, and the hover highlight spans the
+/// work area even though the row only reacts where the text is.
+pub fn tree_node_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/tree_node.fixture.txt"
+    );
+    let text = std::fs::read_to_string(path).expect("tree node fixture");
+    let font = Font::from_pinned(&text).expect("font fixture");
+    let line_uvs = parse_line_uvs(&text);
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    ctx.set_line_uv_lines(line_uvs);
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario tree_node\n");
+
+    let frame = |ctx: &mut Context, out: &mut String, mx: f32, my: f32, down: bool| {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: mx, y: my });
+        ctx.io_mut().mouse_down[0] = down;
+        ctx.begin_frame();
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+        );
+        ctx.begin_window(
+            "T",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        if ctx.tree_node("Root") {
+            ctx.dummy(Vec2 { x: 10.0, y: 8.0 });
+            if ctx.tree_node("Leaf") {
+                ctx.dummy(Vec2 { x: 10.0, y: 8.0 });
+                ctx.tree_pop();
+            }
+            ctx.tree_pop();
+        }
+        ctx.dummy(Vec2 { x: 10.0, y: 8.0 });
+        let body = dump("tree_node", ctx.draw_list());
+        ctx.end_window();
+        out.push_str("frame done\n");
+        for line in body.lines().skip(2) {
+            out.push_str(line);
+            out.push('\n');
+        }
+        ctx.end_frame();
+    };
+
+    // The root node sits at the top of the window, spanning y 68 to 81.
+    for _ in 0..3 {
+        frame(&mut ctx, &mut out, 0.0, 0.0, false);
+    }
+    // A click on the label opens it on release, which shows the indented leaf underneath.
+    frame(&mut ctx, &mut out, 100.0, 74.0, false);
+    frame(&mut ctx, &mut out, 100.0, 74.0, true);
+    frame(&mut ctx, &mut out, 100.0, 74.0, false);
+    // Hovering the child, then opening it with its arrow.
+    frame(&mut ctx, &mut out, 100.0, 90.0, false);
+    frame(&mut ctx, &mut out, 95.0, 90.0, false);
+    frame(&mut ctx, &mut out, 95.0, 90.0, true);
+    frame(&mut ctx, &mut out, 95.0, 90.0, false);
+    // A click on the label of the root closes it again.
+    frame(&mut ctx, &mut out, 100.0, 74.0, false);
+    frame(&mut ctx, &mut out, 100.0, 74.0, true);
+    frame(&mut ctx, &mut out, 100.0, 74.0, false);
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -2913,6 +2989,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "window_resize_cursor" => Some(window_resize_cursor_dump()),
         "window_resize_autofit" => Some(window_resize_autofit_dump()),
         "collapsing_header" => Some(collapsing_header_dump()),
+        "tree_node" => Some(tree_node_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),

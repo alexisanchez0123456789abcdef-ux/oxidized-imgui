@@ -2091,6 +2091,76 @@ static void DumpCollapsingHeader()
     FrameCollapsingHeader(72.0f, 95.0f, false);
 }
 
+// tree_node: unframed tree nodes. A click on the arrow opens on press and a click on the label on
+// release, children move right by IndentSpacing, and the hover highlight spans the work area even
+// though the row only reacts where the text is.
+static void FrameTreeNode(float mx, float my, bool down)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = down;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("T", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar);
+    ImGuiWindow* w = ImGui::GetCurrentWindow();
+    if (ImGui::TreeNode("Root"))
+    {
+        ImGui::Dummy(ImVec2(10.0f, 8.0f));
+        if (ImGui::TreeNode("Leaf"))
+        {
+            ImGui::Dummy(ImVec2(10.0f, 8.0f));
+            ImGui::TreePop();
+        }
+        ImGui::TreePop();
+    }
+    ImGui::Dummy(ImVec2(10.0f, 8.0f));
+    printf("frame done\n");
+    DumpDrawListBody(*w->DrawList);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpTreeNode()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario tree_node\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[7] = { 'R', 'o', 't', 'L', 'e', 'a', 'f' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    ImGui::NewFrame();
+    WriteWindowIconsFixture(font, bake_order, 7);
+    ImGui::EndFrame();
+
+    // The root node sits at the top of the window, spanning y 68 to 81.
+    for (int i = 0; i < 3; i++)
+        FrameTreeNode(0.0f, 0.0f, false);
+    // A click on the label opens it on release, which shows the indented leaf underneath.
+    FrameTreeNode(100.0f, 74.0f, false);
+    FrameTreeNode(100.0f, 74.0f, true);
+    FrameTreeNode(100.0f, 74.0f, false);
+    // Hovering the child, then opening it with its arrow.
+    FrameTreeNode(100.0f, 90.0f, false);
+    FrameTreeNode(95.0f, 90.0f, false);
+    FrameTreeNode(95.0f, 90.0f, true);
+    FrameTreeNode(95.0f, 90.0f, false);
+    // A click on the label of the root closes it again.
+    FrameTreeNode(100.0f, 74.0f, false);
+    FrameTreeNode(100.0f, 74.0f, true);
+    FrameTreeNode(100.0f, 74.0f, false);
+}
+
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 
 static void DumpCmdOffsets()
@@ -2340,6 +2410,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_icons") == 0)
     {
         DumpWindowIcons();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "tree_node") == 0)
+    {
+        DumpTreeNode();
         ImGui::DestroyContext();
         return 0;
     }

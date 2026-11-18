@@ -609,6 +609,11 @@ impl Context {
     }
 
     /// Closes the innermost scope (`ImGui::PopID`).
+    /// `PushOverrideID`: put an id on the stack as is, without hashing it onto the current one.
+    fn push_override_id(&mut self, id: ImGuiID) {
+        self.id_stack.push(id);
+    }
+
     pub fn pop_id(&mut self) {
         self.id_stack.pop();
     }
@@ -2599,6 +2604,151 @@ impl Context {
 
     /// `ButtonBehavior` over an explicit rectangle, with `ItemSize` advancing the cursor by `item`.
     fn interact_rect(
+        &mut self,
+        id: ImGuiID,
+        min: Vec2,
+        max: Vec2,
+        item: Vec2,
+        press_on_click: bool,
+    ) -> bool {
+        let (hovered, held, pressed) = self.behaviour_at(id, min, max, press_on_click);
+        self.dummy(item);
+        self.last_item_hovered = hovered;
+        self.last_item_active = held;
+        pressed
+    }
+
+    /// `ImGui::TreeNode`: an unframed tree node. Returns true while it is open, and `tree_pop` closes
+    /// it.
+    ///
+    /// This is `TreeNodeBehavior` with no flags: the arrow takes a font size plus a frame padding on
+    /// each side, the row only reacts where the arrow and the text are, but the hover highlight spans
+    /// the work area, and the arrow is drawn smaller than a framed header's, at 0.70.
+    pub fn tree_node(&mut self, label: &str) -> bool {
+        let id = self.get_id(label);
+        let pad = self.style.frame_padding;
+        let text = self.font.calc_text_size(label, self.font.size);
+        let icon_width = self.font.size + pad.x * 2.0;
+        // Not framed, so the label sits right after the arrow and the row is one line tall.
+        let text_offset_x = icon_width;
+        let frame_height = text.y;
+
+        let (cursor, work_max_x) = {
+            let window = self.window();
+            (
+                window.cursor,
+                window.inner_rect.1.x - self.style.window_padding.x,
+            )
+        };
+        let frame_min = cursor;
+        let frame_max = Vec2 {
+            x: work_max_x,
+            y: cursor.y + frame_height,
+        };
+        let text_pos = Vec2 {
+            x: cursor.x + text_offset_x,
+            y: cursor.y,
+        };
+        // Without a span flag the row only reacts where the arrow and the text are.
+        let text_width = icon_width + text.x;
+        let interact_max_x = frame_min.x + text_width + self.style.item_spacing.x * 2.0;
+
+        let item = Vec2 {
+            x: text_width,
+            y: frame_height,
+        };
+        let over_arrow = self
+            .io
+            .mouse_pos
+            .map(|m| m.x >= cursor.x && m.x < cursor.x + icon_width)
+            .unwrap_or(false);
+        let pressed = self.interact_rect_spanning(
+            id,
+            frame_min,
+            Vec2 {
+                x: interact_max_x,
+                y: frame_max.y,
+            },
+            item,
+            over_arrow,
+        );
+        let mut open = self.item_open(id);
+        if pressed {
+            open = !open;
+            self.set_item_open(id, open);
+        }
+
+        let text_col = self.style.color_u32(crate::style::Col::Text);
+        if self.last_item_hovered || self.last_item_active {
+            let bg = if self.last_item_active && self.last_item_hovered {
+                crate::style::Col::HeaderActive
+            } else if self.last_item_hovered {
+                crate::style::Col::HeaderHovered
+            } else {
+                crate::style::Col::Header
+            };
+            let colour = self.style.color_u32(bg);
+            self.draw_list.prim_rect(frame_min, frame_max, colour);
+        }
+        // `RenderArrow(..., scale 0.70)` sits a little right and down of the text corner.
+        let (cos_a, sin_a) = if open {
+            (ARROW_DOWN_COS, ARROW_DOWN_SIN)
+        } else {
+            (ARROW_RIGHT_COS, ARROW_RIGHT_SIN)
+        };
+        let lift = self.font.size * 0.15;
+        self.draw_list.add_arrow(
+            Vec2 {
+                x: text_pos.x + lift - text_offset_x + pad.x,
+                y: text_pos.y + lift,
+            },
+            text_col,
+            cos_a,
+            sin_a,
+            0.70,
+            self.font.size,
+            self.style.symbol_arrow_size_factor,
+            self.style.symbol_arrow_thickness_factor,
+        );
+        let font = self.font.clone();
+        self.draw_list
+            .add_text(&font, font.size, text_pos, text_col, label);
+
+        if open {
+            // `TreePushOverrideID`: indent the children and give them ids under this node.
+            self.indent(self.style.indent_spacing);
+            self.push_override_id(id);
+        }
+        open
+    }
+
+    /// `ImGui::TreePop`: undo what an open `tree_node` did.
+    pub fn tree_pop(&mut self) {
+        self.pop_id();
+        self.unindent(self.style.indent_spacing);
+    }
+
+    /// `Indent`: move the layout's left edge right and put the cursor there.
+    fn indent(&mut self, width: f32) {
+        let Some(window) = self.windows.last_mut() else {
+            return;
+        };
+        window.line_start_x += width;
+        window.cursor.x = window.line_start_x;
+    }
+
+    /// `Unindent`.
+    fn unindent(&mut self, width: f32) {
+        let Some(window) = self.windows.last_mut() else {
+            return;
+        };
+        window.line_start_x -= width;
+        window.cursor.x = window.line_start_x;
+    }
+
+    /// `ButtonBehavior` over a rectangle, with the item's own width for `ItemSize`: the row a tree
+    /// node reacts to is narrower than the highlight it paints.
+    fn interact_rect_spanning(
         &mut self,
         id: ImGuiID,
         min: Vec2,
