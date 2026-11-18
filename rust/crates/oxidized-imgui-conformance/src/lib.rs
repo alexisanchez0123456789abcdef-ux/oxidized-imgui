@@ -35,6 +35,7 @@ pub const SCENARIOS: &[&str] = &[
     "slider_basic",
     "style_defaults",
     "aa_rect",
+    "aa_round_rect",
 ];
 
 const COL: u32 = 0xFFFF_0000; // IM_COL32(0, 0, 255, 255)
@@ -750,6 +751,38 @@ pub fn style_defaults_dump() -> String {
     out
 }
 
+/// The `aa_round_rect` scenario: a rounded rectangle, antialiased. Prints the corner arc points
+/// and then the full draw list. `arc_step` is pinned: the reference's automatic segment count is
+/// not ported yet.
+pub fn aa_round_rect_dump() -> String {
+    use oxidized_imgui::{DrawList, Vec2};
+
+    const ARC_STEP: i32 = 4;
+    let min = Vec2 { x: 10.5, y: 20.25 };
+    let max = Vec2 { x: 60.5, y: 50.75 };
+
+    let points = DrawList::path_rect_rounded(min, max, 5.0, ARC_STEP);
+    let mut list = DrawList::new();
+    list.white_uv = WHITE_UV;
+    list.fringe_scale = 1.0;
+    list.add_rect_filled_aa_rounded(min, max, 5.0, COL, ARC_STEP);
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario aa_round_rect\n");
+    for (i, p) in points.iter().enumerate() {
+        out.push_str(&format!("p {i} {:08x} {:08x}\n", bits(p.x), bits(p.y)));
+    }
+    let full = dump("aa_round_rect", &list);
+    for line in full.lines().skip(2) {
+        out.push_str(line);
+        out.push('\n');
+    }
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -763,6 +796,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "widgets_basic" => Some(widgets_basic_dump()),
         "slider_basic" => Some(slider_basic_dump()),
         "style_defaults" => Some(style_defaults_dump()),
+        "aa_round_rect" => Some(aa_round_rect_dump()),
         _ => scene(name).map(|list| dump(name, &list)),
     }
 }

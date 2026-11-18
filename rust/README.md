@@ -24,6 +24,7 @@ instead of against our own expectations:
 | Label, checkbox | text item rect; checkbox box from frame height plus inner spacing, toggling on release | `widgets_basic` golden |
 | Slider (float) | grab region (`GrabMinSize`, 2 px padding), click offset, drag ratio, 3-decimal rounding | `slider_basic` golden |
 | Style values | default colours (`GetColorU32`), roundings and border sizes | `style_defaults` golden |
+| AA fill | rectangle fringe with miter joins; rounded rectangles from the pinned arc table | `aa_rect`, `aa_round_rect` goldens |
 | Clip stack | `PushClipRect`/`PopClipRect`, intersection, fullscreen fallback, command splitting | `clip_stack` golden |
 
 Provisional, **not** parity-checked: everything else. In particular the anti-aliased and rounded
