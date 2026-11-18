@@ -91,6 +91,9 @@ pub struct DrawList {
     pub idx_buffer: Vec<ImDrawIdx>,
     pub cmd_buffer: Vec<DrawCmd>,
     pub flags: u32,
+    /// `ImDrawListSharedData::TexUvWhitePixel`: the UV a solid fill samples. The reference takes it
+    /// from the font atlas; here it is an explicit input so the harness can pin it.
+    pub white_uv: Vec2,
 }
 
 impl DrawList {
@@ -143,12 +146,32 @@ impl DrawList {
         }
     }
 
+    /// `ImDrawList::PrimRect`: a rectangle filled with the white pixel, no explicit UVs.
+    pub fn prim_rect(&mut self, a: Vec2, c: Vec2, col: ImU32) {
+        let uv = self.white_uv;
+        self.prim_rect_uv(a, c, uv, uv, col);
+    }
+
     /// Appends a filled axis-aligned rectangle.
     ///
-    /// Provisional: upstream `AddRectFilled` also has rounding, anti-aliasing and sub-pixel paths.
-    /// This is the plain `PrimRectUV` quad, the case the conformance harness covers today.
+    /// Only the pixel-aligned path is implemented: the reference reduces `AddRectFilled` to
+    /// `PrimRect` when rounding is zero and the coordinates need no anti-aliasing. Rounded,
+    /// anti-aliased and sub-pixel rectangles are not implemented yet.
     pub fn add_rect_filled(&mut self, min: Vec2, max: Vec2, col: ImU32) {
-        self.prim_rect_uv(min, max, Vec2::default(), Vec2::default(), col);
+        self.prim_rect(min, max, col);
+    }
+
+    /// `AddLineH` with the default inside stroke: the reference's pixel-aligned fast path, which is
+    /// a `PrimRect` from `(min_x, y)` to `(max_x, y + thickness)`.
+    pub fn add_line_h(&mut self, min_x: f32, max_x: f32, y: f32, col: ImU32, thickness: f32) {
+        self.prim_rect(
+            Vec2 { x: min_x, y },
+            Vec2 {
+                x: max_x,
+                y: y + thickness,
+            },
+            col,
+        );
     }
 
     pub fn vertices(&self) -> &[DrawVert] {

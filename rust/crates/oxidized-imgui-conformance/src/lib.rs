@@ -5,36 +5,48 @@
 //!
 //! Floats are printed as the hexadecimal bit pattern, never as decimal text: it makes the diff
 //! exact and immune to formatting differences between `printf` and `format!`.
-//!
-//! Scope today: `PrimRectUV` — the lowest-level quad the reference has, with no font atlas, no
-//! anti-aliasing and no rounding involved. Everything else is still provisional.
 
 use oxidized_imgui::{DrawList, IMGUI_VERSION, IMGUI_VERSION_NUM, Vec2};
 
+/// `ImDrawListSharedData::TexUvWhitePixel` of the reference's default atlas at pixel density 1.
+///
+/// This is an input, not something this crate computes: the reference reads it from the font
+/// atlas. It is pinned here with the value the driver prints, so the geometry comparison is fair.
+/// When the font atlas lands (roadmap F4) it will be derived instead.
+pub const WHITE_UV: Vec2 = Vec2 {
+    x: 0.000_976_562_5,
+    y: 0.003_906_25,
+};
+
 /// Every scenario this harness knows, by the name the driver prints.
-pub const SCENARIOS: &[&str] = &["prim_rect_uv"];
+pub const SCENARIOS: &[&str] = &["prim_rect_uv", "prim_rect", "rect_filled", "line_h"];
+
+const COL: u32 = 0xFFFF_0000; // IM_COL32(0, 0, 255, 255)
 
 /// Builds the draw list for a scenario. `None` when the name is unknown.
 pub fn scene(name: &str) -> Option<DrawList> {
-    match name {
-        "prim_rect_uv" => Some(scene_prim_rect_uv()),
-        _ => None,
-    }
-}
-
-/// A single `PrimRectUV` with non-trivial positions and UVs, so a swapped corner or a wrong index
-/// order shows up in the diff.
-pub fn scene_prim_rect_uv() -> DrawList {
     let mut list = DrawList::new();
-    list.prim_rect_uv(
-        Vec2 { x: 10.0, y: 20.0 },
-        Vec2 { x: 30.0, y: 50.0 },
-        Vec2 { x: 0.25, y: 0.5 },
-        Vec2 { x: 0.75, y: 1.0 },
-        // IM_COL32(0, 0, 255, 255): r | g << 8 | b << 16 | a << 24
-        0xFFFF_0000,
-    );
-    list
+    list.white_uv = WHITE_UV;
+    match name {
+        // Explicit UVs: no atlas involved at all.
+        "prim_rect_uv" => list.prim_rect_uv(
+            Vec2 { x: 10.0, y: 20.0 },
+            Vec2 { x: 30.0, y: 50.0 },
+            Vec2 { x: 0.25, y: 0.5 },
+            Vec2 { x: 0.75, y: 1.0 },
+            COL,
+        ),
+        // White-pixel UV, from the pinned atlas value.
+        "prim_rect" => list.prim_rect(Vec2 { x: 10.0, y: 20.0 }, Vec2 { x: 30.0, y: 50.0 }, COL),
+        // Public API: pixel-aligned, no rounding, no anti-aliasing.
+        "rect_filled" => {
+            list.add_rect_filled(Vec2 { x: 10.0, y: 20.0 }, Vec2 { x: 30.0, y: 50.0 }, COL)
+        }
+        // Public API: horizontal line, default inside stroke, one pixel thick.
+        "line_h" => list.add_line_h(10.0, 30.0, 20.0, COL, 1.0),
+        _ => return None,
+    }
+    Some(list)
 }
 
 /// The text form compared against the reference.
@@ -44,6 +56,11 @@ pub fn dump(scenario: &str, list: &DrawList) -> String {
         "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
     ));
     out.push_str(&format!("scenario {scenario}\n"));
+    out.push_str(&format!(
+        "white_uv {:08x} {:08x}\n",
+        bits(list.white_uv.x),
+        bits(list.white_uv.y)
+    ));
 
     out.push_str(&format!("cmd_count {}\n", list.cmd_buffer.len()));
     for (i, cmd) in list.cmd_buffer.iter().enumerate() {
@@ -87,15 +104,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn dump_is_stable_for_the_rect_scene() {
-        let list = scene("prim_rect_uv").expect("scenario");
-        let text = dump("prim_rect_uv", &list);
-        assert!(text.starts_with("header imgui "));
-        assert!(text.contains("vtx_count 4"));
-        assert!(text.contains("idx_count 6"));
-        // 10.0f and 20.0f as f32 bits, and the color written as eight hex digits.
-        assert!(text.contains("vtx 0 pos 41200000 41a00000"));
-        assert!(text.contains("col ffff0000"));
+    fn every_scenario_has_a_dump() {
+        for name in SCENARIOS {
+            let list = scene(name).expect(name);
+            let text = dump(name, &list);
+            assert!(text.starts_with("header imgui "), "{name}");
+            assert!(text.contains("vtx_count 4"), "{name}");
+            assert!(text.contains("idx_count 6"), "{name}");
+        }
+    }
+
+    #[test]
+    fn the_white_uv_is_the_pinned_reference_value() {
+        let list = scene("prim_rect").expect("scenario");
+        assert_eq!(list.white_uv, WHITE_UV);
+        // 1/512 and 1/256 as f32, the values the driver prints.
+        assert_eq!(WHITE_UV.x.to_bits(), 0x3a80_0000);
+        assert_eq!(WHITE_UV.y.to_bits(), 0x3b80_0000);
     }
 
     #[test]

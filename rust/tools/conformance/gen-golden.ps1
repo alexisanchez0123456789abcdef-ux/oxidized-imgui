@@ -1,10 +1,12 @@
-# Builds the reference driver, stores its dump as the golden file, and proves the comparison can
+# Builds the reference driver, stores its dumps as the golden files, and proves the comparison can
 # fail: a single mutated bit must be detected. Windows + Visual Studio C++ Build Tools.
 $ErrorActionPreference = 'Stop'
 
 # Make sure the rustup shims are reachable even when the calling shell lacks them.
 $cargoBin = Join-Path $env:USERPROFILE '.cargo\bin'
 if (Test-Path $cargoBin) { $env:PATH = "$cargoBin;$env:PATH" }
+
+$scenarios = @('prim_rect_uv', 'prim_rect', 'rect_filled', 'line_h')
 
 $conformance = $PSScriptRoot
 $root   = (Resolve-Path "$conformance\..\..\..").Path
@@ -26,23 +28,9 @@ cd /d "$outDir"
 cl /nologo /std:c++17 /EHsc /I"$root" "$conformance\driver.cpp" "$root\imgui.cpp" "$root\imgui_draw.cpp" "$root\imgui_tables.cpp" "$root\imgui_widgets.cpp" /Fe:driver.exe
 "@ | Set-Content -Path $bat -Encoding ascii
 
-& cmd /c $bat 2>&1 | Select-Object -Last 4
+& cmd /c $bat 2>&1 | Select-Object -Last 2
 $driver = Join-Path $outDir 'driver.exe'
 if (-not (Test-Path $driver)) { throw 'driver build failed' }
-
-$tmp = Join-Path $outDir 'dump.txt'
-& cmd /c "`"$driver`" > `"$tmp`"" 
-if ($LASTEXITCODE -ne 0) { throw "driver failed: $LASTEXITCODE" }
-
-Copy-Item $tmp (Join-Path $golden 'prim_rect_uv.txt') -Force
-Write-Host "golden written: prim_rect_uv.txt ($((Get-Item $tmp).Length) bytes)"
-
-# Rust dump, captured byte-for-byte through cmd redirection.
-$actual = Join-Path $outDir 'rust-dump.txt'
-Push-Location (Join-Path $root 'rust')
-& cmd /c "cargo run -q -p oxidized-imgui-conformance --bin conformance-dump > `"$actual`"" 
-Pop-Location
-if ($LASTEXITCODE -ne 0) { throw "cargo run failed: $LASTEXITCODE" }
 
 function Compare-Bytes([string]$a, [string]$b) {
     $ba = [IO.File]::ReadAllBytes($a)
@@ -54,16 +42,33 @@ function Compare-Bytes([string]$a, [string]$b) {
     return $null
 }
 
-$diff = Compare-Bytes $tmp $actual
-if ($diff) { throw "FAIL: Rust dump does not match the reference ($diff)" }
-Write-Host 'PASS: Rust dump matches the reference byte for byte'
+foreach ($name in $scenarios) {
+    $dump = Join-Path $outDir "dump-$name.txt"
+    & cmd /c "`"$driver`" $name > `"$dump`""
+    if ($LASTEXITCODE -ne 0) { throw "driver failed for $name : $LASTEXITCODE" }
+
+    $actual = Join-Path $outDir "rust-$name.txt"
+    Push-Location (Join-Path $root 'rust')
+    & cmd /c "cargo run -q -p oxidized-imgui-conformance --bin conformance-dump -- $name > `"$actual`""
+    $code = $LASTEXITCODE
+    Pop-Location
+    if ($code -ne 0) { throw "cargo run failed for $name : $code" }
+
+    $diff = Compare-Bytes $dump $actual
+    if ($diff) { throw "FAIL [$name]: Rust dump does not match the reference ($diff)" }
+
+    Copy-Item $dump (Join-Path $golden "$name.txt") -Force
+    Write-Host "PASS [$name]: matches the reference ($((Get-Item $dump).Length) bytes)"
+}
 
 # Negative test: one flipped bit must be caught, otherwise the comparison proves nothing.
-$mutated = Join-Path $outDir 'mutated.txt'
-$text = [IO.File]::ReadAllText($tmp)
+$base = Join-Path $outDir 'dump-prim_rect.txt'
+$text = [IO.File]::ReadAllText($base)
 $needle = 'pos 41200000'
 if (-not $text.Contains($needle)) { throw "FAIL: cannot find '$needle' to mutate" }
+$mutated = Join-Path $outDir 'mutated.txt'
 $text.Replace($needle, 'pos 41200001') | Set-Content -Path $mutated -NoNewline -Encoding ascii
-$diff = Compare-Bytes $mutated $actual
+$actualPrim = Join-Path $outDir 'rust-prim_rect.txt'
+$diff = Compare-Bytes $mutated $actualPrim
 if (-not $diff) { throw 'FAIL: the comparison did not detect a one-bit difference' }
-Write-Host "PASS: negative test detects a one-bit mutation ($diff)"
+Write-Host "PASS [negative]: one-bit mutation detected ($diff)"

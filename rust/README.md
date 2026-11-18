@@ -14,9 +14,11 @@ instead of against our own expectations:
 | `ImDrawVert` / `ImDrawCmd` / `TexRef` | same size and field offsets as the C++ compiler | `draw_list::tests::layouts_match_reference` |
 | Identifier stack | `get_id`, `push_id`, `pop_id` seed like the reference | `context::tests::ids_nest_like_the_reference` |
 | `PrimRectUV` | identical draw-list dump, byte for byte | `oxidized-imgui-conformance/tests/golden.rs` |
+| `PrimRect`, `AddRectFilled` (pixel-aligned), `AddLineH` | identical draw-list dump, byte for byte | same, scenarios `prim_rect`, `rect_filled`, `line_h` |
 
-Provisional, **not** parity-checked: everything else, including `add_rect_filled` beyond the plain
-quad (rounding, anti-aliasing, sub-pixel paths).
+Provisional, **not** parity-checked: everything else. In particular the anti-aliased and rounded
+paths, the diagonal `AddLine` (stroke joins), circles and any text are not implemented yet; the
+font atlas is a prerequisite, because even a solid fill samples the white-pixel UV of the atlas.
 
 ## Commands
 
