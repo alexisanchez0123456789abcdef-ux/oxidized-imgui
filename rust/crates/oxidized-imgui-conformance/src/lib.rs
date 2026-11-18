@@ -42,6 +42,7 @@ pub const SCENARIOS: &[&str] = &[
     "bezier_points",
     "aa_polyline",
     "aa_border",
+    "button_draw",
 ];
 
 const COL: u32 = 0xFFFF_0000; // IM_COL32(0, 0, 255, 255)
@@ -863,6 +864,31 @@ pub fn bezier_points_dump() -> String {
     out
 }
 
+/// The `button_draw` scenario: the draw list of a frame holding a single button, in a window
+/// without background so the list contains only the widget. The glyph table travels as a fixture
+/// because the atlas is only stable inside the reference process.
+pub fn button_draw_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2};
+
+    const GLYPHS: &str = include_str!("../tests/fixtures/button_draw.glyphs.txt");
+    let font = Font::from_pinned(GLYPHS).expect("glyph fixture");
+
+    let mut ctx = Context::new();
+    ctx.begin_frame();
+    ctx.begin_window(
+        "W",
+        Some(Vec2 { x: 60.0, y: 60.0 }),
+        Some(Vec2 { x: 300.0, y: 200.0 }),
+    );
+    ctx.set_cursor_screen_pos(Vec2 { x: 80.0, y: 80.0 });
+    ctx.set_font_for_drawing(font);
+    let _ = ctx.button("Hi");
+    let out = dump("button_draw", ctx.draw_list());
+    ctx.end_window();
+    ctx.end_frame();
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -877,6 +903,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "slider_basic" => Some(slider_basic_dump()),
         "style_defaults" => Some(style_defaults_dump()),
         "aa_round_rect" => Some(aa_round_rect_dump()),
+        "button_draw" => Some(button_draw_dump()),
         "arc_steps" => Some(arc_steps_dump()),
         "bezier_points" => Some(bezier_points_dump()),
         _ => scene(name).map(|list| dump(name, &list)),

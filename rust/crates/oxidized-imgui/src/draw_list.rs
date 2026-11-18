@@ -18,6 +18,12 @@ pub struct Vec2 {
     pub y: f32,
 }
 
+/// `ImDrawListSharedData::TexUvWhitePixel` for the default atlas (a 1x1 white pixel).
+pub const DEFAULT_WHITE_UV: Vec2 = Vec2 {
+    x: 0.000_976_562_5,
+    y: 0.003_906_25,
+};
+
 /// A packed RGBA color, `ImU32`.
 pub type ImU32 = u32;
 
@@ -107,6 +113,7 @@ impl DrawList {
     /// `_ResetForNewFrame` ("We always have a command ready in the buffer").
     pub fn new() -> Self {
         Self {
+            white_uv: DEFAULT_WHITE_UV,
             cmd_buffer: vec![DrawCmd::default()],
             fullscreen_clip: [0.0, 0.0, 1280.0, 720.0],
             ..Self::default()

@@ -44,6 +44,8 @@ pub struct Context {
     windows: Vec<Window>,
     remembered: Vec<(String, Vec2, Vec2)>,
     active_id: Option<ImGuiID>,
+    /// The window's draw list: what this frame has drawn so far.
+    draw_list: crate::draw_list::DrawList,
     slider_just_activated: bool,
     slider_grab_offset: f32,
     last_item_hovered: bool,
@@ -63,6 +65,7 @@ impl Default for Context {
             windows: Vec::new(),
             remembered: Vec::new(),
             active_id: None,
+            draw_list: crate::draw_list::DrawList::new(),
             slider_just_activated: false,
             slider_grab_offset: 0.0,
             last_item_hovered: false,
@@ -87,6 +90,7 @@ impl Context {
     /// also does) leaves the identifier stack untouched.
     pub fn begin_frame(&mut self) {
         self.frame_count += 1;
+        self.draw_list = crate::draw_list::DrawList::new();
         self.time += self.io.delta_time as f64;
         self.update_keyboard_inputs();
         self.update_mouse_inputs();
@@ -106,6 +110,16 @@ impl Context {
     }
 
     /// `g.Time`: seconds accumulated from `DeltaTime`, kept as the reference's `double`.
+    /// Replaces the font used for drawing, e.g. with one built from a pinned glyph table.
+    pub fn set_font_for_drawing(&mut self, font: crate::font::Font) {
+        self.font = font;
+    }
+
+    /// The draw list for the current frame.
+    pub fn draw_list(&self) -> &crate::draw_list::DrawList {
+        &self.draw_list
+    }
+
     pub fn time(&self) -> f64 {
         self.time
     }
@@ -262,6 +276,18 @@ impl Context {
             x: pos.x + pad.x,
             y: pos.y + pad.y,
         };
+        // The window's draw list is clipped to its rectangle, inset by the window border.
+        self.draw_list.push_clip_rect(
+            Vec2 {
+                x: pos.x + self.style.window_border_size,
+                y: pos.y + self.style.window_border_size,
+            },
+            Vec2 {
+                x: pos.x + size.x - self.style.window_border_size,
+                y: pos.y + size.y - self.style.window_border_size,
+            },
+            false,
+        );
         let content_size = Vec2 {
             x: size.x - pad.x * 2.0,
             y: size.y - pad.y * 2.0,
@@ -435,7 +461,36 @@ impl Context {
             x: text.x + padding.x * 2.0,
             y: self.font.size + padding.y * 2.0,
         };
-        self.interact(id, size)
+        let min = self.window().cursor;
+        let pressed = self.interact(id, size);
+
+        // Draw it: a filled frame in the state colour, then the label. FrameBorderSize is 0 in the
+        // default style, so there is no border to draw.
+        let max = Vec2 {
+            x: min.x + size.x,
+            y: min.y + size.y,
+        };
+        let frame_color = if self.last_item_active {
+            self.style.color_u32(crate::style::Col::ButtonActive)
+        } else if self.last_item_hovered {
+            self.style.color_u32(crate::style::Col::ButtonHovered)
+        } else {
+            self.style.color_u32(crate::style::Col::Button)
+        };
+        self.draw_list.prim_rect(min, max, frame_color);
+        let font = self.font.clone();
+        let text_color = self.style.color_u32(crate::style::Col::Text);
+        self.draw_list.add_text(
+            &font,
+            font.size,
+            Vec2 {
+                x: min.x + padding.x,
+                y: min.y + padding.y,
+            },
+            text_color,
+            label,
+        );
+        pressed
     }
 
     /// `ImGui::SliderFloat` (horizontal, not logarithmic): the value follows the mouse inside the
