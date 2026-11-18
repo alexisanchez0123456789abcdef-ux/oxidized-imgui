@@ -25,6 +25,7 @@ pub const SCENARIOS: &[&str] = &[
     "rect_filled",
     "line_h",
     "window_layout",
+    "io_mouse_events",
 ];
 
 const COL: u32 = 0xFFFF_0000; // IM_COL32(0, 0, 255, 255)
@@ -220,12 +221,60 @@ pub fn window_layout_dump() -> String {
     out
 }
 
+/// The `io_mouse_events` scenario: five frames of raw mouse input, printing what `begin_frame`
+/// derives from it (rounded position, delta, click, release, down duration, click count).
+pub fn io_mouse_dump() -> String {
+    use oxidized_imgui::Context;
+
+    let frames: [(f32, f32, bool); 5] = [
+        (10.5, 20.5, false),
+        (12.7, 22.2, true),
+        (14.0, 24.0, true),
+        (14.0, 24.0, false),
+        (14.0, 24.0, true),
+    ];
+
+    let mut ctx = Context::new();
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario io_mouse_events\n");
+
+    for (i, (x, y, down)) in frames.iter().enumerate() {
+        {
+            let io = ctx.io_mut();
+            io.delta_time = 0.1;
+            io.mouse_pos = Some(Vec2 { x: *x, y: *y });
+            io.mouse_down[0] = *down;
+        }
+        ctx.begin_frame();
+
+        let io = ctx.io();
+        let pos = io.mouse_pos.unwrap_or_default();
+        out.push_str(&format!(
+            "f{i} pos {:08x} {:08x} delta {:08x} {:08x} clk {} rel {} count {} dur {:08x}\n",
+            bits(pos.x),
+            bits(pos.y),
+            bits(io.mouse_delta.x),
+            bits(io.mouse_delta.y),
+            io.mouse_clicked[0] as u8,
+            io.mouse_released[0] as u8,
+            io.mouse_clicked_count[0],
+            bits(io.mouse_down_duration[0]),
+        ));
+        ctx.end_frame();
+    }
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
-    if name == "window_layout" {
-        return Some(window_layout_dump());
+    match name {
+        "window_layout" => Some(window_layout_dump()),
+        "io_mouse_events" => Some(io_mouse_dump()),
+        _ => scene(name).map(|list| dump(name, &list)),
     }
-    scene(name).map(|list| dump(name, &list))
 }
 
 fn bits(value: f32) -> u32 {

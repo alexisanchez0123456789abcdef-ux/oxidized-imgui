@@ -105,6 +105,41 @@ static void DumpWindowLayout()
     ImGui::EndFrame();
 }
 
+// io_mouse_events: five frames of raw mouse input, printing what NewFrame derives from it.
+static void DumpIoMouse()
+{
+    struct Frame
+    {
+        float x, y;
+        bool down;
+    };
+    const Frame frames[5] = {
+        { 10.5f, 20.5f, false },
+        { 12.7f, 22.2f, true },
+        { 14.0f, 24.0f, true },
+        { 14.0f, 24.0f, false },
+        { 14.0f, 24.0f, true },
+    };
+
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario io_mouse_events\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    for (int i = 0; i < 5; i++)
+    {
+        io.DeltaTime = 0.1f;
+        io.MousePos = ImVec2(frames[i].x, frames[i].y);
+        io.MouseDown[0] = frames[i].down;
+        ImGui::NewFrame();
+        const ImVec2 pos = io.MousePos; // UpdateMouseInputs rounded it
+        printf("f%d pos %08x %08x delta %08x %08x clk %d rel %d count %d dur %08x\n", i,
+            Bits(pos.x), Bits(pos.y), Bits(io.MouseDelta.x), Bits(io.MouseDelta.y),
+            io.MouseClicked[0] ? 1 : 0, io.MouseReleased[0] ? 1 : 0,
+            io.MouseClickedCount[0], Bits(io.MouseDownDuration[0]));
+        ImGui::EndFrame();
+    }
+}
+
 // Explicit UVs: no atlas involved.
 static void ScenePrimRectUV(ImDrawList& list)
 {
@@ -156,6 +191,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_layout") == 0)
     {
         DumpWindowLayout();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "io_mouse_events") == 0)
+    {
+        DumpIoMouse();
         ImGui::DestroyContext();
         return 0;
     }

@@ -8,6 +8,7 @@
 
 use crate::draw_list::Vec2;
 use crate::id::{ImGuiID, hash_str_utf8};
+use crate::io::{BUTTONS, Io};
 use crate::style::Style;
 
 /// An open window. Only the geometry the harness checks is modelled.
@@ -28,13 +29,16 @@ pub struct Window {
     has_item: bool,
 }
 
-/// Frame state, identifier stack, style and the open window stack.
+/// Frame state, identifier stack, style, input state and the open window stack.
 #[derive(Debug, Default)]
 pub struct Context {
     id_stack: Vec<ImGuiID>,
     frame_count: u64,
     last_frame_draw_calls: usize,
     style: Style,
+    io: Io,
+    /// `g.Time`: the reference accumulates it as a `float`, not a double; the rounding matters.
+    time: f32,
     windows: Vec<Window>,
     remembered: Vec<(String, Vec2, Vec2)>,
 }
@@ -51,13 +55,99 @@ impl Context {
         &self.style
     }
 
-    /// Starts a frame. The reference also validates the IO and resets the draw data.
+    /// Starts a frame: advances the clock, turns the raw input into events, and (as the reference
+    /// also does) leaves the identifier stack untouched.
     pub fn begin_frame(&mut self) {
         self.frame_count += 1;
+        self.time += self.io.delta_time;
+        self.update_mouse_inputs();
     }
 
     /// Ends a frame.
     pub fn end_frame(&mut self) {}
+
+    /// `ImGuiIO` for reading the computed state.
+    pub fn io(&self) -> &Io {
+        &self.io
+    }
+
+    /// `ImGuiIO` for feeding raw input before the next `begin_frame`.
+    pub fn io_mut(&mut self) -> &mut Io {
+        &mut self.io
+    }
+
+    /// `g.Time`: seconds accumulated from `DeltaTime`, as the reference's `float`.
+    pub fn time(&self) -> f32 {
+        self.time
+    }
+
+    /// The reference's `UpdateMouseInputs`, restricted to position, buttons and double clicks.
+    fn update_mouse_inputs(&mut self) {
+        let time = self.time;
+        let delta_time = self.io.delta_time;
+
+        // The reference rounds the position to avoid spreading sub-pixel values.
+        if let Some(pos) = self.io.mouse_pos {
+            self.io.mouse_pos = Some(Vec2 {
+                x: pos.x.floor(),
+                y: pos.y.floor(),
+            });
+        }
+
+        self.io.mouse_delta = match (self.io.mouse_pos, self.io.mouse_pos_prev) {
+            (Some(current), Some(previous)) => Vec2 {
+                x: current.x - previous.x,
+                y: current.y - previous.y,
+            },
+            _ => Vec2::default(),
+        };
+
+        for i in 0..BUTTONS {
+            self.io.mouse_clicked[i] =
+                self.io.mouse_down[i] && self.io.mouse_down_duration[i] < 0.0;
+            self.io.mouse_released[i] =
+                !self.io.mouse_down[i] && self.io.mouse_down_duration[i] >= 0.0;
+            self.io.mouse_clicked_count[i] = 0;
+
+            let duration = self.io.mouse_down_duration[i];
+            self.io.mouse_down_duration[i] = if self.io.mouse_down[i] {
+                if duration < 0.0 {
+                    0.0
+                } else {
+                    duration + delta_time
+                }
+            } else {
+                -1.0
+            };
+
+            if self.io.mouse_clicked[i] {
+                let mut repeated = false;
+                // The reference casts the difference to float before comparing, and both the
+                // clock and the timeout are floats: keep that, it decides double clicks.
+                let elapsed = (time as f64 - self.io.mouse_clicked_time[i]) as f32;
+                if elapsed < self.io.mouse_double_click_time {
+                    if let Some(pos) = self.io.mouse_pos {
+                        let dx = pos.x - self.io.mouse_clicked_pos[i].x;
+                        let dy = pos.y - self.io.mouse_clicked_pos[i].y;
+                        let max = self.io.mouse_double_click_max_dist;
+                        if dx * dx + dy * dy < max * max {
+                            repeated = true;
+                        }
+                    }
+                }
+                self.io.mouse_clicked_last_count[i] = if repeated {
+                    self.io.mouse_clicked_last_count[i] + 1
+                } else {
+                    1
+                };
+                self.io.mouse_clicked_time[i] = time as f64;
+                self.io.mouse_clicked_pos[i] = self.io.mouse_pos.unwrap_or_default();
+                self.io.mouse_clicked_count[i] = self.io.mouse_clicked_last_count[i];
+            }
+        }
+
+        self.io.mouse_pos_prev = self.io.mouse_pos;
+    }
 
     pub fn frame_count(&self) -> u64 {
         self.frame_count

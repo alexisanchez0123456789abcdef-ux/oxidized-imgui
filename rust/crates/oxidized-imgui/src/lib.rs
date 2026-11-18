@@ -24,6 +24,7 @@
 pub mod context;
 pub mod draw_list;
 pub mod id;
+pub mod io;
 pub mod style;
 
 /// Matches `IMGUI_VERSION` in `imgui.h` of the reference this crate is checked against.
@@ -35,4 +36,5 @@ pub const IMGUI_VERSION_NUM: u32 = 19303;
 pub use context::{Context, Window};
 pub use draw_list::{DrawCmd, DrawList, DrawVert, ImDrawIdx, TexRef, Vec2};
 pub use id::{ImGuiID, hash_data, hash_str, hash_str_utf8};
+pub use io::Io;
 pub use style::Style;
