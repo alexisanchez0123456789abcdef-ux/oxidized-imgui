@@ -6,7 +6,7 @@
     {
       "id": "core",
       "title": "Núcleo: contexto, IO, ventanas, identificadores, layout",
-      "weight": 51,
+      "weight": 52,
       "infra": false,
       "items": [
         { "id": "hash", "label": "Hash de identificadores (CRC32c, reinicio con ###)", "weight": 2, "done": true, "evidence": "id::tests::hashes_match_oracle (12 vectores del oráculo)" },
@@ -23,6 +23,7 @@
         { "id": "win_icons", "label": "Iconos de ventana: flecha de colapso y cruz de cierre", "weight": 1, "done": true, "evidence": "golden window_icons (flecha, cruz y texto desplazado por los iconos)" },
         { "id": "win_icons_input", "label": "Iconos de ventana: hover, pulsación, colapso y cierre", "weight": 1, "done": true, "evidence": "golden window_icons_states (14 estados: resalte, pulsado, soltar dentro y fuera, colapsada y expandida)" },
         { "id": "win_icons_drag", "label": "Arrastrar la ventana desde la flecha (umbral de arrastre y desplazamiento)", "weight": 1, "done": true, "evidence": "golden window_icons_drag (8 estados con la posición de la ventana)" },
+        { "id": "win_min_size", "label": "Tamaño mínimo de ventana: recorta el tamaño pedido por API (32), con mínimo duro de 1 px para el auto-tamaño", "weight": 1, "done": true, "evidence": "golden window_min_size (6 frames: 10, 31, 32, 120 y auto con tamaño pedido)" },
         { "id": "win_scrollbar_page", "label": "Barra por páginas: clic en la pista avanza una página, con Shift forzando la búsqueda absoluta", "weight": 1, "done": true, "evidence": "golden window_scrollbar_page (16 frames: página, página otra vez, Shift y absoluto)" },
         { "id": "win_hscrollbar", "label": "Barra de scroll horizontal: aparición, alto que quita al área interior, dibujo y arrastre", "weight": 1, "done": true, "evidence": "golden window_hscrollbar (8 frames con contenido más ancho que la ventana)" },
         { "id": "win_wheel_lock", "label": "Bloqueo de la ventana que rueda: el solapamiento no roba la rueda hasta superar el umbral", "weight": 1, "done": true, "evidence": "golden window_wheel_lock (11 frames, dos ventanas solapadas 2 px)" },

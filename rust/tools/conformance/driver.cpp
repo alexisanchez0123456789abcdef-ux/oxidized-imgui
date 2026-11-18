@@ -1735,6 +1735,65 @@ static void DumpWindowScrollbarPage()
     FramePageWindow(0, false, false, 200.0f, false);
 }
 
+// window_min_size: `WindowMinSize` clamps a size asked for by API. It is deliberately *not* applied
+// to an auto-fitted size, where the content plus padding wins even when it is smaller.
+static void FrameMinSizeWindow(float w, float h, bool auto_resize, bool dump)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize;
+    if (auto_resize)
+    {
+        // An auto-sized window ignores the requested size.
+        ImGui::SetNextWindowSize(ImVec2(10.0f, 10.0f));
+        flags |= ImGuiWindowFlags_AlwaysAutoResize;
+    }
+    else
+    {
+        ImGui::SetNextWindowSize(ImVec2(w, h));
+    }
+    ImGui::Begin("M", NULL, flags);
+    ImGuiWindow* win = ImGui::GetCurrentWindow();
+    if (auto_resize)
+        ImGui::Dummy(ImVec2(1.0f, 1.0f));
+    if (!dump)
+    {
+        ImGui::End();
+        ImGui::EndFrame();
+        return;
+    }
+    printf("frame requested %08x %08x auto %d size %08x %08x min %08x %08x\n", Bits(w), Bits(h),
+        auto_resize ? 1 : 0, Bits(win->Size.x), Bits(win->Size.y),
+        Bits(ImGui::GetStyle().WindowMinSize.x), Bits(ImGui::GetStyle().WindowMinSize.y));
+    DumpDrawListBody(*win->DrawList);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpWindowMinSize()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario window_min_size\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
+    // A tiny requested size is bumped to the minimum.
+    FrameMinSizeWindow(10.0f, 10.0f, false, true);
+    FrameMinSizeWindow(10.0f, 10.0f, false, true);
+    // Just under: also bumped.
+    FrameMinSizeWindow(31.0f, 31.0f, false, true);
+    // Exactly at the minimum: unchanged.
+    FrameMinSizeWindow(32.0f, 32.0f, false, true);
+    // Above it: unchanged.
+    FrameMinSizeWindow(120.0f, 80.0f, false, true);
+    FrameMinSizeWindow(10.0f, 10.0f, true, true);
+}
+
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 
 static void DumpCmdOffsets()
@@ -1984,6 +2043,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_icons") == 0)
     {
         DumpWindowIcons();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "window_min_size") == 0)
+    {
+        DumpWindowMinSize();
         ImGui::DestroyContext();
         return 0;
     }
