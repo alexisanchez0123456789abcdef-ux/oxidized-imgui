@@ -1963,6 +1963,50 @@ static void DumpWindowResizeCursor()
     FrameResizeCursor(200.0f, 150.0f, false);
 }
 
+// window_resize_autofit: double-clicking a resize grip fits the window to its content. The reference
+// asks CalcWindowAutoFitSize for both axes and then applies the size constraint, so the result is the
+// content plus the window padding, never under WindowMinSize. The content here is 100 by 50, so the
+// fitted size is 116 by 66.
+static void FrameResizeAutofit(float mx, float my, bool down)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = down;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("A", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar);
+    ImGuiWindow* w = ImGui::GetCurrentWindow();
+    ImGui::Dummy(ImVec2(100.0f, 50.0f));
+    printf("frame size %08x %08x pos %08x %08x\n", Bits(w->Size.x), Bits(w->Size.y),
+        Bits(w->Pos.x), Bits(w->Pos.y));
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpWindowResizeAutofit()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario window_resize_autofit\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
+    // Settle: the content size of the previous frame is what the fit will use.
+    for (int i = 0; i < 4; i++)
+        FrameResizeAutofit(0.0f, 0.0f, false);
+    // A single click on the lower-right grip: no fit, the size is asked for again every frame.
+    FrameResizeAutofit(357.0f, 257.0f, false);
+    FrameResizeAutofit(357.0f, 257.0f, true);
+    FrameResizeAutofit(357.0f, 257.0f, false);
+    // Now a double click within the 0.30 s threshold: press, release, press.
+    FrameResizeAutofit(357.0f, 257.0f, true);
+    FrameResizeAutofit(357.0f, 257.0f, false);
+    FrameResizeAutofit(357.0f, 257.0f, true);
+    FrameResizeAutofit(357.0f, 257.0f, false);
+}
+
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 
 static void DumpCmdOffsets()
@@ -2212,6 +2256,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_icons") == 0)
     {
         DumpWindowIcons();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "window_resize_autofit") == 0)
+    {
+        DumpWindowResizeAutofit();
         ImGui::DestroyContext();
         return 0;
     }

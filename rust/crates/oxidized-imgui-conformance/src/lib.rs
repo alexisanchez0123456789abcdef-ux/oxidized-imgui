@@ -67,6 +67,7 @@ pub const SCENARIOS: &[&str] = &[
     "window_resize_drag",
     "window_resize_edges",
     "window_resize_cursor",
+    "window_resize_autofit",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -2720,6 +2721,59 @@ pub fn window_resize_cursor_dump() -> String {
     out
 }
 
+/// The `window_resize_autofit` scenario: double-clicking a resize grip fits the window to its
+/// content, which is `CalcWindowAutoFitSize` followed by the size constraint.
+pub fn window_resize_autofit_dump() -> String {
+    use oxidized_imgui::{Context, Vec2};
+
+    let mut ctx = Context::new();
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario window_resize_autofit\n");
+
+    let frame = |ctx: &mut Context, out: &mut String, mx: f32, my: f32, down: bool| {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: mx, y: my });
+        ctx.io_mut().mouse_down[0] = down;
+        ctx.begin_frame();
+        ctx.set_next_window_flags(WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR);
+        ctx.begin_window(
+            "A",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        ctx.dummy(Vec2 { x: 100.0, y: 50.0 });
+        let window = ctx.window();
+        let text = format!(
+            "frame size {:08x} {:08x} pos {:08x} {:08x}\n",
+            window.size.x.to_bits(),
+            window.size.y.to_bits(),
+            window.pos.x.to_bits(),
+            window.pos.y.to_bits(),
+        );
+        ctx.end_window();
+        ctx.end_frame();
+        out.push_str(&text);
+    };
+
+    // Settle: the content size of the previous frame is what the fit will use.
+    for _ in 0..4 {
+        frame(&mut ctx, &mut out, 0.0, 0.0, false);
+    }
+    // A single click on the lower-right grip: no fit, the size is asked for again every frame.
+    frame(&mut ctx, &mut out, 357.0, 257.0, false);
+    frame(&mut ctx, &mut out, 357.0, 257.0, true);
+    frame(&mut ctx, &mut out, 357.0, 257.0, false);
+    // Now a double click within the 0.30 s threshold: press, release, press.
+    frame(&mut ctx, &mut out, 357.0, 257.0, true);
+    frame(&mut ctx, &mut out, 357.0, 257.0, false);
+    frame(&mut ctx, &mut out, 357.0, 257.0, true);
+    frame(&mut ctx, &mut out, 357.0, 257.0, false);
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -2757,6 +2811,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "window_resize_drag" => Some(window_resize_drag_dump()),
         "window_resize_edges" => Some(window_resize_edges_dump()),
         "window_resize_cursor" => Some(window_resize_cursor_dump()),
+        "window_resize_autofit" => Some(window_resize_autofit_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),

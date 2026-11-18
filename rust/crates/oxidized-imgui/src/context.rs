@@ -869,7 +869,8 @@ impl Context {
         // interior is computed, so a drag changes what the same frame draws with. The drawing
         // happens later, in the decoration pass, and only reads the colours this pass decided.
         if !flags.contains(WindowFlags::NO_RESIZE) && !window_just_created {
-            if let Some((new_pos, new_size)) = self.update_resize(name, pos, size_full, always_auto)
+            if let Some((new_pos, new_size)) =
+                self.update_resize(name, pos, size_full, content, title_height, always_auto)
             {
                 pos = Vec2 {
                     x: new_pos.x.trunc(),
@@ -1745,6 +1746,8 @@ impl Context {
         name: &str,
         pos: Vec2,
         size: Vec2,
+        content: Vec2,
+        title_height: f32,
         always_auto: bool,
     ) -> Option<(Vec2, Vec2)> {
         let draw_size = (self.font.size * 1.10)
@@ -1801,7 +1804,21 @@ impl Context {
                     y: mouse.y - rect_min.y,
                 };
             }
-            if held {
+            if held && self.io.mouse_clicked_count[0] == 2 {
+                // `CalcWindowAutoFitSize`, then the size constraint: the content plus padding, never
+                // under the minimum. Double-clicking a grip fits the window to its content.
+                let pad = self.style.window_padding;
+                let minimum = if always_auto {
+                    Vec2 { x: 1.0, y: 1.0 }
+                } else {
+                    self.style.window_min_size
+                };
+                let fitted = Vec2 {
+                    x: (content.x + pad.x * 2.0).max(minimum.x),
+                    y: (content.y + pad.y * 2.0 + title_height).max(minimum.y),
+                };
+                result = Some((pos, fitted));
+            } else if held {
                 // `ImLerp(InnerDir * grip_hover_outer_size, InnerDir * -grip_hover_inner_size,
                 // CornerPosN)`: outward on the axes the corner is at 0, inward where it is at 1.
                 let reach = |dir: f32, corner_at: f32| {
