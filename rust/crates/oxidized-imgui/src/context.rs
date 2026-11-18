@@ -264,7 +264,18 @@ impl Context {
     /// `None` keeps the position or size the window had in a previous frame, as the reference does.
     /// Starts a window and paints its background, like `ImGui::Begin` with default flags.
     pub fn begin_window(&mut self, name: &str, pos: Option<Vec2>, size: Option<Vec2>) {
-        self.begin_window_ex(name, pos, size, true);
+        self.begin_window_impl(name, None, pos, size, true);
+    }
+
+    /// Starts a window with a title bar: background, title band, border and the title text.
+    pub fn begin_window_titled(
+        &mut self,
+        name: &str,
+        title: &str,
+        pos: Option<Vec2>,
+        size: Option<Vec2>,
+    ) {
+        self.begin_window_impl(name, Some(title), pos, size, true);
     }
 
     /// Starts a window, choosing whether the background is painted
@@ -272,6 +283,17 @@ impl Context {
     pub fn begin_window_ex(
         &mut self,
         name: &str,
+        pos: Option<Vec2>,
+        size: Option<Vec2>,
+        background: bool,
+    ) {
+        self.begin_window_impl(name, None, pos, size, background);
+    }
+
+    fn begin_window_impl(
+        &mut self,
+        name: &str,
+        title: Option<&str>,
         pos: Option<Vec2>,
         size: Option<Vec2>,
         background: bool,
@@ -297,13 +319,35 @@ impl Context {
         if background {
             self.draw_list
                 .set_current_clip(self.draw_list.fullscreen_clip);
+            // With a title bar the background starts below it: the band covers the top.
+            let bg_top = if title.is_some() {
+                self.frame_height()
+            } else {
+                0.0
+            };
             self.draw_list.prim_rect(
-                pos,
+                Vec2 {
+                    x: pos.x,
+                    y: pos.y + bg_top,
+                },
                 Vec2 {
                     x: pos.x + size.x,
                     y: pos.y + size.y,
                 },
                 self.style.color_u32(crate::style::Col::WindowBg),
+            );
+        }
+
+        // The title band, between the background and the border.
+        if title.is_some() {
+            let title_height = self.frame_height();
+            self.draw_list.prim_rect(
+                pos,
+                Vec2 {
+                    x: pos.x + size.x,
+                    y: pos.y + title_height,
+                },
+                self.style.color_u32(crate::style::Col::TitleBgActive),
             );
         }
 
@@ -319,6 +363,23 @@ impl Context {
                 },
                 self.style.color_u32(crate::style::Col::Border),
                 self.style.window_border_size,
+            );
+        }
+
+        // The title text goes last, after the border, indented by the border width on top of the
+        // frame padding: the reference draws it inside the window's inner rectangle.
+        if let Some(title) = title {
+            let font = self.font.clone();
+            let text_color = self.style.color_u32(crate::style::Col::Text);
+            self.draw_list.add_text(
+                &font,
+                font.size,
+                Vec2 {
+                    x: pos.x + self.style.window_border_size + self.style.frame_padding.x,
+                    y: pos.y + self.style.frame_padding.y,
+                },
+                text_color,
+                title,
             );
         }
 

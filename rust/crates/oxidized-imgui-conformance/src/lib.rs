@@ -45,6 +45,7 @@ pub const SCENARIOS: &[&str] = &[
     "button_draw",
     "window_bg",
     "window_border",
+    "window_title",
 ];
 
 const COL: u32 = 0xFFFF_0000; // IM_COL32(0, 0, 255, 255)
@@ -923,6 +924,32 @@ pub fn window_border_dump() -> String {
     dump("window_border", ctx.draw_list())
 }
 
+/// The `window_title` scenario: a titled window, so the title band and its text are in the list.
+pub fn window_title_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2};
+
+    // Read at run time: the fixture is written by the reference in the same run as the golden, and
+    // an atlas re-bake can move a glyph by a pixel, so a compile-time copy could be stale.
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/window_title.glyphs.txt"
+    );
+    let glyphs = std::fs::read_to_string(path).expect("glyph fixture");
+    let font = Font::from_pinned(&glyphs).expect("glyph fixture");
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    ctx.begin_frame();
+    ctx.begin_window_titled(
+        "W",
+        "W",
+        Some(Vec2 { x: 60.0, y: 60.0 }),
+        Some(Vec2 { x: 300.0, y: 200.0 }),
+    );
+    ctx.end_window();
+    dump("window_title", ctx.draw_list())
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -939,6 +966,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "aa_round_rect" => Some(aa_round_rect_dump()),
         "window_bg" => Some(window_bg_dump()),
         "window_border" => Some(window_border_dump()),
+        "window_title" => Some(window_title_dump()),
         "button_draw" => Some(button_draw_dump()),
         "arc_steps" => Some(arc_steps_dump()),
         "bezier_points" => Some(bezier_points_dump()),

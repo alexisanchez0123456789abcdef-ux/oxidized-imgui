@@ -24,6 +24,7 @@ instead of against our own expectations:
 | Button drawing | state colour fill plus the label with its atlas UVs | `button_draw` golden |
 | Window background | background rect before the window clip, with empty trailing commands dropped at close | `window_bg` golden |
 | Window border | aligned two-ring frame, drawn only when the window has a background | `window_border` golden |
+| Title bar | band below the window top, title text inset by border plus padding, drawn after the border | `window_title` golden |
 | Label, checkbox | text item rect; checkbox box from frame height plus inner spacing, toggling on release | `widgets_basic` golden |
 | Slider (float) | grab region (`GrabMinSize`, 2 px padding), click offset, drag ratio, 3-decimal rounding | `slider_basic` golden |
 | Style values | default colours (`GetColorU32`), roundings and border sizes | `style_defaults` golden |

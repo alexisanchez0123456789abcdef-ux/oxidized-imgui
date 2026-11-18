@@ -2,16 +2,16 @@
 
 _Actualizado: 2026-11-18. Generado desde `docs/progress.json`: no editar a mano._
 
-## Reescritura a Rust: **40.2 %**
+## Reescritura a Rust: **40.8 %**
 
-Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 45.5 %.
+Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 46.0 %.
 
 Qué cuenta como hecho: solo lo que tiene una prueba que lo compara con el código C++ original.
 Un cambio de estado sin evidencia no sube el porcentaje.
 
 | Área | Peso | Avance |
 | --- | ---: | ---: |
-| Núcleo: contexto, IO, ventanas, identificadores, layout | 32 | 56 % |
+| Núcleo: contexto, IO, ventanas, identificadores, layout | 33 | 58 % |
 | Listas de dibujo y primitivas | 16 | 88 % |
 | Widgets | 23 | 30 % |
 | Fuentes y texto | 13 | 15 % |
@@ -30,6 +30,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Teclado: cola de eventos, duplicados, duraciones y modificadores** — golden io_keyboard_events
 - **Fondo de ventana y orden del recorte** — golden window_bg
 - **Borde de ventana (marco alineado de dos anillos)** — golden window_border
+- **Barra de título: banda, texto y orden de dibujo** — golden window_title
 - **Pila de recorte y cortes de comando** — golden clip_stack
 - **Estructuras con el layout exacto de C++** — draw_list::tests::layouts_match_reference
 - **PrimRectUV con paridad exacta** — golden prim_rect_uv + prueba negativa
