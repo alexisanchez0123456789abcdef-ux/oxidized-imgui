@@ -16,7 +16,7 @@
         { "id": "io_mouse", "label": "Ratón: posición redondeada, delta, clic, release, doble clic", "weight": 3, "done": true, "evidence": "golden io_mouse_events" },
         { "id": "io_time", "label": "Tiempo: DeltaTime y reloj interno (float, como la referencia)", "weight": 1, "done": true, "evidence": "golden io_mouse_events (doble clic depende del reloj)" },
         { "id": "frame", "label": "Ciclo de frame completo: validación de IO y reset de draw data", "weight": 4, "done": false, "evidence": "" },
-        { "id": "io_keyboard", "label": "Teclado, modificadores, rueda y arrastre", "weight": 2, "done": false, "evidence": "" },
+        { "id": "io_keyboard", "label": "Teclado: cola de eventos, duplicados, duraciones y modificadores", "weight": 2, "done": true, "evidence": "golden io_keyboard_events" },
         { "id": "windows_stack", "label": "Pila de ventanas: colapso, scroll, foco, orden, auto-tamaño", "weight": 4, "done": false, "evidence": "" },
         { "id": "layout_full", "label": "Layout completo: wrap, columnas, alineación, grupos", "weight": 4, "done": false, "evidence": "" },
         { "id": "clip", "label": "Pila de recorte", "weight": 2, "done": false, "evidence": "" },

@@ -140,6 +140,55 @@ static void DumpIoMouse()
     }
 }
 
+// io_keyboard_events: queued key events across frames, one duplicate, two different keys in one
+// frame.
+static void DumpIoKeyboard()
+{
+    struct KeyEv
+    {
+        ImGuiKey key;
+        bool down;
+    };
+    struct KFrame
+    {
+        int count;
+        KeyEv ev[2];
+    };
+    const KeyEv none = { ImGuiKey_None, false };
+    const KFrame kframes[9] = {
+        { 0, { none, none } },
+        { 1, { { ImGuiKey_A, true }, none } },
+        { 0, { none, none } },
+        { 2, { { ImGuiKey_A, false }, { ImGuiKey_A, false } } },
+        { 2, { { ImGuiKey_LeftCtrl, true }, { ImGuiKey_A, true } } },
+        { 2, { { ImGuiKey_LeftCtrl, false }, { ImGuiKey_A, false } } },
+        { 0, { none, none } },
+        { 1, { { ImGuiMod_Ctrl, true }, none } },
+        { 1, { { ImGuiMod_Ctrl, false }, none } },
+    };
+
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario io_keyboard_events\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    for (int i = 0; i < 9; i++)
+    {
+        io.DeltaTime = 0.1f;
+        for (int e = 0; e < kframes[i].count; e++)
+            io.AddKeyEvent(kframes[i].ev[e].key, kframes[i].ev[e].down);
+        ImGui::NewFrame();
+
+        const ImGuiKeyData* a = ImGui::GetKeyData(ImGuiKey_A);
+        const ImGuiKeyData* ctrl = ImGui::GetKeyData(ImGuiKey_LeftCtrl);
+        printf("f%d t %08x a_down %d a_dur %08x a_press %d ctrl_down %d ctrl_dur %08x ctrl_press %d mods %d%d%d%d\n",
+            i, Bits(ImGui::GetTime()),
+            a->Down ? 1 : 0, Bits(a->DownDuration), ImGui::IsKeyPressed(ImGuiKey_A, false) ? 1 : 0,
+            ctrl->Down ? 1 : 0, Bits(ctrl->DownDuration), ImGui::IsKeyPressed(ImGuiKey_LeftCtrl, false) ? 1 : 0,
+            io.KeyCtrl ? 1 : 0, io.KeyShift ? 1 : 0, io.KeyAlt ? 1 : 0, io.KeySuper ? 1 : 0);
+        ImGui::EndFrame();
+    }
+}
+
 // Explicit UVs: no atlas involved.
 static void ScenePrimRectUV(ImDrawList& list)
 {
@@ -198,6 +247,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "io_mouse_events") == 0)
     {
         DumpIoMouse();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "io_keyboard_events") == 0)
+    {
+        DumpIoKeyboard();
         ImGui::DestroyContext();
         return 0;
     }

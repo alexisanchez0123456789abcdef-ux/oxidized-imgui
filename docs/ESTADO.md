@@ -2,16 +2,16 @@
 
 _Actualizado: 2026-11-18. Generado desde `docs/progress.json`: no editar a mano._
 
-## Reescritura a Rust: **17.8 %**
+## Reescritura a Rust: **20.0 %**
 
-Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 26.0 %.
+Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 28.0 %.
 
 Qué cuenta como hecho: solo lo que tiene una prueba que lo compara con el código C++ original.
 Un cambio de estado sin evidencia no sube el porcentaje.
 
 | Área | Peso | Avance |
 | --- | ---: | ---: |
-| Núcleo: contexto, IO, ventanas, identificadores, layout | 30 | 40 % |
+| Núcleo: contexto, IO, ventanas, identificadores, layout | 30 | 47 % |
 | Listas de dibujo y primitivas | 8 | 50 % |
 | Widgets | 22 | 0 % |
 | Fuentes y texto | 12 | 0 % |
@@ -27,6 +27,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Cursor y avance de ítems (Dummy, SameLine, rects de ítem)** — golden window_layout + context::tests
 - **Ratón: posición redondeada, delta, clic, release, doble clic** — golden io_mouse_events
 - **Tiempo: DeltaTime y reloj interno (float, como la referencia)** — golden io_mouse_events (doble clic depende del reloj)
+- **Teclado: cola de eventos, duplicados, duraciones y modificadores** — golden io_keyboard_events
 - **Estructuras con el layout exacto de C++** — draw_list::tests::layouts_match_reference
 - **PrimRectUV con paridad exacta** — golden prim_rect_uv + prueba negativa
 - **PrimRect con el UV del píxel blanco fijado** — golden prim_rect

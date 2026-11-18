@@ -8,7 +8,7 @@
 
 use crate::draw_list::Vec2;
 use crate::id::{ImGuiID, hash_str_utf8};
-use crate::io::{BUTTONS, Io};
+use crate::io::{BUTTONS, Io, Key};
 use crate::style::Style;
 
 /// An open window. Only the geometry the harness checks is modelled.
@@ -37,8 +37,8 @@ pub struct Context {
     last_frame_draw_calls: usize,
     style: Style,
     io: Io,
-    /// `g.Time`: the reference accumulates it as a `float`, not a double; the rounding matters.
-    time: f32,
+    /// `g.Time`: the reference keeps it as a `double` and `GetTime()` returns it as such.
+    time: f64,
     windows: Vec<Window>,
     remembered: Vec<(String, Vec2, Vec2)>,
 }
@@ -59,7 +59,8 @@ impl Context {
     /// also does) leaves the identifier stack untouched.
     pub fn begin_frame(&mut self) {
         self.frame_count += 1;
-        self.time += self.io.delta_time;
+        self.time += self.io.delta_time as f64;
+        self.update_keyboard_inputs();
         self.update_mouse_inputs();
     }
 
@@ -76,9 +77,39 @@ impl Context {
         &mut self.io
     }
 
-    /// `g.Time`: seconds accumulated from `DeltaTime`, as the reference's `float`.
-    pub fn time(&self) -> f32 {
+    /// `g.Time`: seconds accumulated from `DeltaTime`, kept as the reference's `double`.
+    pub fn time(&self) -> f64 {
         self.time
+    }
+
+    /// The reference's `UpdateInputEvents` (key events only) followed by `UpdateKeyboardInputs`:
+    /// queued events are applied, then durations and the modifier flags are derived.
+    fn update_keyboard_inputs(&mut self) {
+        let queued = core::mem::take(&mut self.io.key_queue);
+        for (key, down) in queued {
+            let data = &mut self.io.keys[key.index()];
+            data.down = down;
+            data.analog_value = if down { 1.0 } else { 0.0 };
+        }
+
+        let delta_time = self.io.delta_time;
+        for data in &mut self.io.keys {
+            data.down_duration = if data.down {
+                if data.down_duration < 0.0 {
+                    0.0
+                } else {
+                    data.down_duration + delta_time
+                }
+            } else {
+                -1.0
+            };
+        }
+
+        let keys = &self.io.keys;
+        self.io.key_ctrl = keys[Key::ModCtrl.index()].down;
+        self.io.key_shift = keys[Key::ModShift.index()].down;
+        self.io.key_alt = keys[Key::ModAlt.index()].down;
+        self.io.key_super = keys[Key::ModSuper.index()].down;
     }
 
     /// The reference's `UpdateMouseInputs`, restricted to position, buttons and double clicks.
@@ -124,7 +155,7 @@ impl Context {
                 let mut repeated = false;
                 // The reference casts the difference to float before comparing, and both the
                 // clock and the timeout are floats: keep that, it decides double clicks.
-                let elapsed = (time as f64 - self.io.mouse_clicked_time[i]) as f32;
+                let elapsed = (time - self.io.mouse_clicked_time[i]) as f32;
                 if elapsed < self.io.mouse_double_click_time {
                     if let Some(pos) = self.io.mouse_pos {
                         let dx = pos.x - self.io.mouse_clicked_pos[i].x;
@@ -140,7 +171,7 @@ impl Context {
                 } else {
                     1
                 };
-                self.io.mouse_clicked_time[i] = time as f64;
+                self.io.mouse_clicked_time[i] = time;
                 self.io.mouse_clicked_pos[i] = self.io.mouse_pos.unwrap_or_default();
                 self.io.mouse_clicked_count[i] = self.io.mouse_clicked_last_count[i];
             }
