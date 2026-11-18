@@ -36,6 +36,8 @@ impl WindowFlags {
     pub const HORIZONTAL_SCROLLBAR: Self = Self(1 << 2);
     /// `ImGuiWindowFlags_AlwaysAutoResize`: the window sizes itself to its content.
     pub const ALWAYS_AUTO_RESIZE: Self = Self(1 << 3);
+    /// `ImGuiWindowFlags_NoResize`: no resize grips and no resize borders.
+    pub const NO_RESIZE: Self = Self(1 << 4);
 
     pub fn contains(self, other: Self) -> bool {
         self.0 & other.0 == other.0
@@ -615,7 +617,7 @@ impl Context {
                 background: true,
                 open: None,
                 collapsible: false,
-                flags: WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR,
+                flags: WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
             },
         )
     }
@@ -637,7 +639,7 @@ impl Context {
                 background: true,
                 open: None,
                 collapsible: false,
-                flags: WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR,
+                flags: WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
             },
         )
     }
@@ -660,7 +662,7 @@ impl Context {
                 background: true,
                 open: None,
                 collapsible: false,
-                flags: WindowFlags::NO_SCROLLBAR,
+                flags: WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
             },
         )
     }
@@ -697,6 +699,7 @@ impl Context {
                 open,
                 collapsible: true,
                 flags: WindowFlags::NO_SCROLLBAR
+                    | WindowFlags::NO_RESIZE
                     | if no_move {
                         WindowFlags::NO_MOVE
                     } else {
@@ -724,7 +727,7 @@ impl Context {
                 background,
                 open: None,
                 collapsible: false,
-                flags: WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR,
+                flags: WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
             },
         )
     }
@@ -742,6 +745,9 @@ impl Context {
         // own, and `set_next_window_flags` overrides them for a window opened that way.
         let flags = self.next_flags.take().unwrap_or(opts.flags);
         let remembered = WindowMemory::find(&self.memory, name);
+        // A window that has just appeared has no grips yet: the reference only handles them from
+        // its second frame on.
+        let window_just_created = remembered.is_none();
         let pos_was_set = pos.is_some();
         let (
             pos,
@@ -1008,6 +1014,12 @@ impl Context {
                         y: inner_rect.0.y + pad.y - scroll.y,
                     };
                 }
+            }
+
+            // `RenderResizeGrips`: between the scrollbars and the border, so the border draws over
+            // them and they never sit on top of the frame.
+            if !flags.contains(WindowFlags::NO_RESIZE) && !window_just_created {
+                self.draw_resize_grips(name, pos, size);
             }
 
             // The window border, inside the rectangle. A pixel-aligned window takes the two-ring
@@ -1639,6 +1651,111 @@ impl Context {
 
     /// The work area is the whole display here, inset by `max(DisplayWindowPadding,
     /// DisplaySafeAreaPadding)` on each side.
+    /// `ImGui::RenderResizeGrips` drawing half: the two lower corner grips, the lower-right one
+    /// always visible and the lower-left one only while it is hovered or held. Resizing itself is
+    /// not wired up yet, so only the colours react.
+    fn draw_resize_grips(&mut self, name: &str, pos: Vec2, size: Vec2) {
+        use crate::style::Col;
+
+        // `resize_grip_draw_size`: `ImTrunc(ImMax(FontSize * 1.10, WindowRounding + 1.0))`.
+        let draw_size = (self.font.size * 1.10)
+            .max(self.style.window_rounding + 1.0)
+            .trunc();
+        let grip_hover_inner = (draw_size * 0.75).trunc();
+        let grip_hover_outer = self.style.window_border_hover_padding * 3.0;
+        let border_inner = (self.style.window_border_size * 0.5).round();
+        let rounding = self.style.window_rounding;
+        let count = if self.io.config_windows_resize_from_edges {
+            2
+        } else {
+            1
+        };
+        let grip_defs = [
+            (Vec2 { x: 1.0, y: 1.0 }, Vec2 { x: -1.0, y: -1.0 }),
+            (Vec2 { x: 0.0, y: 1.0 }, Vec2 { x: 1.0, y: -1.0 }),
+        ];
+        let base_id = self.get_id("#RESIZE");
+        let mouse = self.io.mouse_pos.unwrap_or_default();
+
+        for (index, (corner_n, inner_dir)) in grip_defs.iter().enumerate().take(count) {
+            let corner = Vec2 {
+                x: pos.x + size.x * corner_n.x,
+                y: pos.y + size.y * corner_n.y,
+            };
+            // The handle, grown outward and inward around the corner.
+            let mut rect_min = Vec2 {
+                x: corner.x - inner_dir.x * grip_hover_outer,
+                y: corner.y - inner_dir.y * grip_hover_outer,
+            };
+            let mut rect_max = Vec2 {
+                x: corner.x + inner_dir.x * grip_hover_inner,
+                y: corner.y + inner_dir.y * grip_hover_inner,
+            };
+            if rect_min.x > rect_max.x {
+                core::mem::swap(&mut rect_min.x, &mut rect_max.x);
+            }
+            if rect_min.y > rect_max.y {
+                core::mem::swap(&mut rect_min.y, &mut rect_max.y);
+            }
+            let grip_id = base_id + index as u32;
+            let own_window = self.hovered_window.as_deref() == Some(name);
+            let inside = mouse.x >= rect_min.x
+                && mouse.x < rect_max.x
+                && mouse.y >= rect_min.y
+                && mouse.y < rect_max.y;
+            let hovered = own_window
+                && inside
+                && (self.active_id.is_none() || self.active_id == Some(grip_id));
+            if hovered {
+                self.hovered_id = Some(grip_id);
+            }
+            if hovered && self.io.mouse_clicked[0] {
+                self.active_id = Some(grip_id);
+            }
+            let held = self.active_id == Some(grip_id) && self.io.mouse_down[0];
+            if self.active_id == Some(grip_id) && !self.io.mouse_down[0] {
+                self.active_id = None;
+            }
+
+            // Only the lower-right grip is visible at rest.
+            if !(held || hovered || index == 0) {
+                continue;
+            }
+            let col = if held {
+                self.style.color_u32(Col::ResizeGripActive)
+            } else if hovered {
+                self.style.color_u32(Col::ResizeGripHovered)
+            } else {
+                self.style.color_u32(Col::ResizeGrip)
+            };
+            if col & 0xFF00_0000 == 0 {
+                continue;
+            }
+            // Two points along the corner's edges, then the arc of the window rounding, which at
+            // rounding 0 collapses onto the corner itself.
+            let along = |a: f32, b: f32| Vec2 {
+                x: corner.x + inner_dir.x * a,
+                y: corner.y + inner_dir.y * b,
+            };
+            let mut points = Vec::with_capacity(6);
+            if index & 1 == 1 {
+                points.push(along(border_inner, draw_size));
+                points.push(along(draw_size, border_inner));
+            } else {
+                points.push(along(draw_size, border_inner));
+                points.push(along(border_inner, draw_size));
+            }
+            let centre = Vec2 {
+                x: corner.x + inner_dir.x * (rounding + border_inner),
+                y: corner.y + inner_dir.y * (rounding + border_inner),
+            };
+            // PathArcToFast with a zero radius pushes the centre once, so the shape is a
+            // triangle rather than a fan.
+            points.push(centre);
+            self.draw_list.add_convex_poly_filled_aa(&points, col);
+        }
+    }
+
     fn clamp_window_pos(&self, pos: Vec2, size: Vec2) -> Vec2 {
         let pad = Vec2 {
             x: self

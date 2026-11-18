@@ -31,12 +31,15 @@ pub enum Col {
     ScrollbarGrab,
     ScrollbarGrabHovered,
     ScrollbarGrabActive,
+    ResizeGrip,
+    ResizeGripHovered,
+    ResizeGripActive,
     HeaderHovered,
     HeaderActive,
 }
 
 impl Col {
-    pub const COUNT: usize = 24;
+    pub const COUNT: usize = 27;
 
     pub(crate) fn index(self) -> usize {
         match self {
@@ -64,6 +67,9 @@ impl Col {
             Col::ScrollbarGrab => 21,
             Col::ScrollbarGrabHovered => 22,
             Col::ScrollbarGrabActive => 23,
+            Col::ResizeGrip => 24,
+            Col::ResizeGripHovered => 25,
+            Col::ResizeGripActive => 26,
         }
     }
 }
@@ -92,6 +98,8 @@ pub struct Style {
     pub tab_rounding: f32,
 
     pub window_border_size: f32,
+    /// Style::WindowBorderHoverPadding: how far outside a border counts as its handle.
+    pub window_border_hover_padding: f32,
     pub frame_border_size: f32,
     pub child_border_size: f32,
     pub popup_border_size: f32,
@@ -140,6 +148,7 @@ impl Default for Style {
             scrollbar_rounding: 9.0,
             tab_rounding: 5.0,
             window_border_size: 1.0,
+            window_border_hover_padding: 4.0,
             frame_border_size: 0.0,
             child_border_size: 1.0,
             popup_border_size: 1.0,
@@ -173,6 +182,9 @@ impl Default for Style {
                 0xFF4F_4F4F, // ScrollbarGrab (pinned from the reference)
                 0xFF69_6969, // ScrollbarGrabHovered (pinned from the reference)
                 0xFF82_8282, // ScrollbarGrabActive (pinned from the reference)
+                0x33FA_9642, // ResizeGrip (pinned from the reference)
+                0xABFA_9642, // ResizeGripHovered (pinned from the reference)
+                0xF2FA_9642, // ResizeGripActive (pinned from the reference)
             ],
         }
     }
