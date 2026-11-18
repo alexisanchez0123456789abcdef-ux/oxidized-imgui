@@ -19,6 +19,66 @@ const ARROW_DOWN_SIN: f32 = 1.0;
 const ARROW_RIGHT_COS: f32 = 1.0;
 const ARROW_RIGHT_SIN: f32 = 0.0;
 
+/// The per-window flags the port models, mirroring the `ImGuiWindowFlags` bits of the same name.
+///
+/// They used to be one `set_next_window_*` call per flag, which does not scale: this is the
+/// reference's own shape.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct WindowFlags(u32);
+
+impl WindowFlags {
+    pub const NONE: Self = Self(0);
+    /// `ImGuiWindowFlags_NoMove`: a click cannot start a move drag on this window.
+    pub const NO_MOVE: Self = Self(1 << 0);
+    /// `ImGuiWindowFlags_NoScrollbar`: no scrollbar, even when the content does not fit.
+    pub const NO_SCROLLBAR: Self = Self(1 << 1);
+    /// `ImGuiWindowFlags_HorizontalScrollbar`: a horizontal scrollbar may show up too.
+    pub const HORIZONTAL_SCROLLBAR: Self = Self(1 << 2);
+    /// `ImGuiWindowFlags_AlwaysAutoResize`: the window sizes itself to its content.
+    pub const ALWAYS_AUTO_RESIZE: Self = Self(1 << 3);
+
+    pub fn contains(self, other: Self) -> bool {
+        self.0 & other.0 == other.0
+    }
+}
+
+impl core::ops::BitOr for WindowFlags {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self {
+        Self(self.0 | rhs.0)
+    }
+}
+
+impl core::ops::BitOrAssign for WindowFlags {
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.0 |= rhs.0;
+    }
+}
+
+/// Everything the port remembers about a window between frames, so `Begin` can start from it.
+#[derive(Clone, Debug)]
+struct WindowMemory {
+    name: String,
+    pos: Vec2,
+    size_full: Vec2,
+    collapsed: bool,
+    want_collapse_toggle: bool,
+    scroll: Vec2,
+    /// `window->ContentSize` of the previous frame: the scroll maximum and the auto-fit size use it.
+    content_size: Vec2,
+    flags: WindowFlags,
+}
+
+impl WindowMemory {
+    fn find<'a>(memory: &'a [WindowMemory], name: &str) -> Option<&'a WindowMemory> {
+        memory.iter().find(|known| known.name == name)
+    }
+
+    fn find_mut<'a>(memory: &'a mut [WindowMemory], name: &str) -> Option<&'a mut WindowMemory> {
+        memory.iter_mut().find(|known| known.name == name)
+    }
+}
+
 /// What `begin_window` has to know about the window it is opening.
 struct WindowOptions<'a> {
     /// `None` for a window without a title bar.
@@ -27,10 +87,10 @@ struct WindowOptions<'a> {
     background: bool,
     /// `p_open != NULL`: the title bar gets a close button, and a press turns it off.
     open: Option<&'a mut bool>,
-    /// `!(flags & ImGuiWindowFlags_NoCollapse)`: the title bar gets a collapse arrow.
+    /// `ImGuiWindowFlags_NoCollapse` when false: the title bar gets a collapse arrow.
     collapsible: bool,
-    /// `ImGuiWindowFlags_NoMove`: the window cannot be moved by dragging its title bar.
-    no_move: bool,
+    /// The flags of the window, `NoMove` and `NoScrollbar` included.
+    flags: WindowFlags,
 }
 
 /// An open window. Only the geometry the harness checks is modelled.
@@ -44,6 +104,8 @@ pub struct Window {
     pub size_full: Vec2,
     pub collapsed: bool,
     pub want_collapse_toggle: bool,
+    /// The window's ImGuiWindowFlags, as it was opened this frame.
+    pub flags: WindowFlags,
     /// `window->Scroll`: how far the content is scrolled inside the window.
     pub scroll: Vec2,
     /// `window->ScrollMax`: the largest scroll the content allows.
@@ -84,10 +146,8 @@ pub struct Context {
     /// `g.Time`: the reference keeps it as a `double` and `GetTime()` returns it as such.
     time: f64,
     windows: Vec<Window>,
-    /// (name, pos, size_full, collapsed, want_collapse_toggle) per window, between frames.
-    remembered: Vec<(String, Vec2, Vec2, bool, bool, Vec2)>,
-    /// `window->ContentSize` per window, from the previous frame: the scroll maximum needs it.
-    content_sizes: Vec<(String, Vec2)>,
+    /// Per-window state between frames: position, size, scroll, content size and flags.
+    memory: Vec<WindowMemory>,
     /// `SetNextWindowScroll` for the window about to start.
     next_scroll: Option<Vec2>,
     /// g.ScrollbarClickDeltaToGrabCenter: where inside the grab the seek started.
@@ -103,13 +163,8 @@ pub struct Context {
     wheeling_ref_mouse: Vec2,
     /// g.WheelingWindowReleaseTimer: seconds of lock left.
     wheeling_release_timer: f32,
-    /// ImGuiWindowFlags_HorizontalScrollbar for the window about to start.
-    next_horizontal_scrollbar: bool,
-    /// ImGuiWindowFlags_AlwaysAutoResize for the window about to start.
-    next_auto_resize: bool,
-    /// Whether the window about to start may show a scrollbar. The other constructors model
-    /// `ImGuiWindowFlags_NoScrollbar`, which every existing scenario uses.
-    next_scrollbar: bool,
+    /// The flags of the window about to start, set with `set_next_window_flags`.
+    next_flags: Option<WindowFlags>,
     /// `g.Windows`, back to front: the order the lists are rendered in. It survives frames.
     display_order: Vec<String>,
     /// Names of the windows that were submitted on the previous frame (`WasActive`).
@@ -122,8 +177,6 @@ pub struct Context {
     hovered_window: Option<String>,
     /// `g.NavWindow` as far as the port needs it: the window whose title bar is highlighted.
     focused_window: Option<String>,
-    /// Windows carrying `ImGuiWindowFlags_NoMove`: the move drag takes the id but does not move.
-    immovable_windows: Vec<String>,
     /// `g.HoveredId`: the widget under the mouse, which blocks the click-to-raise.
     hovered_id: Option<ImGuiID>,
     active_id: Option<ImGuiID>,
@@ -151,12 +204,9 @@ impl Default for Context {
             io: Io::default(),
             time: 0.0,
             windows: Vec::new(),
-            remembered: Vec::new(),
-            content_sizes: Vec::new(),
+            memory: Vec::new(),
             next_scroll: None,
-            next_scrollbar: false,
-            next_auto_resize: false,
-            next_horizontal_scrollbar: false,
+            next_flags: None,
             wheeling_window: None,
             wheeling_ref_mouse: Vec2::default(),
             wheeling_release_timer: 0.0,
@@ -169,7 +219,7 @@ impl Default for Context {
             last_list: crate::draw_list::DrawList::new(),
             hovered_window: None,
             focused_window: None,
-            immovable_windows: Vec::new(),
+
             hovered_id: None,
             active_id: None,
             active_click_offset: Vec2::default(),
@@ -236,20 +286,18 @@ impl Context {
             if !self.last_frame_windows.contains(name) {
                 continue;
             }
-            let Some((_, pos, size_full, collapsed, _, _)) =
-                self.remembered.iter().find(|(known, ..)| known == name)
-            else {
+            let Some(memory) = WindowMemory::find(&self.memory, name) else {
                 continue;
             };
-            let height = if *collapsed {
+            let height = if memory.collapsed {
                 self.frame_height()
             } else {
-                size_full.y
+                memory.size_full.y
             };
-            if mouse.x >= pos.x
-                && mouse.x < pos.x + size_full.x
-                && mouse.y >= pos.y
-                && mouse.y < pos.y + height
+            if mouse.x >= memory.pos.x
+                && mouse.x < memory.pos.x + memory.size_full.x
+                && mouse.y >= memory.pos.y
+                && mouse.y < memory.pos.y + height
             {
                 found = Some(name.clone());
                 break;
@@ -334,12 +382,8 @@ impl Context {
             y: mouse.y - self.active_click_offset.y,
         };
         // `SetWindowPos(..., ImGuiCond_Always)`.
-        if let Some(entry) = self
-            .remembered
-            .iter_mut()
-            .find(|(known, ..)| *known == name)
-        {
-            entry.1 = pos;
+        if let Some(entry) = WindowMemory::find_mut(&mut self.memory, &name) {
+            entry.pos = pos;
         }
     }
 
@@ -349,23 +393,9 @@ impl Context {
         self.next_scroll = Some(scroll);
     }
 
-    /// Allows the next window to show a scrollbar. The reference's default; the constructors here
-    /// model `ImGuiWindowFlags_NoScrollbar` instead, because every earlier scenario passes it.
-    pub fn set_next_window_scrollbar(&mut self, enabled: bool) {
-        self.next_scrollbar = enabled;
-    }
-
-    /// `ImGuiWindowFlags_AlwaysAutoResize` for the next window: it sizes itself to its content.
-    pub fn set_next_window_auto_resize(&mut self, enabled: bool) {
-        self.next_auto_resize = enabled;
-    }
-
-    /// `ImGuiWindowFlags_HorizontalScrollbar`: the window may show a horizontal scrollbar too.
-    ///
-    /// These per-window switches are piling up (`no_move`, `no_scrollbar`, `auto_resize`, this one)
-    /// and want to become a real flags value.
-    pub fn set_next_window_horizontal_scrollbar(&mut self, enabled: bool) {
-        self.next_horizontal_scrollbar = enabled;
+    /// The `ImGuiWindowFlags` of the next window, as `ImGui::Begin` takes them.
+    pub fn set_next_window_flags(&mut self, flags: WindowFlags) {
+        self.next_flags = Some(flags);
     }
 
     /// Pins `ImDrawListSharedData::TexUvLines`: the atlas line-texture table a stroked primitive
@@ -582,7 +612,7 @@ impl Context {
                 background: true,
                 open: None,
                 collapsible: false,
-                no_move: true,
+                flags: WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR,
             },
         )
     }
@@ -604,7 +634,7 @@ impl Context {
                 background: true,
                 open: None,
                 collapsible: false,
-                no_move: true,
+                flags: WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR,
             },
         )
     }
@@ -627,7 +657,7 @@ impl Context {
                 background: true,
                 open: None,
                 collapsible: false,
-                no_move: false,
+                flags: WindowFlags::NO_SCROLLBAR,
             },
         )
     }
@@ -663,7 +693,12 @@ impl Context {
                 background: true,
                 open,
                 collapsible: true,
-                no_move,
+                flags: WindowFlags::NO_SCROLLBAR
+                    | if no_move {
+                        WindowFlags::NO_MOVE
+                    } else {
+                        WindowFlags::NONE
+                    },
             },
         )
     }
@@ -686,7 +721,7 @@ impl Context {
                 background,
                 open: None,
                 collapsible: false,
-                no_move: true,
+                flags: WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR,
             },
         )
     }
@@ -700,35 +735,31 @@ impl Context {
     ) -> bool {
         let title = opts.title;
         let background = opts.background;
-        let remembered = self
-            .remembered
-            .iter()
-            .rev()
-            .find(|(known, ..)| known == name)
-            .map(|(_, p, s, c, w, sc)| (*p, *s, *c, *w, Some(*sc)));
+        // `ImGui::Begin` takes the flags as an argument; the convenience constructors pass their
+        // own, and `set_next_window_flags` overrides them for a window opened that way.
+        let flags = self.next_flags.take().unwrap_or(opts.flags);
+        let remembered = WindowMemory::find(&self.memory, name);
         let pos_was_set = pos.is_some();
-        let (pos, size_full, mut collapsed, mut want_collapse_toggle, remembered_scroll) =
+        let (pos, size_full, mut collapsed, mut want_collapse_toggle, remembered_scroll, content) =
             match remembered {
-                Some((rp, rs, rc, rw, rscroll)) => {
-                    (pos.unwrap_or(rp), size.unwrap_or(rs), rc, rw, rscroll)
-                }
+                Some(memory) => (
+                    pos.unwrap_or(memory.pos),
+                    size.unwrap_or(memory.size_full),
+                    memory.collapsed,
+                    memory.want_collapse_toggle,
+                    Some(memory.scroll),
+                    memory.content_size,
+                ),
                 None => (
                     pos.unwrap_or_default(),
                     size.unwrap_or_default(),
                     false,
                     false,
                     None,
+                    Vec2::default(),
                 ),
             };
 
-        // Track the `NoMove` flag so the click-to-move knows whether it may drag this one.
-        if opts.no_move {
-            if !self.immovable_windows.iter().any(|known| known == name) {
-                self.immovable_windows.push(name.to_string());
-            }
-        } else {
-            self.immovable_windows.retain(|known| known != name);
-        }
         // Each window draws into its own list for the frame.
         self.draw_list = self.new_window_draw_list();
         // A window that has never been seen goes on top of the display order and takes the focus;
@@ -755,15 +786,8 @@ impl Context {
         // `CalcWindowAutoFitSize` does clamp to `WindowMinSize`, but the reference's first frame
         // shows the unclamped value here, and no scenario content is small enough to tell them
         // apart otherwise.
-        let auto_resize = core::mem::take(&mut self.next_auto_resize);
         let mut size_full = size_full;
-        if auto_resize {
-            let content = self
-                .content_sizes
-                .iter()
-                .find(|(known, _)| known == name)
-                .map(|(_, size)| *size)
-                .unwrap_or_default();
+        if flags.contains(WindowFlags::ALWAYS_AUTO_RESIZE) {
             let decoration = title_height;
             size_full = Vec2 {
                 x: (content.x + pad.x * 2.0).min(self.io.display_size.x),
@@ -800,16 +824,9 @@ impl Context {
                 y: pos.y + size.y,
             },
         );
-        // `ScrollMax` uses the content size of the previous frame, so it lags one frame behind.
-        let content = self
-            .content_sizes
-            .iter()
-            .find(|(known, _)| known == name)
-            .map(|(_, size)| *size)
-            .unwrap_or_default();
-        // `window->ScrollbarY`: the content did not fit on the previous frame.
-        let wants_scrollbar = core::mem::take(&mut self.next_scrollbar);
-        let wants_horizontal = core::mem::take(&mut self.next_horizontal_scrollbar);
+        // `window->ScrollbarY`: the content of the previous frame did not fit.
+        let wants_scrollbar = !flags.contains(WindowFlags::NO_SCROLLBAR);
+        let wants_horizontal = wants_scrollbar && flags.contains(WindowFlags::HORIZONTAL_SCROLLBAR);
         let scrollbar_y =
             wants_scrollbar && content.y + pad.y * 2.0 > inner_rect.1.y - inner_rect.0.y;
         if scrollbar_y {
@@ -982,7 +999,7 @@ impl Context {
                 opts.open.is_some(),
                 opts.collapsible,
                 collapsed,
-                !opts.no_move,
+                !opts.flags.contains(WindowFlags::NO_MOVE),
             );
             if pressed_collapse {
                 want_collapse_toggle = true;
@@ -1020,6 +1037,7 @@ impl Context {
             size_full,
             collapsed,
             want_collapse_toggle,
+            flags,
             scroll,
             scroll_max,
             content_extent: content,
@@ -1305,35 +1323,25 @@ impl Context {
     pub fn end_window(&mut self) {
         self.draw_list.finish_clip_scope();
         if let Some(window) = self.windows.pop() {
-            let entry = (
-                window.name.clone(),
-                window.pos,
-                window.size_full,
-                window.collapsed,
-                window.want_collapse_toggle,
-                window.scroll,
-            );
-            match self
-                .remembered
-                .iter_mut()
-                .find(|(name, ..)| *name == window.name)
-            {
-                Some(slot) => *slot = entry,
-                None => self.remembered.push(entry),
-            }
             // `CalcWindowContentSizes`: the extent the layout reached, measured from the scrolled
             // start so scrolling does not change it.
-            let size = Vec2 {
+            let content_size = Vec2 {
                 x: (window.cursor_max.x - window.cursor_start.x).trunc(),
                 y: (window.cursor_max.y - window.cursor_start.y).trunc(),
             };
-            match self
-                .content_sizes
-                .iter_mut()
-                .find(|(known, _)| *known == window.name)
-            {
-                Some(slot) => slot.1 = size,
-                None => self.content_sizes.push((window.name.clone(), size)),
+            let entry = WindowMemory {
+                name: window.name.clone(),
+                pos: window.pos,
+                size_full: window.size_full,
+                collapsed: window.collapsed,
+                want_collapse_toggle: window.want_collapse_toggle,
+                scroll: window.scroll,
+                content_size,
+                flags: window.flags,
+            };
+            match WindowMemory::find_mut(&mut self.memory, &window.name) {
+                Some(slot) => *slot = entry,
+                None => self.memory.push(entry),
             }
             // The frame's list for this window, kept for `render_lists`.
             let list = core::mem::take(&mut self.draw_list);
@@ -1370,9 +1378,10 @@ impl Context {
         }
         // `StartMouseMovingWindow`: the same click also starts a move drag. The window only
         // follows the mouse when it is not `NoMove`, but the active id is taken either way.
-        if let Some((_, pos, ..)) = self.remembered.iter().find(|(known, ..)| *known == hovered) {
-            let pos = *pos;
-            let can_move = !self.immovable_windows.contains(&hovered);
+        if let Some(memory) = WindowMemory::find(&self.memory, &hovered) {
+            let pos = memory.pos;
+            let can_move = !memory.flags.contains(WindowFlags::NO_MOVE);
+            let hovered = hovered.clone();
             self.start_mouse_moving_window(&hovered, pos, can_move);
         }
         self.focused_window = Some(hovered);
