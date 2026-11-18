@@ -63,6 +63,7 @@ pub const SCENARIOS: &[&str] = &[
     "window_hscrollbar",
     "window_scrollbar_page",
     "window_min_size",
+    "window_resize_grips",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -1897,7 +1898,7 @@ pub fn window_scrollbar_dump() -> String {
         if let Some(y) = scroll_y {
             ctx.set_next_window_scroll(Vec2 { x: 0.0, y });
         }
-        ctx.set_next_window_flags(WindowFlags::NO_MOVE);
+        ctx.set_next_window_flags(WindowFlags::NO_MOVE | WindowFlags::NO_RESIZE);
         ctx.begin_window(
             "S",
             Some(Vec2 { x: 60.0, y: 60.0 }),
@@ -1967,7 +1968,7 @@ pub fn window_scrollbar_drag_dump() -> String {
         ctx.io_mut().mouse_pos = Some(Vec2 { x: mx, y: my });
         ctx.io_mut().mouse_down[0] = down;
         ctx.begin_frame();
-        ctx.set_next_window_flags(WindowFlags::NO_MOVE);
+        ctx.set_next_window_flags(WindowFlags::NO_MOVE | WindowFlags::NO_RESIZE);
         ctx.begin_window(
             "S",
             Some(Vec2 { x: 60.0, y: 60.0 }),
@@ -2031,7 +2032,7 @@ pub fn window_wheel_dump() -> String {
         ctx.io_mut().mouse_down[0] = false;
         ctx.io_mut().mouse_wheel = wheel_y;
         ctx.begin_frame();
-        ctx.set_next_window_flags(WindowFlags::NO_MOVE);
+        ctx.set_next_window_flags(WindowFlags::NO_MOVE | WindowFlags::NO_RESIZE);
         ctx.begin_window(
             "S",
             Some(Vec2 { x: 60.0, y: 60.0 }),
@@ -2089,7 +2090,10 @@ pub fn window_autosize_dump() -> String {
         ctx.io_mut().mouse_down[0] = false;
         ctx.begin_frame();
         ctx.set_next_window_flags(
-            WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::ALWAYS_AUTO_RESIZE,
+            WindowFlags::NO_MOVE
+                | WindowFlags::NO_RESIZE
+                | WindowFlags::NO_SCROLLBAR
+                | WindowFlags::ALWAYS_AUTO_RESIZE,
         );
         ctx.begin_window("A", Some(Vec2 { x: 60.0, y: 60.0 }), None);
         ctx.dummy(Vec2 { x: 100.0, y: 300.0 });
@@ -2145,7 +2149,10 @@ pub fn window_autosize_change_dump() -> String {
         ctx.io_mut().mouse_down[0] = false;
         ctx.begin_frame();
         ctx.set_next_window_flags(
-            WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::ALWAYS_AUTO_RESIZE,
+            WindowFlags::NO_MOVE
+                | WindowFlags::NO_RESIZE
+                | WindowFlags::NO_SCROLLBAR
+                | WindowFlags::ALWAYS_AUTO_RESIZE,
         );
         ctx.begin_window("A", Some(Vec2 { x: 60.0, y: 60.0 }), None);
         let window = ctx.window();
@@ -2208,7 +2215,7 @@ pub fn window_wheel_lock_dump() -> String {
         ctx.io_mut().mouse_down[0] = false;
         ctx.io_mut().mouse_wheel = wheel_y;
         ctx.begin_frame();
-        ctx.set_next_window_flags(WindowFlags::NO_MOVE);
+        ctx.set_next_window_flags(WindowFlags::NO_MOVE | WindowFlags::NO_RESIZE);
         ctx.begin_window(
             "A",
             Some(Vec2 { x: 60.0, y: 60.0 }),
@@ -2217,7 +2224,7 @@ pub fn window_wheel_lock_dump() -> String {
         let scroll_a = ctx.window().scroll.y;
         ctx.dummy(Vec2 { x: 100.0, y: 300.0 });
         ctx.end_window();
-        ctx.set_next_window_flags(WindowFlags::NO_MOVE);
+        ctx.set_next_window_flags(WindowFlags::NO_MOVE | WindowFlags::NO_RESIZE);
         ctx.begin_window(
             "B",
             Some(Vec2 { x: 358.0, y: 60.0 }),
@@ -2280,7 +2287,9 @@ pub fn window_hscrollbar_dump() -> String {
         if let Some(x) = scroll_x {
             ctx.set_next_window_scroll(Vec2 { x, y: 0.0 });
         }
-        ctx.set_next_window_flags(WindowFlags::NO_MOVE | WindowFlags::HORIZONTAL_SCROLLBAR);
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE | WindowFlags::NO_RESIZE | WindowFlags::HORIZONTAL_SCROLLBAR,
+        );
         ctx.begin_window(
             "H",
             Some(Vec2 { x: 60.0, y: 60.0 }),
@@ -2371,7 +2380,7 @@ pub fn window_scrollbar_page_dump() -> String {
         if let Some(y) = scroll_y {
             ctx.set_next_window_scroll(Vec2 { x: 0.0, y });
         }
-        ctx.set_next_window_flags(WindowFlags::NO_MOVE);
+        ctx.set_next_window_flags(WindowFlags::NO_MOVE | WindowFlags::NO_RESIZE);
         ctx.begin_window(
             "P",
             Some(Vec2 { x: 60.0, y: 60.0 }),
@@ -2439,7 +2448,9 @@ pub fn window_min_size_dump() -> String {
             ctx.begin_frame();
             if auto {
                 // An auto-sized window ignores the requested size, because the size was set by API.
-                ctx.set_next_window_flags(WindowFlags::NO_MOVE | WindowFlags::ALWAYS_AUTO_RESIZE);
+                ctx.set_next_window_flags(
+                    WindowFlags::NO_MOVE | WindowFlags::NO_RESIZE | WindowFlags::ALWAYS_AUTO_RESIZE,
+                );
             }
             ctx.begin_window(
                 "M",
@@ -2488,6 +2499,60 @@ pub fn window_min_size_dump() -> String {
     out
 }
 
+/// The `window_resize_grips` scenario: the lower corner grips of a resizable window. The lower-right
+/// one is visible at rest, the lower-left one only while it is hovered or held, and the colours
+/// change with the mouse. Resizing itself is not wired up yet, so only the drawing is pinned.
+pub fn window_resize_grips_dump() -> String {
+    use oxidized_imgui::{Context, Vec2};
+
+    let mut ctx = Context::new();
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario window_resize_grips\n");
+
+    let frame = |ctx: &mut Context, out: &mut String, mx: f32, my: f32, down: bool| {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: mx, y: my });
+        ctx.io_mut().mouse_down[0] = down;
+        ctx.begin_frame();
+        ctx.set_next_window_flags(WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR);
+        ctx.begin_window(
+            "G",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        let window = ctx.window();
+        let text = format!(
+            "frame size {:08x} {:08x}\n",
+            window.size.x.to_bits(),
+            window.size.y.to_bits(),
+        );
+        let body = dump("window_resize_grips", ctx.draw_list());
+        ctx.end_window();
+        out.push_str(&text);
+        for line in body.lines().skip(2) {
+            out.push_str(line);
+            out.push('\n');
+        }
+        ctx.end_frame();
+    };
+
+    // Away from the window: only the lower-right grip is visible, faintly.
+    for _ in 0..3 {
+        frame(&mut ctx, &mut out, 0.0, 0.0, false);
+    }
+    // Over the lower-right grip (the window ends at 360,260; the handle reaches 12 pixels out).
+    frame(&mut ctx, &mut out, 357.0, 257.0, false);
+    frame(&mut ctx, &mut out, 357.0, 257.0, true);
+    frame(&mut ctx, &mut out, 357.0, 257.0, false);
+    // Over the lower-left grip: the second one shows up too.
+    frame(&mut ctx, &mut out, 63.0, 257.0, false);
+    frame(&mut ctx, &mut out, 0.0, 0.0, false);
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -2521,6 +2586,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "window_hscrollbar" => Some(window_hscrollbar_dump()),
         "window_scrollbar_page" => Some(window_scrollbar_page_dump()),
         "window_min_size" => Some(window_min_size_dump()),
+        "window_resize_grips" => Some(window_resize_grips_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),

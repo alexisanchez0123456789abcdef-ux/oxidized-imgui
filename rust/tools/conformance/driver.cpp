@@ -1794,6 +1794,46 @@ static void DumpWindowMinSize()
     FrameMinSizeWindow(10.0f, 10.0f, true, true);
 }
 
+// window_resize_grips: the two lower corner grips of a resizable window. The lower-right one is
+// visible at rest; the lower-left one only while it is hovered or held. Resizing is not wired up in
+// the port yet, so this scenario only pins the drawing and the colours.
+static void FrameGripWindow(float mx, float my, bool down)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = down;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("G", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar);
+    ImGuiWindow* w = ImGui::GetCurrentWindow();
+    printf("frame size %08x %08x\n", Bits(w->Size.x), Bits(w->Size.y));
+    DumpDrawListBody(*w->DrawList);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpWindowResizeGrips()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario window_resize_grips\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
+    // Away from the window: only the lower-right grip is visible, faintly.
+    for (int i = 0; i < 3; i++)
+        FrameGripWindow(0.0f, 0.0f, false);
+    // Over the lower-right grip (the window ends at 360,260): the handle reaches 12 pixels out.
+    FrameGripWindow(357.0f, 257.0f, false);
+    FrameGripWindow(357.0f, 257.0f, true);
+    FrameGripWindow(357.0f, 257.0f, false);
+    // Over the lower-left grip: the second one shows up too.
+    FrameGripWindow(63.0f, 257.0f, false);
+    FrameGripWindow(0.0f, 0.0f, false);
+}
+
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 
 static void DumpCmdOffsets()
@@ -2043,6 +2083,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_icons") == 0)
     {
         DumpWindowIcons();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "window_resize_grips") == 0)
+    {
+        DumpWindowResizeGrips();
         ImGui::DestroyContext();
         return 0;
     }

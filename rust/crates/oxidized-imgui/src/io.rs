@@ -88,6 +88,9 @@ pub struct Io {
     /// io.MouseWheel / io.MouseWheelH: filled from the wheel events of the frame.
     pub mouse_wheel: f32,
     pub mouse_wheel_h: f32,
+    /// io.ConfigWindowsResizeFromEdges: the lower-left corner is a resize grip too, not only the
+    /// lower-right one.
+    pub config_windows_resize_from_edges: bool,
     /// io.ConfigScrollbarScrollByPage: a click on a scrollbar's track scrolls a page instead of
     /// jumping to the clicked position.
     pub config_scrollbar_scroll_by_page: bool,
@@ -130,6 +133,7 @@ impl Default for Io {
             mouse_double_click_time: 0.30,
             mouse_double_click_max_dist: 6.0,
             config_scrollbar_scroll_by_page: false,
+            config_windows_resize_from_edges: true,
             mouse_wheel: 0.0,
             mouse_wheel_h: 0.0,
             mouse_drag_threshold: 6.0,
