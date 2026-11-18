@@ -189,6 +189,8 @@ pub struct Context {
     active_click_offset: Vec2,
     /// `resize_grip_col[2]`: the colour each lower corner grip paints this frame, zero when hidden.
     resize_grip_cols: [u32; 2],
+    /// `window->DC.StateStorage`: the open or closed state of every tree node and collapsing header.
+    item_states: Vec<(ImGuiID, bool)>,
     /// `g.HoveredIdTimer`: how long the border under the mouse has been hovered. The reference
     /// waits WINDOWS_RESIZE_FROM_EDGES_FEEDBACK_TIMER before it reports a border, so brushing past
     /// an edge on the way to a widget does not light it up.
@@ -239,6 +241,7 @@ impl Default for Context {
             hovered_id: None,
             active_id: None,
             active_click_offset: Vec2::default(),
+            item_states: Vec::new(),
             resize_grip_cols: [0; 2],
             resize_hover_timer: 0.0,
             resize_border_prev: -1,
@@ -2252,15 +2255,30 @@ impl Context {
 
     /// The hover/active/press logic shared by framed widgets (`ButtonBehavior`).
     fn interact(&mut self, id: ImGuiID, size: Vec2) -> bool {
-        let (min, window_pos, window_size) = {
-            let window = self.window();
-            (window.cursor, window.pos, window.size)
-        };
+        let min = self.window().cursor;
         let max = Vec2 {
             x: min.x + size.x,
             y: min.y + size.y,
         };
+        let (hovered, active, pressed) = self.behaviour_at(id, min, max, false);
+        self.dummy(size);
+        self.last_item_hovered = hovered;
+        self.last_item_active = active;
+        pressed
+    }
 
+    /// ButtonBehavior over a rectangle: hover, press on release, and the active state.
+    fn behaviour_at(
+        &mut self,
+        id: ImGuiID,
+        min: Vec2,
+        max: Vec2,
+        press_on_click: bool,
+    ) -> (bool, bool, bool) {
+        let (window_pos, window_size) = {
+            let window = self.window();
+            (window.pos, window.size)
+        };
         let over_window = self
             .io
             .mouse_pos
@@ -2277,30 +2295,34 @@ impl Context {
                 .mouse_pos
                 .map(|m| m.x >= min.x && m.x < max.x && m.y >= min.y && m.y < max.y)
                 .unwrap_or(false);
-
         if hovered {
             self.hovered_id = Some(id);
         }
         if hovered && self.io.mouse_clicked[0] {
             self.active_id = Some(id);
         }
-
-        // On release the reference clears the active id before returning, so `IsItemActive()`
-        // queried afterwards is already false on that frame.
+        // On release the reference clears the active id before returning, so
+        // IsItemActive() queried afterwards is already false on that frame.
         let was_active = self.active_id == Some(id);
         let mut pressed = false;
+        // ImGuiButtonFlags_PressedOnClick: the press itself activates, which is what the arrow of a
+        // tree node does so that opening reacts on the way down.
+        if press_on_click && hovered && self.io.mouse_clicked[0] {
+            pressed = true;
+        }
         if was_active && self.io.mouse_released[0] {
-            pressed = hovered;
+            // A press-to-activate item was already activated on the way down, so releasing it must
+            // not press it a second time.
+            pressed = pressed || (!press_on_click && hovered);
             self.active_id = None;
         }
-        let active = self.active_id == Some(id);
-
-        self.dummy(size);
-        self.last_item_hovered = hovered;
-        self.last_item_active = active;
-        pressed
+        // held is the id being active *and* the button still down, which is what the colours key on.
+        (
+            hovered,
+            self.active_id == Some(id) && self.io.mouse_down[0],
+            pressed,
+        )
     }
-
     /// `ImGui::Button`: a framed label. Returns true on the frame the mouse is released inside.
     pub fn button(&mut self, label: &str) -> bool {
         let id = self.get_id(label);
@@ -2454,6 +2476,141 @@ impl Context {
         self.last_item_hovered = hovered;
         self.last_item_active = active;
         changed
+    }
+
+    /// `ImGui::CollapsingHeader`: a framed, full-width header with a collapsing arrow. Returns true
+    /// while it is open, and the caller decides what to draw under it.
+    ///
+    /// This is `TreeNodeBehavior` with the `CollapsingHeader` flag set, which adds `Framed`,
+    /// `SpanAvailWidth` and `NoTreePushOnOpen`. Left out is everything that needs machinery this port
+    /// does not have yet: keyboard navigation, multi-selection, drag and drop, and the tree lines.
+    pub fn collapsing_header(&mut self, label: &str) -> bool {
+        let id = self.get_id(label);
+        let pad = self.style.frame_padding;
+        let text = self.font.calc_text_size(label, self.font.size);
+        // The arrow takes `FontSize` plus a frame padding on each side.
+        let icon_width = self.font.size + pad.x * 2.0;
+        let text_offset_x = icon_width + pad.x;
+        let text_offset_y = pad.y;
+        let frame_height = text.y + pad.y * 2.0;
+        // A framed header reaches a little outside the current limits.
+        let outer_extend = (self.style.window_padding.x * 0.5).trunc();
+
+        let (cursor, work_max_x) = {
+            let window = self.window();
+            (
+                window.cursor,
+                window.inner_rect.1.x - self.style.window_padding.x,
+            )
+        };
+        let frame_min = Vec2 {
+            x: cursor.x - outer_extend,
+            y: cursor.y,
+        };
+        let frame_max = Vec2 {
+            x: work_max_x + outer_extend,
+            y: cursor.y + frame_height,
+        };
+        let text_pos = Vec2 {
+            x: cursor.x + text_offset_x,
+            y: cursor.y + text_offset_y,
+        };
+
+        // `ItemSize(ImVec2(text_width, frame_height), padding.y)`: the item is as wide as the arrow
+        // plus the label, even though the header itself spans the window.
+        let item = Vec2 {
+            x: icon_width + text.x,
+            y: frame_height,
+        };
+        // The arrow area activates on press, the rest of the header on release.
+        let over_arrow = self
+            .io
+            .mouse_pos
+            .map(|m| m.x >= cursor.x && m.x < cursor.x + icon_width)
+            .unwrap_or(false);
+        let pressed = self.interact_rect(id, frame_min, frame_max, item, over_arrow);
+        let mut open = self.item_open(id);
+        if pressed {
+            open = !open;
+            self.set_item_open(id, open);
+        }
+
+        // `RenderFrame` with the header colours, then the arrow, then the label.
+        let bg_col = if self.last_item_active {
+            self.style.color_u32(crate::style::Col::HeaderActive)
+        } else if self.last_item_hovered {
+            self.style.color_u32(crate::style::Col::HeaderHovered)
+        } else {
+            self.style.color_u32(crate::style::Col::Header)
+        };
+        self.draw_list.prim_rect(frame_min, frame_max, bg_col);
+        if self.style.frame_border_size > 0.0 {
+            self.draw_list.add_aligned_rect_border(
+                frame_min,
+                frame_max,
+                self.style.color_u32(crate::style::Col::Border),
+                self.style.frame_border_size,
+            );
+        }
+        let text_col = self.style.color_u32(crate::style::Col::Text);
+        // `RenderArrow(... ImVec2(text_pos.x - text_offset_x + padding.x, text_pos.y) ...)`: down
+        // while it is open, right while it is closed.
+        let (cos_a, sin_a) = if open {
+            (ARROW_DOWN_COS, ARROW_DOWN_SIN)
+        } else {
+            (ARROW_RIGHT_COS, ARROW_RIGHT_SIN)
+        };
+        self.draw_list.add_arrow(
+            Vec2 {
+                x: text_pos.x - text_offset_x + pad.x,
+                y: text_pos.y,
+            },
+            text_col,
+            cos_a,
+            sin_a,
+            1.0,
+            self.font.size,
+            self.style.symbol_arrow_size_factor,
+            self.style.symbol_arrow_thickness_factor,
+        );
+        let font = self.font.clone();
+        self.draw_list
+            .add_text(&font, font.size, text_pos, text_col, label);
+        open
+    }
+
+    /// `TreeNodeUpdateNextOpen` with no next-item data and no default-open flag: closed until the
+    /// user opens it.
+    fn item_open(&self, id: ImGuiID) -> bool {
+        self.item_states
+            .iter()
+            .find(|(known, _)| *known == id)
+            .map(|(_, open)| *open)
+            .unwrap_or(false)
+    }
+
+    fn set_item_open(&mut self, id: ImGuiID, open: bool) {
+        if let Some(entry) = self.item_states.iter_mut().find(|(known, _)| *known == id) {
+            entry.1 = open;
+            return;
+        }
+        self.item_states.push((id, open));
+    }
+
+    /// `ButtonBehavior` over an explicit rectangle, with `ItemSize` advancing the cursor by `item`.
+    fn interact_rect(
+        &mut self,
+        id: ImGuiID,
+        min: Vec2,
+        max: Vec2,
+        item: Vec2,
+        press_on_click: bool,
+    ) -> bool {
+        let (hovered, held, pressed) = self.behaviour_at(id, min, max, press_on_click);
+        self.dummy(item);
+        self.last_item_hovered = hovered;
+        self.last_item_active = held;
+        pressed
     }
 
     /// `ImGui::Text` for an unformatted string: an item as wide as the text, no interaction.

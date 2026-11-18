@@ -68,6 +68,7 @@ pub const SCENARIOS: &[&str] = &[
     "window_resize_edges",
     "window_resize_cursor",
     "window_resize_autofit",
+    "collapsing_header",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -2796,6 +2797,83 @@ pub fn window_resize_autofit_dump() -> String {
     out
 }
 
+/// The `collapsing_header` scenario: a framed collapsing header. A click on the label toggles it on
+/// release, a click on the arrow toggles it on press, and the arrow points down while open.
+///
+/// The fixture carries both tables: the labels are text and the arrow is a stroke.
+pub fn collapsing_header_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/collapsing_header.fixture.txt"
+    );
+    let text = std::fs::read_to_string(path).expect("collapsing header fixture");
+    let font = Font::from_pinned(&text).expect("font fixture");
+    let line_uvs = parse_line_uvs(&text);
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    ctx.set_line_uv_lines(line_uvs);
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario collapsing_header\n");
+
+    let frame = |ctx: &mut Context, out: &mut String, mx: f32, my: f32, down: bool| {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: mx, y: my });
+        ctx.io_mut().mouse_down[0] = down;
+        ctx.begin_frame();
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+        );
+        ctx.begin_window(
+            "H",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        let first = ctx.collapsing_header("First");
+        if first {
+            ctx.dummy(Vec2 { x: 20.0, y: 10.0 });
+        }
+        let second = ctx.collapsing_header("Second");
+        if second {
+            ctx.dummy(Vec2 { x: 20.0, y: 10.0 });
+        }
+        let body = dump("collapsing_header", ctx.draw_list());
+        ctx.end_window();
+        out.push_str(&format!(
+            "frame first {} second {}\n",
+            first as u8, second as u8
+        ));
+        for line in body.lines().skip(2) {
+            out.push_str(line);
+            out.push('\n');
+        }
+        ctx.end_frame();
+    };
+
+    // The headers sit at the top of the window: the first spans y 68 to 87, the second follows.
+    for _ in 0..3 {
+        frame(&mut ctx, &mut out, 0.0, 0.0, false);
+    }
+    // A click on the label of the first one: press, then release inside it opens it.
+    frame(&mut ctx, &mut out, 200.0, 78.0, false);
+    frame(&mut ctx, &mut out, 200.0, 78.0, true);
+    frame(&mut ctx, &mut out, 200.0, 78.0, false);
+    // Hovering while it is open, then a second click closes it.
+    frame(&mut ctx, &mut out, 200.0, 78.0, false);
+    frame(&mut ctx, &mut out, 200.0, 78.0, true);
+    frame(&mut ctx, &mut out, 200.0, 78.0, false);
+    // A click on the arrow of the second header toggles on press instead.
+    frame(&mut ctx, &mut out, 72.0, 95.0, false);
+    frame(&mut ctx, &mut out, 72.0, 95.0, true);
+    frame(&mut ctx, &mut out, 72.0, 95.0, false);
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -2834,6 +2912,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "window_resize_edges" => Some(window_resize_edges_dump()),
         "window_resize_cursor" => Some(window_resize_cursor_dump()),
         "window_resize_autofit" => Some(window_resize_autofit_dump()),
+        "collapsing_header" => Some(collapsing_header_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),
