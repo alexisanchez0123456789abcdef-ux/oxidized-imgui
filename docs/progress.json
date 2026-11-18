@@ -67,10 +67,11 @@
     {
       "id": "fonts",
       "title": "Fuentes y texto",
-      "weight": 12,
+      "weight": 13,
       "infra": false,
       "items": [
         { "id": "atlas", "label": "Construcción del atlas de fuentes", "weight": 3, "done": false, "evidence": "" },
+        { "id": "atlas_pinned", "label": "UVs de texto con el atlas fijado por fixture", "weight": 1, "done": true, "evidence": "golden text_draw con UVs + fixture text_draw.glyphs.txt" },
         { "id": "raster", "label": "Rasterizado (port de stb_truetype)", "weight": 3, "done": false, "evidence": "" },
         { "id": "metrics", "label": "Métricas de glifos completas (offsets, kerning)", "weight": 2, "done": false, "evidence": "" },
         { "id": "text_metrics", "label": "Medida de texto (CalcTextSize) con tabla de avances fijada", "weight": 1, "done": true, "evidence": "golden font_metrics" },

@@ -101,6 +101,64 @@ impl Font {
         }
     }
 
+    /// Builds a font from a pinned glyph table (`g <code> <adv> <u0> <v0> <u1> <v1> <x0> <y0> <x1> <y1>`
+    /// plus one `font size <b> ascent <b> descent <b>` line, all as raw float bits).
+    ///
+    /// The table comes from a reference run, because atlas coordinates are only stable inside the
+    /// process that baked them.
+    pub fn from_pinned(text: &str) -> Option<Self> {
+        let hex = |s: &str| u32::from_str_radix(s, 16).ok().map(f32::from_bits);
+        let mut size = None;
+        let mut ascent = None;
+        let mut descent = None;
+        let mut glyphs = Vec::new();
+        for line in text.lines() {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            match parts.first() {
+                Some(&"font") if parts.len() >= 7 => {
+                    size = hex(parts[2]);
+                    ascent = hex(parts[4]);
+                    descent = hex(parts[6]);
+                }
+                Some(&"g") if parts.len() >= 11 => {
+                    let code: u32 = parts[1].parse().ok()?;
+                    let values: Vec<u32> = parts[2..11]
+                        .iter()
+                        .map(|s| u32::from_str_radix(s, 16).ok())
+                        .collect::<Option<Vec<u32>>>()?;
+                    let ch = char::from_u32(code)?;
+                    glyphs.push((
+                        ch,
+                        Glyph {
+                            advance_x: f32::from_bits(values[0]),
+                            uv: [
+                                f32::from_bits(values[1]),
+                                f32::from_bits(values[2]),
+                                f32::from_bits(values[3]),
+                                f32::from_bits(values[4]),
+                            ],
+                            offset: [
+                                f32::from_bits(values[5]),
+                                f32::from_bits(values[6]),
+                                f32::from_bits(values[7]),
+                                f32::from_bits(values[8]),
+                            ],
+                        },
+                    ));
+                }
+                _ => {}
+            }
+        }
+        let fallback_advance = glyphs.first().map(|(_, g)| g.advance_x).unwrap_or(7.0);
+        Some(Self {
+            size: size?,
+            ascent: ascent?,
+            descent: descent?,
+            glyphs,
+            fallback_advance,
+        })
+    }
+
     pub fn glyph(&self, c: char) -> Option<&Glyph> {
         self.glyphs
             .iter()

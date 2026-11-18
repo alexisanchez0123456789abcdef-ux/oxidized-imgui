@@ -42,9 +42,19 @@ function Compare-Bytes([string]$a, [string]$b) {
     return $null
 }
 
+$fixtures = Join-Path $root 'rust\crates\oxidized-imgui-conformance\tests\fixtures'
+New-Item -ItemType Directory -Force -Path $fixtures | Out-Null
+
 foreach ($name in $scenarios) {
     $dump = Join-Path $outDir "dump-$name.txt"
-    & cmd /c "`"$driver`" $name > `"$dump`""
+    # text_draw also writes the glyph table it used: the atlas is only stable inside one process,
+    # so the Rust side consumes that fixture instead of a table generated elsewhere.
+    if ($name -eq 'text_draw') {
+        $fixture = Join-Path $fixtures 'text_draw.glyphs.txt'
+        & cmd /c "`"$driver`" $name `"$fixture`" > `"$dump`""
+    } else {
+        & cmd /c "`"$driver`" $name > `"$dump`""
+    }
     if ($LASTEXITCODE -ne 0) { throw "driver failed for $name : $LASTEXITCODE" }
 
     $actual = Join-Path $outDir "rust-$name.txt"

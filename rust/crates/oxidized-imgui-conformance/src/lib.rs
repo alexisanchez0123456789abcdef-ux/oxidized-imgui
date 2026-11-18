@@ -493,46 +493,19 @@ pub fn clip_stack_dump() -> String {
 /// packer and differ between runs of the same driver, so they cannot be a stable contract. What is
 /// compared is the geometry (positions, colours, indices), which is what text layout decides.
 pub fn text_draw_dump() -> String {
-    use oxidized_imgui::{DrawList, Font, Vec2};
+    use oxidized_imgui::{Font, Vec2};
 
-    let font = Font::reference_default();
+    // The atlas is only stable inside the process that baked it, so the table travels with the
+    // scenario as a fixture written by the same reference run that produced the golden.
+    const GLYPHS: &str = include_str!("../tests/fixtures/text_draw.glyphs.txt");
+    let font = Font::from_pinned(GLYPHS).expect("glyph fixture");
+
     let mut list = DrawList::new();
     list.white_uv = WHITE_UV;
+    list.fringe_scale = 1.0;
     list.add_text(&font, 13.0, Vec2 { x: 10.0, y: 20.0 }, 0xFFFF_FFFF, "Hi");
-
-    let mut out = String::new();
-    out.push_str(&format!(
-        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
-    ));
-    out.push_str("scenario text_draw\n");
-    out.push_str("uv omitted: atlas packing is not reproducible across runs\n");
-    out.push_str(&format!("cmd_count {}\n", list.cmd_buffer.len()));
-    for (i, cmd) in list.cmd_buffer.iter().enumerate() {
-        out.push_str(&format!(
-            "cmd {i} clip {:08x} {:08x} {:08x} {:08x} elems {}\n",
-            bits(cmd.clip_rect[0]),
-            bits(cmd.clip_rect[1]),
-            bits(cmd.clip_rect[2]),
-            bits(cmd.clip_rect[3]),
-            cmd.elem_count
-        ));
-    }
-    out.push_str(&format!("vtx_count {}\n", list.vtx_buffer.len()));
-    for (i, v) in list.vtx_buffer.iter().enumerate() {
-        out.push_str(&format!(
-            "vtx {i} pos {:08x} {:08x} col {:08x}\n",
-            bits(v.pos.x),
-            bits(v.pos.y),
-            v.col
-        ));
-    }
-    out.push_str(&format!("idx_count {}\n", list.idx_buffer.len()));
-    for idx in &list.idx_buffer {
-        out.push_str(&format!("idx {idx}\n"));
-    }
-    out
+    dump("text_draw", &list)
 }
-
 /// The `button` scenario: one button, six frames of mouse input, printing the item rect, the
 /// hover/active state, the return value and the cursor afterwards.
 pub fn button_dump() -> String {
