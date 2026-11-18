@@ -2,16 +2,16 @@
 
 _Actualizado: 2026-11-18. Generado desde `docs/progress.json`: no editar a mano._
 
-## Reescritura a Rust: **53.4 %**
+## Reescritura a Rust: **53.8 %**
 
-Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 56.7 %.
+Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 57.0 %.
 
 Qué cuenta como hecho: solo lo que tiene una prueba que lo compara con el código C++ original.
 Un cambio de estado sin evidencia no sube el porcentaje.
 
 | Área | Peso | Avance |
 | --- | ---: | ---: |
-| Núcleo: contexto, IO, ventanas, identificadores, layout | 57 | 75 % |
+| Núcleo: contexto, IO, ventanas, identificadores, layout | 58 | 76 % |
 | Listas de dibujo y primitivas | 17 | 88 % |
 | Widgets | 26 | 38 % |
 | Fuentes y texto | 13 | 15 % |
@@ -34,6 +34,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Iconos de ventana: flecha de colapso y cruz de cierre** — golden window_icons (flecha, cruz y texto desplazado por los iconos)
 - **Iconos de ventana: hover, pulsación, colapso y cierre** — golden window_icons_states (14 estados: resalte, pulsado, soltar dentro y fuera, colapsada y expandida)
 - **Arrastrar la ventana desde la flecha (umbral de arrastre y desplazamiento)** — golden window_icons_drag (8 estados con la posición de la ventana)
+- **Trazo del borde agarrado: más grueso y en color separador, sobre el borde de la ventana** — golden window_resize_edges con lista de dibujo completa (29 776 bytes)
 - **Doble clic en el tirador: ajusta la ventana a su contenido, con el mínimo aplicado** — golden window_resize_autofit (11 frames: clic simple y doble clic)
 - **Cursor de redimensionado: flechas según el tirador, con la espera de 40 ms de los bordes** — golden window_resize_cursor (10 frames de cursor)
 - **Tirador izquierdo y los cuatro bordes: el tamaño sale de la esquina opuesta fija** — golden window_resize_edges (16 frames: tamaño y posición)

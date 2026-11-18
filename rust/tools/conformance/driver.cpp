@@ -1891,6 +1891,7 @@ static void FrameResizeEdge(float mx, float my, bool down)
     ImGuiWindow* w = ImGui::GetCurrentWindow();
     printf("frame size %08x %08x pos %08x %08x\n", Bits(w->Size.x), Bits(w->Size.y),
         Bits(w->Pos.x), Bits(w->Pos.y));
+    DumpDrawListBody(*w->DrawList);
     ImGui::End();
     ImGui::EndFrame();
 }
@@ -1901,6 +1902,15 @@ static void DumpWindowResizeEdges()
     printf("scenario window_resize_edges\n");
     ImGuiIO& io = ImGui::GetIO();
     io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    // The line table only reaches the shared data once a frame has selected the atlas font.
+    ImGui::NewFrame();
+    WriteLineUvFixture();
+    ImGui::EndFrame();
 
     for (int i = 0; i < 4; i++)
         FrameResizeEdge(0.0f, 0.0f, false);
@@ -1948,6 +1958,15 @@ static void DumpWindowResizeCursor()
     printf("scenario window_resize_cursor\n");
     ImGuiIO& io = ImGui::GetIO();
     io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    // Hovering a border strokes it, which samples the atlas line texture: pin the table here too.
+    ImGui::NewFrame();
+    WriteLineUvFixture();
+    ImGui::EndFrame();
 
     for (int i = 0; i < 3; i++)
         FrameResizeCursor(0.0f, 0.0f, false);

@@ -6,7 +6,7 @@
     {
       "id": "core",
       "title": "Núcleo: contexto, IO, ventanas, identificadores, layout",
-      "weight": 57,
+      "weight": 58,
       "infra": false,
       "items": [
         { "id": "hash", "label": "Hash de identificadores (CRC32c, reinicio con ###)", "weight": 2, "done": true, "evidence": "id::tests::hashes_match_oracle (12 vectores del oráculo)" },
@@ -23,6 +23,7 @@
         { "id": "win_icons", "label": "Iconos de ventana: flecha de colapso y cruz de cierre", "weight": 1, "done": true, "evidence": "golden window_icons (flecha, cruz y texto desplazado por los iconos)" },
         { "id": "win_icons_input", "label": "Iconos de ventana: hover, pulsación, colapso y cierre", "weight": 1, "done": true, "evidence": "golden window_icons_states (14 estados: resalte, pulsado, soltar dentro y fuera, colapsada y expandida)" },
         { "id": "win_icons_drag", "label": "Arrastrar la ventana desde la flecha (umbral de arrastre y desplazamiento)", "weight": 1, "done": true, "evidence": "golden window_icons_drag (8 estados con la posición de la ventana)" },
+        { "id": "win_resize_highlight", "label": "Trazo del borde agarrado: más grueso y en color separador, sobre el borde de la ventana", "weight": 1, "done": true, "evidence": "golden window_resize_edges con lista de dibujo completa (29 776 bytes)" },
         { "id": "win_resize_autofit", "label": "Doble clic en el tirador: ajusta la ventana a su contenido, con el mínimo aplicado", "weight": 1, "done": true, "evidence": "golden window_resize_autofit (11 frames: clic simple y doble clic)" },
         { "id": "win_resize_cursor", "label": "Cursor de redimensionado: flechas según el tirador, con la espera de 40 ms de los bordes", "weight": 1, "done": true, "evidence": "golden window_resize_cursor (10 frames de cursor)" },
         { "id": "win_resize_edges", "label": "Tirador izquierdo y los cuatro bordes: el tamaño sale de la esquina opuesta fija", "weight": 1, "done": true, "evidence": "golden window_resize_edges (16 frames: tamaño y posición)" },

@@ -195,6 +195,9 @@ pub struct Context {
     resize_hover_timer: f32,
     /// The border hovered last frame, so the timer knows when the hover started.
     resize_border_prev: i32,
+    /// window->ResizeBorderHovered and ResizeBorderHeld: which border is grabbed, -1 when none.
+    resize_border_hovered: i32,
+    resize_border_held: i32,
     /// `g.MovingWindow`: the window that follows the mouse while the move drag lasts.
     moving_window: Option<String>,
     /// The window's draw list: what this frame has drawn so far.
@@ -239,6 +242,8 @@ impl Default for Context {
             resize_grip_cols: [0; 2],
             resize_hover_timer: 0.0,
             resize_border_prev: -1,
+            resize_border_hovered: -1,
+            resize_border_held: -1,
             moving_window: None,
             draw_list: crate::draw_list::DrawList::new(),
             slider_just_activated: false,
@@ -1076,6 +1081,17 @@ impl Context {
                     self.style.window_border_size,
                 );
             }
+            // `RenderWindowOuterSingleBorder` over the grabbed edge, thicker than the frame.
+            let highlight = if self.resize_border_held != -1 {
+                Some((self.resize_border_held, true))
+            } else if self.resize_border_hovered != -1 {
+                Some((self.resize_border_hovered, false))
+            } else {
+                None
+            };
+            if let Some((border_n, active)) = highlight {
+                self.draw_resize_border_highlight(pos, size, border_n, active);
+            }
         }
 
         // The title bar's contents: the icons first, then the text. This is the reference's
@@ -1866,6 +1882,8 @@ impl Context {
             x: pos.x + size.x,
             y: pos.y + size.y,
         };
+        self.resize_border_hovered = -1;
+        self.resize_border_held = -1;
         let prev_hovered_border = self.resize_border_prev;
         self.resize_border_prev = -1;
         let border_defs = [
@@ -1930,6 +1948,12 @@ impl Context {
                 self.resize_border_prev = border_n as i32;
             }
             let hovered = hovered_raw && self.resize_hover_timer > 0.04;
+            if hovered {
+                self.resize_border_hovered = border_n as i32;
+            }
+            if held {
+                self.resize_border_held = border_n as i32;
+            }
             if hovered || held {
                 self.set_mouse_cursor(if axis == 0 {
                     crate::io::MouseCursor::ResizeEW
@@ -2042,6 +2066,59 @@ impl Context {
             });
             self.draw_list.add_convex_poly_filled_aa(&points, col);
         }
+    }
+
+    /// `RenderWindowOuterSingleBorder`: the thicker stroke the reference draws over the border being
+    /// grabbed, in the separator colours.
+    fn draw_resize_border_highlight(&mut self, pos: Vec2, size: Vec2, border_n: i32, active: bool) {
+        use crate::style::Col;
+
+        let rounding = self.style.window_rounding;
+        let border_size = self.style.window_border_size.max(2.0);
+        let col = if active {
+            self.style.color_u32(Col::SeparatorActive)
+        } else {
+            self.style.color_u32(Col::SeparatorHovered)
+        };
+        // `GetResizeBorderRect(window, border_n, rounding, 0.0f)`: a zero thickness also shrinks the
+        // far corner by one, which the ports of the reference's rectangles inherit.
+        let rect_min = pos;
+        let rect_max = Vec2 {
+            x: pos.x + size.x - 1.0,
+            y: pos.y + size.y - 1.0,
+        };
+        let (n1, n2, angle) = match border_n {
+            0 => (
+                Vec2 { x: 0.0, y: 1.0 },
+                Vec2 { x: 0.0, y: 0.0 },
+                core::f32::consts::PI,
+            ),
+            1 => (Vec2 { x: 1.0, y: 0.0 }, Vec2 { x: 1.0, y: 1.0 }, 0.0),
+            2 => (
+                Vec2 { x: 0.0, y: 0.0 },
+                Vec2 { x: 1.0, y: 0.0 },
+                core::f32::consts::PI * 1.5,
+            ),
+            _ => (
+                Vec2 { x: 1.0, y: 1.0 },
+                Vec2 { x: 0.0, y: 1.0 },
+                core::f32::consts::PI * 0.5,
+            ),
+        };
+        let inner_dir = match border_n {
+            0 => Vec2 { x: 1.0, y: 0.0 },
+            1 => Vec2 { x: -1.0, y: 0.0 },
+            2 => Vec2 { x: 0.0, y: 1.0 },
+            _ => Vec2 { x: 0.0, y: -1.0 },
+        };
+        let at = |n: Vec2| Vec2 {
+            x: rect_min.x + (rect_max.x - rect_min.x) * n.x + 0.5 + inner_dir.x * rounding,
+            y: rect_min.y + (rect_max.y - rect_min.y) * n.y + 0.5 + inner_dir.y * rounding,
+        };
+        // `PathArcTo` with a zero radius adds the point once, and `PathStroke` walks the two points.
+        let _ = angle;
+        let points = [at(n1), at(n2)];
+        self.draw_list.add_polyline(&points, col, border_size, 0);
     }
 
     fn clamp_window_pos(&self, pos: Vec2, size: Vec2) -> Vec2 {
