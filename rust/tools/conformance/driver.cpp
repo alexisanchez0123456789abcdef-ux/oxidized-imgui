@@ -2178,6 +2178,7 @@ static void FrameChildRegion()
     ImGui::BeginChild("Inside", ImVec2(150.0f, 60.0f), ImGuiChildFlags_Borders);
     ImGui::Button("BB");
     ImGui::Button("CC");
+    ImGui::Button("DD");
     ImGui::EndChild();
     ImGui::Button("EE");
     ImGui::End();
@@ -2196,7 +2197,7 @@ static void DumpChildRegion()
     }
     ImFont* font = io.Fonts->Fonts[0];
     ImFontBaked* baked = font->GetFontBaked(13.0f);
-    const char bake_order[5] = { 'A', 'B', 'C', 'E', 'i' };
+    const char bake_order[5] = { 'A', 'B', 'C', 'D', 'E' };
     for (char c : bake_order)
         baked->FindGlyph((ImWchar)c);
     WriteGlyphFixture(font, bake_order, 5);
