@@ -11,6 +11,7 @@ pub struct Style {
     pub window_padding: Vec2,
     pub item_spacing: Vec2,
     pub frame_padding: Vec2,
+    pub item_inner_spacing: Vec2,
 }
 
 impl Default for Style {
@@ -19,6 +20,7 @@ impl Default for Style {
             window_padding: Vec2 { x: 8.0, y: 8.0 },
             item_spacing: Vec2 { x: 8.0, y: 4.0 },
             frame_padding: Vec2 { x: 4.0, y: 3.0 },
+            item_inner_spacing: Vec2 { x: 4.0, y: 4.0 },
         }
     }
 }

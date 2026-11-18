@@ -396,6 +396,78 @@ static void DumpButton()
     }
 }
 
+// widgets_basic: a label's item rect and a checkbox over six frames.
+static void DumpWidgets()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario widgets_basic\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImGui::NewFrame();
+    ImGui::EndFrame();
+
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
+
+    // Label.
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("W", NULL, flags);
+    ImGui::SetCursorScreenPos(ImVec2(80.0f, 80.0f));
+    ImGui::Text("Hi");
+    {
+        const ImVec2 mn = ImGui::GetItemRectMin();
+        const ImVec2 mx = ImGui::GetItemRectMax();
+        const ImVec2 cursor = ImGui::GetCursorScreenPos();
+        printf("label rect %08x %08x %08x %08x cursor %08x %08x\n",
+            Bits(mn.x), Bits(mn.y), Bits(mx.x), Bits(mx.y), Bits(cursor.x), Bits(cursor.y));
+    }
+    ImGui::End();
+    ImGui::EndFrame();
+
+    // Checkbox.
+    struct Frame
+    {
+        float x, y;
+        bool down;
+    };
+    const Frame frames[6] = {
+        { 0.0f, 0.0f, false },  { 98.0f, 89.0f, false }, { 98.0f, 89.0f, true },
+        { 98.0f, 89.0f, false }, { 0.0f, 0.0f, false },  { 98.0f, 89.0f, true },
+    };
+    bool value = false;
+    for (int i = 0; i < 6; i++)
+    {
+        io.DeltaTime = 0.1f;
+        io.MousePos = ImVec2(frames[i].x, frames[i].y);
+        io.MouseDown[0] = frames[i].down;
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+        ImGui::Begin("W", NULL, flags);
+        ImGui::SetCursorScreenPos(ImVec2(80.0f, 80.0f));
+        const bool ret = ImGui::Checkbox("Hi", &value);
+        const ImVec2 mn = ImGui::GetItemRectMin();
+        const ImVec2 mx = ImGui::GetItemRectMax();
+        const ImVec2 cursor = ImGui::GetCursorScreenPos();
+        printf("cb%d rect %08x %08x %08x %08x hov %d act %d v %d ret %d cursor %08x %08x\n", i,
+            Bits(mn.x), Bits(mn.y), Bits(mx.x), Bits(mx.y),
+            ImGui::IsItemHovered() ? 1 : 0, ImGui::IsItemActive() ? 1 : 0, value ? 1 : 0,
+            ret ? 1 : 0, Bits(cursor.x), Bits(cursor.y));
+        ImGui::End();
+        ImGui::EndFrame();
+    }
+}
+
 // Explicit UVs: no atlas involved.
 static void ScenePrimRectUV(ImDrawList& list)
 {
@@ -459,6 +531,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "button") == 0)
     {
         DumpButton();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "widgets_basic") == 0)
+    {
+        DumpWidgets();
         ImGui::DestroyContext();
         return 0;
     }

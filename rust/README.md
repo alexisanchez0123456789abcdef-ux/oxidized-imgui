@@ -21,6 +21,7 @@ instead of against our own expectations:
 | Text measurement | `CalcTextSize` over a pinned advance table (the atlas is **not** built: see `font.rs`) | `font_metrics` golden |
 | Text geometry | glyph quads (positions, colours, indices) for a short string; **UVs are not compared** | `text_draw` golden |
 | Button | item rect from text metrics, hover, active, release-inside result | `button` golden |
+| Label, checkbox | text item rect; checkbox box from frame height plus inner spacing, toggling on release | `widgets_basic` golden |
 | Clip stack | `PushClipRect`/`PopClipRect`, intersection, fullscreen fallback, command splitting | `clip_stack` golden |
 
 Provisional, **not** parity-checked: everything else. In particular the anti-aliased and rounded
