@@ -947,21 +947,23 @@ static void WriteWindowIconsFixture(ImFont* font, const char* bake_order, int ba
 
 // One frame of the icon window. The window does not know its title bar height during its first
 // frame, so the scene settles before anything is dumped.
-static void FrameWindowIcons(ImDrawList** out_list, bool diagnostics)
+static bool FrameWindowIcons(float mx, float my, bool down, bool* open, ImDrawList** out_list,
+    bool diagnostics, bool* out_collapsed)
 {
     ImGuiIO& io = ImGui::GetIO();
-    static bool open = true;
     io.DeltaTime = 0.1f;
-    io.MousePos = ImVec2(0.0f, 0.0f);
-    io.MouseDown[0] = false;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = down;
     ImGui::NewFrame();
     ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
     ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
     const ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
         ImGuiWindowFlags_NoScrollbar;
-    ImGui::Begin("W", &open, flags);
+    const bool began = ImGui::Begin("W", open, flags);
     if (out_list != NULL)
         *out_list = ImGui::GetWindowDrawList();
+    if (out_collapsed != NULL)
+        *out_collapsed = ImGui::GetCurrentWindow()->Collapsed;
     if (diagnostics)
     {
         ImGuiWindow* window = ImGui::GetCurrentWindow();
@@ -979,6 +981,7 @@ static void FrameWindowIcons(ImDrawList** out_list, bool diagnostics)
     }
     ImGui::End();
     ImGui::EndFrame();
+    return began;
 }
 
 // window_icons: a titled window that carries both window icons (a close button because p_open is
@@ -999,17 +1002,77 @@ static void DumpWindowIcons()
     for (char ch : bake_order)
         baked->FindGlyph((ImWchar)ch);
 
-    const int settle_frames = 12;
+    bool open = true;
+    const int settle_frames = 13;
     for (int i = 0; i < settle_frames; i++)
-        FrameWindowIcons(NULL, false);
+        FrameWindowIcons(0.0f, 0.0f, false, &open, NULL, false, NULL);
     // A frame to wire the atlas tables, then the fixture and the frame that is dumped.
-    FrameWindowIcons(NULL, false);
+    FrameWindowIcons(0.0f, 0.0f, false, &open, NULL, false, NULL);
     WriteWindowIconsFixture(font, bake_order, 6);
 
     ImDrawList* dl = NULL;
-    FrameWindowIcons(&dl, true);
+    FrameWindowIcons(0.0f, 0.0f, false, &open, &dl, true, NULL);
     if (dl != NULL)
         DumpDrawListBody(*dl);
+}
+
+// window_icons_states: the same window hovered, held, released inside and outside, collapsed and
+// expanded. Each state is one dumped section, taken right after its frame.
+static void DumpWindowIconsStates()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario window_icons_states\n");
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[6] = { 'W', 'H', 'i', 'e', 'l', 'o' };
+    for (char ch : bake_order)
+        baked->FindGlyph((ImWchar)ch);
+
+    bool open = true;
+    for (int i = 0; i < 13; i++)
+        FrameWindowIcons(0.0f, 0.0f, false, &open, NULL, false, NULL);
+    FrameWindowIcons(0.0f, 0.0f, false, &open, NULL, false, NULL);
+    WriteWindowIconsFixture(font, bake_order, 6);
+
+    // The two icon squares: the arrow at (65, 63) and the cross at (342, 63), 13x13 each.
+    const float arrow_x = 70.0f, arrow_y = 69.0f;
+    const float close_x = 348.0f, close_y = 69.0f;
+
+    auto section = [&](const char* name, float mx, float my, bool down) {
+        ImDrawList* dl = NULL;
+        bool collapsed = false;
+        const bool began = FrameWindowIcons(mx, my, down, &open, &dl, false, &collapsed);
+        printf("state %s open %d collapsed %d began %d\n", name, open ? 1 : 0,
+            collapsed ? 1 : 0, began ? 1 : 0);
+        if (dl != NULL)
+            DumpDrawListBody(*dl);
+    };
+
+    section("resting", 0.0f, 0.0f, false);
+    section("hover_arrow", arrow_x, arrow_y, false);
+    section("hover_close", close_x, close_y, false);
+    section("held_close", close_x, close_y, true);
+    section("released_close", close_x, close_y, false);
+
+    // The same press, released away from the button: it must not close.
+    open = true;
+    section("held_close_again", close_x, close_y, true);
+    section("released_outside", 100.0f, 150.0f, false);
+
+    // Collapse with the arrow, then expand again.
+    section("held_arrow", arrow_x, arrow_y, true);
+    section("released_arrow", arrow_x, arrow_y, false);
+    section("collapsed", 0.0f, 0.0f, false);
+    section("collapsed_hover_arrow", arrow_x, arrow_y, false);
+    section("held_arrow_collapsed", arrow_x, arrow_y, true);
+    section("released_arrow_collapsed", arrow_x, arrow_y, false);
+    section("expanded", 0.0f, 0.0f, false);
 }
 
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
@@ -1260,6 +1323,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_icons") == 0)
     {
         DumpWindowIcons();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "window_icons_states") == 0)
+    {
+        DumpWindowIconsStates();
         ImGui::DestroyContext();
         return 0;
     }
