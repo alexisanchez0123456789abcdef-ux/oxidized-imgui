@@ -34,12 +34,14 @@ pub enum Col {
     ResizeGrip,
     ResizeGripHovered,
     ResizeGripActive,
+    SeparatorHovered,
+    SeparatorActive,
     HeaderHovered,
     HeaderActive,
 }
 
 impl Col {
-    pub const COUNT: usize = 27;
+    pub const COUNT: usize = 29;
 
     pub(crate) fn index(self) -> usize {
         match self {
@@ -70,6 +72,8 @@ impl Col {
             Col::ResizeGrip => 24,
             Col::ResizeGripHovered => 25,
             Col::ResizeGripActive => 26,
+            Col::SeparatorHovered => 27,
+            Col::SeparatorActive => 28,
         }
     }
 }
@@ -185,6 +189,8 @@ impl Default for Style {
                 0x33FA_9642, // ResizeGrip (pinned from the reference)
                 0xABFA_9642, // ResizeGripHovered (pinned from the reference)
                 0xF2FA_9642, // ResizeGripActive (pinned from the reference)
+                0xC7BF_661A, // SeparatorHovered (pinned from the reference)
+                0xFFBF_661A, // SeparatorActive (pinned from the reference)
             ],
         }
     }

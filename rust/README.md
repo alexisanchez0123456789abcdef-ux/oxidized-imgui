@@ -34,6 +34,7 @@ instead of against our own expectations:
 | Window auto-size, changing content | the size follows the content of the previous frame in both directions, so shrinking and growing both show up one frame later | `window_autosize_change` golden |
 | Window auto-size | the window takes its content size plus the padding (and the title bar), one frame behind the content, starting at padding-only on its first frame | `window_autosize` golden |
 | Mouse wheel | over a window it scrolls by five font sizes (capped at two thirds of the interior), symmetric up and down, and leaves the scroll alone when the wheel is silent | `window_wheel` golden |
+| Window resize, edges | the lower-left grip and the four borders resize too, moving the opposite corner: a left drag moves the window and grows it at once | `window_resize_edges` golden (geometry) |
 | Window resize, dragging | dragging the lower-right grip resizes the window: the size is the mouse position minus the offset inside the handle, constrained by `WindowMinSize` | `window_resize_drag` golden |
 | Window resize grips | a resizable window shows the lower-right corner grip, the lower-left one appears only while hovered or held, and the three colours follow the mouse; dragging them does not resize yet | `window_resize_grips` golden |
 | Window minimum size | a size asked for by API is clamped up to `WindowMinSize`, while an auto-sized window uses the 1 pixel hard minimum and can end up smaller; a squeezed vertical bar also fades out and stops taking clicks | `window_min_size` golden |

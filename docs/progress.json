@@ -6,7 +6,7 @@
     {
       "id": "core",
       "title": "Núcleo: contexto, IO, ventanas, identificadores, layout",
-      "weight": 54,
+      "weight": 55,
       "infra": false,
       "items": [
         { "id": "hash", "label": "Hash de identificadores (CRC32c, reinicio con ###)", "weight": 2, "done": true, "evidence": "id::tests::hashes_match_oracle (12 vectores del oráculo)" },
@@ -23,6 +23,7 @@
         { "id": "win_icons", "label": "Iconos de ventana: flecha de colapso y cruz de cierre", "weight": 1, "done": true, "evidence": "golden window_icons (flecha, cruz y texto desplazado por los iconos)" },
         { "id": "win_icons_input", "label": "Iconos de ventana: hover, pulsación, colapso y cierre", "weight": 1, "done": true, "evidence": "golden window_icons_states (14 estados: resalte, pulsado, soltar dentro y fuera, colapsada y expandida)" },
         { "id": "win_icons_drag", "label": "Arrastrar la ventana desde la flecha (umbral de arrastre y desplazamiento)", "weight": 1, "done": true, "evidence": "golden window_icons_drag (8 estados con la posición de la ventana)" },
+        { "id": "win_resize_edges", "label": "Tirador izquierdo y los cuatro bordes: el tamaño sale de la esquina opuesta fija", "weight": 1, "done": true, "evidence": "golden window_resize_edges (16 frames: tamaño y posición)" },
         { "id": "win_resize_drag", "label": "Arrastrar el tirador de la esquina: el tamaño sale de la posición del ratón y su recorte", "weight": 1, "done": true, "evidence": "golden window_resize_drag (10 frames con tamaño y posición)" },
         { "id": "win_resize_grips", "label": "Tiradores de redimensionado: el de abajo a la derecha siempre, el otro al pasar por encima, con sus tres colores", "weight": 1, "done": true, "evidence": "golden window_resize_grips (8 frames: reposo, hover, pulsado y esquina izquierda)" },
         { "id": "win_min_size", "label": "Tamaño mínimo de ventana: recorta el tamaño pedido por API (32), con mínimo duro de 1 px para el auto-tamaño", "weight": 1, "done": true, "evidence": "golden window_min_size (6 frames: 10, 31, 32, 120 y auto con tamaño pedido)" },

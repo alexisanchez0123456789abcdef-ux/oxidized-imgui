@@ -835,12 +835,32 @@ impl Context {
                 y: (content.y + pad.y * 2.0 + decoration).min(self.io.display_size.y),
             };
         }
-        // `UpdateWindowManualResize` for the two lower grips: the input pass runs before the
-        // interior is computed, so a drag changes the size the same frame draws with. The drawing
+        // `ClampWindowPos`: unless the position was asked for explicitly this frame, the window is
+        // pushed back so at least part of it stays inside the work area.
+        let clamp_size = if collapsed {
+            Vec2 {
+                x: size_full.x,
+                y: title_height,
+            }
+        } else {
+            size_full
+        };
+        let mut pos = if pos_was_set {
+            pos
+        } else {
+            self.clamp_window_pos(pos, clamp_size)
+        };
+        // `UpdateWindowManualResize`: the input pass runs after the position clamp and before the
+        // interior is computed, so a drag changes what the same frame draws with. The drawing
         // happens later, in the decoration pass, and only reads the colours this pass decided.
         if !flags.contains(WindowFlags::NO_RESIZE) && !window_just_created {
-            if let Some(resized) = self.update_resize_grips(name, pos, size_full, always_auto) {
-                size_full = resized;
+            if let Some((new_pos, new_size)) = self.update_resize(name, pos, size_full, always_auto)
+            {
+                pos = Vec2 {
+                    x: new_pos.x.trunc(),
+                    y: new_pos.y.trunc(),
+                };
+                size_full = new_size;
             }
         }
         // A collapsed window shrinks to its title bar: the reference keeps `SizeFull` and displays
@@ -852,14 +872,6 @@ impl Context {
             }
         } else {
             size_full
-        };
-
-        // `ClampWindowPos`: unless the position was asked for explicitly this frame, the window is
-        // pushed back so at least part of it stays inside the work area.
-        let pos = if pos_was_set {
-            pos
-        } else {
-            self.clamp_window_pos(pos, size)
         };
         // `InnerRect`: the window rectangle without its decorations. A top-level window gives up
         // the title bar, and a vertical scrollbar its width on the right.
@@ -1666,40 +1678,85 @@ impl Context {
     /// `UpdateWindowManualResize` for the two lower grips: hover, press, and while the lower-right
     /// one is held it resizes the window. The colour it decides is drawn later, in the decoration
     /// pass, so a drag has no frame of latency.
-    fn update_resize_grips(
+    /// `CalcResizePosSizeFromAnyCorner`: from the corner the mouse asks for, the window's position
+    /// and the size it would need. The other corner stays where it is, and the min size constrains.
+    fn resize_from_corner(
+        &self,
+        pos: Vec2,
+        size: Vec2,
+        corner_target: Vec2,
+        corner_norm: Vec2,
+        always_auto: bool,
+    ) -> (Vec2, Vec2) {
+        let lerp = |a: Vec2, b: Vec2| Vec2 {
+            x: if corner_norm.x == 1.0 { b.x } else { a.x },
+            y: if corner_norm.y == 1.0 { b.y } else { a.y },
+        };
+        // `pos_min` is the window's upper-left and `pos_max` its lower-right.
+        let pos_min = lerp(corner_target, pos);
+        let pos_max = lerp(
+            Vec2 {
+                x: pos.x + size.x,
+                y: pos.y + size.y,
+            },
+            corner_target,
+        );
+        let min_size = if always_auto {
+            1.0
+        } else {
+            self.style.window_min_size.x
+        };
+        let min_size_y = if always_auto {
+            1.0
+        } else {
+            self.style.window_min_size.y
+        };
+        (
+            pos_min,
+            Vec2 {
+                x: (pos_max.x - pos_min.x).max(min_size),
+                y: (pos_max.y - pos_min.y).max(min_size_y),
+            },
+        )
+    }
+
+    /// `UpdateWindowManualResize`: the two lower grips and the four borders, when the window can be
+    /// resized. Returns the position and size the drag asks for, if any.
+    ///
+    /// The borders are not highlighted while hovered: the reference waits 0.04 s before showing that
+    /// and this port has no cursor to show it with, so only the drag is modelled.
+    fn update_resize(
         &mut self,
         name: &str,
         pos: Vec2,
         size: Vec2,
         always_auto: bool,
-    ) -> Option<Vec2> {
-        use crate::style::Col;
-
-        // `resize_grip_draw_size`: `ImTrunc(ImMax(FontSize * 1.10, WindowRounding + 1.0))`.
+    ) -> Option<(Vec2, Vec2)> {
         let draw_size = (self.font.size * 1.10)
             .max(self.style.window_rounding + 1.0)
             .trunc();
         let grip_hover_inner = (draw_size * 0.75).trunc();
         let grip_hover_outer = self.style.window_border_hover_padding * 3.0;
-        let count = if self.io.config_windows_resize_from_edges {
-            2
-        } else {
-            1
-        };
+        let border_hover = self.style.window_border_hover_padding;
+        let mouse = self.io.mouse_pos.unwrap_or_default();
+        let base_id = self.get_id("#RESIZE");
+        let mut result = None;
+
+        // The two lower grips.
         let grip_defs = [
             (Vec2 { x: 1.0, y: 1.0 }, Vec2 { x: -1.0, y: -1.0 }),
             (Vec2 { x: 0.0, y: 1.0 }, Vec2 { x: 1.0, y: -1.0 }),
         ];
-        let base_id = self.get_id("#RESIZE");
-        let mouse = self.io.mouse_pos.unwrap_or_default();
-        let mut resized = None;
-
-        for (index, (corner_n, inner_dir)) in grip_defs.iter().enumerate().take(count) {
+        let grip_count = if self.io.config_windows_resize_from_edges {
+            2
+        } else {
+            1
+        };
+        for (index, (corner_n, inner_dir)) in grip_defs.iter().enumerate().take(grip_count) {
             let corner = Vec2 {
                 x: pos.x + size.x * corner_n.x,
                 y: pos.y + size.y * corner_n.y,
             };
-            // The handle, grown outward and inward around the corner.
             let mut rect_min = Vec2 {
                 x: corner.x - inner_dir.x * grip_hover_outer,
                 y: corner.y - inner_dir.y * grip_hover_outer,
@@ -1715,66 +1772,164 @@ impl Context {
                 core::mem::swap(&mut rect_min.y, &mut rect_max.y);
             }
             let grip_id = base_id + index as u32;
-            let own_window = self.hovered_window.as_deref() == Some(name);
-            let inside = mouse.x >= rect_min.x
-                && mouse.x < rect_max.x
-                && mouse.y >= rect_min.y
-                && mouse.y < rect_max.y;
-            let hovered = own_window
-                && inside
-                && (self.active_id.is_none() || self.active_id == Some(grip_id));
-            if hovered {
-                self.hovered_id = Some(grip_id);
-            }
+            let (hovered, held) = self.item_behavior(name, grip_id, rect_min, rect_max);
             if hovered && self.io.mouse_clicked[0] {
-                self.active_id = Some(grip_id);
-                // `ButtonBehavior`: the offset inside the handle, so a drag is a delta.
                 self.active_click_offset = Vec2 {
                     x: mouse.x - rect_min.x,
                     y: mouse.y - rect_min.y,
                 };
             }
-            let held = self.active_id == Some(grip_id) && self.io.mouse_down[0];
-            if held && index == 0 {
-                // `CalcResizePosSizeFromAnyCorner` for the lower-right corner: the corner the mouse
-                // asks for becomes `Pos + Size`, then the size constraint applies.
+            if held {
+                // `ImLerp(InnerDir * grip_hover_outer_size, InnerDir * -grip_hover_inner_size,
+                // CornerPosN)`: outward on the axes the corner is at 0, inward where it is at 1.
+                let reach = |dir: f32, corner_at: f32| {
+                    if corner_at == 1.0 {
+                        dir * -grip_hover_inner
+                    } else {
+                        dir * grip_hover_outer
+                    }
+                };
                 let corner_target = Vec2 {
-                    x: mouse.x - self.active_click_offset.x + grip_hover_inner,
-                    y: mouse.y - self.active_click_offset.y + grip_hover_inner,
+                    x: mouse.x - self.active_click_offset.x + reach(inner_dir.x, corner_n.x),
+                    y: mouse.y - self.active_click_offset.y + reach(inner_dir.y, corner_n.y),
                 };
-                let wanted = Vec2 {
-                    x: corner_target.x - pos.x,
-                    y: corner_target.y - pos.y,
-                };
-                let min_size = if always_auto {
-                    1.0
-                } else {
-                    self.style.window_min_size.x
-                };
-                resized = Some(Vec2 {
-                    x: wanted.x.max(min_size),
-                    y: wanted.y.max(min_size),
-                });
+                result =
+                    Some(self.resize_from_corner(pos, size, corner_target, *corner_n, always_auto));
             }
-            if self.active_id == Some(grip_id) && !self.io.mouse_down[0] {
-                self.active_id = None;
-            }
-
-            // Only the lower-right grip is visible at rest.
             if held || hovered || index == 0 {
                 let col = if held {
-                    self.style.color_u32(Col::ResizeGripActive)
+                    self.style.color_u32(crate::style::Col::ResizeGripActive)
                 } else if hovered {
-                    self.style.color_u32(Col::ResizeGripHovered)
+                    self.style.color_u32(crate::style::Col::ResizeGripHovered)
                 } else {
-                    self.style.color_u32(Col::ResizeGrip)
+                    self.style.color_u32(crate::style::Col::ResizeGrip)
                 };
                 if col & 0xFF00_0000 != 0 {
                     self.resize_grip_cols[index] = col;
                 }
             }
         }
-        resized
+
+        // The four borders, laid out as `GetResizeBorderRect` does.
+        if !self.io.config_windows_resize_from_edges {
+            self.active_id_expire();
+            return result;
+        }
+        let far = Vec2 {
+            x: pos.x + size.x,
+            y: pos.y + size.y,
+        };
+        let border_defs = [
+            (0usize, 0usize, Vec2 { x: 0.0, y: 0.0 }),
+            (1, 0, Vec2 { x: 1.0, y: 0.0 }),
+            (2, 1, Vec2 { x: 0.0, y: 0.0 }),
+            (3, 1, Vec2 { x: 0.0, y: 1.0 }),
+        ];
+        for (border_n, axis, corner_norm) in border_defs {
+            let border_rect = match border_n {
+                0 => (
+                    Vec2 {
+                        x: pos.x - border_hover,
+                        y: pos.y + grip_hover_inner,
+                    },
+                    Vec2 {
+                        x: pos.x + border_hover,
+                        y: far.y - grip_hover_inner,
+                    },
+                ),
+                1 => (
+                    Vec2 {
+                        x: far.x - border_hover,
+                        y: pos.y + grip_hover_inner,
+                    },
+                    Vec2 {
+                        x: far.x + border_hover,
+                        y: far.y - grip_hover_inner,
+                    },
+                ),
+                2 => (
+                    Vec2 {
+                        x: pos.x + grip_hover_inner,
+                        y: pos.y - border_hover,
+                    },
+                    Vec2 {
+                        x: far.x - grip_hover_inner,
+                        y: pos.y + border_hover,
+                    },
+                ),
+                _ => (
+                    Vec2 {
+                        x: pos.x + grip_hover_inner,
+                        y: far.y - border_hover,
+                    },
+                    Vec2 {
+                        x: far.x - grip_hover_inner,
+                        y: far.y + border_hover,
+                    },
+                ),
+            };
+            let border_id = base_id + border_n as u32 + 4;
+            let (hovered, held) = self.item_behavior(name, border_id, border_rect.0, border_rect.1);
+            if hovered && self.io.mouse_clicked[0] {
+                self.active_click_offset = Vec2 {
+                    x: mouse.x - border_rect.0.x,
+                    y: mouse.y - border_rect.0.y,
+                };
+            }
+            if held {
+                // `border_target = window->Pos` with the dragged axis replaced by the mouse.
+                let mut border_target = pos;
+                if axis == 0 {
+                    border_target.x = mouse.x - self.active_click_offset.x + border_hover;
+                } else {
+                    border_target.y = mouse.y - self.active_click_offset.y + border_hover;
+                }
+                result = Some(self.resize_from_corner(
+                    pos,
+                    size,
+                    border_target,
+                    corner_norm,
+                    always_auto,
+                ));
+            }
+        }
+        self.active_id_expire();
+        result
+    }
+
+    /// `ButtonBehavior` over a rectangle: hover, press and release.
+    fn item_behavior(
+        &mut self,
+        name: &str,
+        id: ImGuiID,
+        rect_min: Vec2,
+        rect_max: Vec2,
+    ) -> (bool, bool) {
+        let mouse = self.io.mouse_pos.unwrap_or_default();
+        // The reference's ItemAdd/ButtonBehavior test the handle's rectangle, which reaches outside
+        // the window on purpose: a border can be grabbed from the pixels just beyond it. Requiring
+        // the window to be hovered would make those pixels dead.
+        let _ = name;
+        let inside = mouse.x >= rect_min.x
+            && mouse.x < rect_max.x
+            && mouse.y >= rect_min.y
+            && mouse.y < rect_max.y;
+        let hovered = inside && (self.active_id.is_none() || self.active_id == Some(id));
+        if hovered {
+            self.hovered_id = Some(id);
+        }
+        if hovered && self.io.mouse_clicked[0] {
+            self.active_id = Some(id);
+        }
+        let held = self.active_id == Some(id) && self.io.mouse_down[0];
+        (hovered, held)
+    }
+
+    /// Clears the active id once the button is up.
+    fn active_id_expire(&mut self) {
+        if self.active_id.is_some() && !self.io.mouse_down[0] {
+            self.active_id = None;
+        }
     }
 
     /// `ImGui::RenderResizeGrips`: the two lower corner grips, painted with the colours the input

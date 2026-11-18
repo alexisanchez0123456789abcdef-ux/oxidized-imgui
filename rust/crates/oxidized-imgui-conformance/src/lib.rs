@@ -65,6 +65,7 @@ pub const SCENARIOS: &[&str] = &[
     "window_min_size",
     "window_resize_grips",
     "window_resize_drag",
+    "window_resize_edges",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -2610,6 +2611,69 @@ pub fn window_resize_drag_dump() -> String {
     out
 }
 
+/// The `window_resize_edges` scenario: the lower-left grip, which moves the window as well as
+/// resizing it, and the borders as grab areas. Each drag is a single axis, so the position and size
+/// changes are easy to read in the dump.
+pub fn window_resize_edges_dump() -> String {
+    use oxidized_imgui::{Context, Vec2};
+
+    let mut ctx = Context::new();
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario window_resize_edges\n");
+
+    let frame = |ctx: &mut Context, out: &mut String, mx: f32, my: f32, down: bool| {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: mx, y: my });
+        ctx.io_mut().mouse_down[0] = down;
+        ctx.begin_frame();
+        ctx.set_next_window_flags(WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR);
+        ctx.begin_window(
+            "E",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        let window = ctx.window();
+        let text = format!(
+            "frame size {:08x} {:08x} pos {:08x} {:08x}\n",
+            window.size.x.to_bits(),
+            window.size.y.to_bits(),
+            window.pos.x.to_bits(),
+            window.pos.y.to_bits(),
+        );
+        ctx.end_window();
+        // Only the geometry is pinned here: the reference also strokes the grabbed border with the
+        // separator colour, which the port does not draw yet.
+        out.push_str(&text);
+        ctx.end_frame();
+    };
+
+    for _ in 0..4 {
+        frame(&mut ctx, &mut out, 0.0, 0.0, false);
+    }
+
+    // Lower-left grip (the window is 60,60 to 360,260): drag left by twenty.
+    frame(&mut ctx, &mut out, 63.0, 257.0, false);
+    frame(&mut ctx, &mut out, 63.0, 257.0, true);
+    frame(&mut ctx, &mut out, 43.0, 257.0, true);
+    frame(&mut ctx, &mut out, 43.0, 257.0, false);
+
+    // Right border: drag right by twenty, which only grows the width.
+    frame(&mut ctx, &mut out, 362.0, 150.0, false);
+    frame(&mut ctx, &mut out, 362.0, 150.0, true);
+    frame(&mut ctx, &mut out, 382.0, 150.0, true);
+    frame(&mut ctx, &mut out, 382.0, 150.0, false);
+
+    // Bottom border: drag down by twenty, which only grows the height.
+    frame(&mut ctx, &mut out, 200.0, 262.0, false);
+    frame(&mut ctx, &mut out, 200.0, 262.0, true);
+    frame(&mut ctx, &mut out, 200.0, 282.0, true);
+    frame(&mut ctx, &mut out, 200.0, 282.0, false);
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -2645,6 +2709,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "window_min_size" => Some(window_min_size_dump()),
         "window_resize_grips" => Some(window_resize_grips_dump()),
         "window_resize_drag" => Some(window_resize_drag_dump()),
+        "window_resize_edges" => Some(window_resize_edges_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),
