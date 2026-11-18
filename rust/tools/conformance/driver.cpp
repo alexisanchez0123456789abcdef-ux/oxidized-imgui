@@ -189,6 +189,50 @@ static void DumpIoKeyboard()
     }
 }
 
+// font_metrics: the default font's baked metrics, glyph advances and CalcTextSize.
+static void DumpFontMetrics()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario font_metrics\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    if (baked == NULL)
+    {
+        printf("no baked font\n");
+        return;
+    }
+
+    printf("font size %08x ascent %08x descent %08x\n",
+        Bits(baked->Size), Bits(baked->Ascent), Bits(baked->Descent));
+
+    const char glyphs[5] = { 'H', 'i', 'W', ' ', 'o' };
+    for (char c : glyphs)
+    {
+        ImFontGlyph* glyph = baked->FindGlyph((ImWchar)c);
+        printf("glyph '%c' advance %08x\n", c, Bits(glyph ? glyph->AdvanceX : 0.0f));
+    }
+
+    struct Text
+    {
+        const char* text;
+        float size;
+    };
+    const Text texts[4] = { { "", 13.0f }, { "Hello", 13.0f }, { "Hello", 26.0f }, { "Hi", 13.0f } };
+    for (const Text& t : texts)
+    {
+        const ImVec2 measured = font->CalcTextSizeA(t.size, FLT_MAX, 0.0f, t.text);
+        printf("text \"%s\" at %08x size %08x %08x\n", t.text, Bits(t.size),
+            Bits(measured.x), Bits(measured.y));
+    }
+}
+
 // Explicit UVs: no atlas involved.
 static void ScenePrimRectUV(ImDrawList& list)
 {
@@ -233,8 +277,13 @@ int main(int argc, char** argv)
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.DisplaySize = ImVec2(1280.0f, 720.0f);
-    // No renderer backend here: declare the modern texture contract so NewFrame does not require
-    // the atlas to be built beforehand.
+    if (strcmp(name, "font_metrics") == 0)
+    {
+        DumpFontMetrics();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
     io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
 
     if (strcmp(name, "window_layout") == 0)

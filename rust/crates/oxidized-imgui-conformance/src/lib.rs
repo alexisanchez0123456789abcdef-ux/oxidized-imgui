@@ -27,6 +27,7 @@ pub const SCENARIOS: &[&str] = &[
     "window_layout",
     "io_mouse_events",
     "io_keyboard_events",
+    "font_metrics",
 ];
 
 const COL: u32 = 0xFFFF_0000; // IM_COL32(0, 0, 255, 255)
@@ -322,12 +323,49 @@ pub fn io_keyboard_dump() -> String {
     out
 }
 
+/// The `font_metrics` scenario: the default font's baked metrics, its glyph advances and
+/// `CalcTextSize` at two sizes. The advances are pinned inputs (see `Font::reference_default`).
+pub fn font_metrics_dump() -> String {
+    use oxidized_imgui::Font;
+
+    let font = Font::reference_default();
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario font_metrics\n");
+    out.push_str(&format!(
+        "font size {:08x} ascent {:08x} descent {:08x}\n",
+        bits(font.size),
+        bits(font.ascent),
+        bits(font.descent)
+    ));
+
+    for c in ['H', 'i', 'W', ' ', 'o'] {
+        let advance = font.glyph(c).map(|g| g.advance_x).unwrap_or(0.0);
+        out.push_str(&format!("glyph '{c}' advance {:08x}\n", bits(advance)));
+    }
+
+    let texts: [(&str, f32); 4] = [("", 13.0), ("Hello", 13.0), ("Hello", 26.0), ("Hi", 13.0)];
+    for (text, size) in texts {
+        let measured = font.calc_text_size(text, size);
+        out.push_str(&format!(
+            "text \"{text}\" at {:08x} size {:08x} {:08x}\n",
+            bits(size),
+            bits(measured.x),
+            bits(measured.y)
+        ));
+    }
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
         "window_layout" => Some(window_layout_dump()),
         "io_mouse_events" => Some(io_mouse_dump()),
         "io_keyboard_events" => Some(io_keyboard_dump()),
+        "font_metrics" => Some(font_metrics_dump()),
         _ => scene(name).map(|list| dump(name, &list)),
     }
 }
