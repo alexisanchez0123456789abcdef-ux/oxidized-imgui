@@ -2026,6 +2026,71 @@ static void DumpWindowResizeAutofit()
     FrameResizeAutofit(357.0f, 257.0f, false);
 }
 
+// collapsing_header: a framed collapsing header. A click on the label toggles it on release, a click
+// on the arrow toggles it on press, and the arrow points down while open and right while closed.
+static void FrameCollapsingHeader(float mx, float my, bool down)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = down;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("H", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar);
+    ImGuiWindow* w = ImGui::GetCurrentWindow();
+    bool first = ImGui::CollapsingHeader("First");
+    if (first)
+        ImGui::Dummy(ImVec2(20.0f, 10.0f));
+    bool second = ImGui::CollapsingHeader("Second");
+    if (second)
+        ImGui::Dummy(ImVec2(20.0f, 10.0f));
+    printf("frame first %d second %d\n", first ? 1 : 0, second ? 1 : 0);
+    DumpDrawListBody(*w->DrawList);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpCollapsingHeader()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario collapsing_header\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    // Every letter the two labels use, so the fixture carries all of them.
+    const char bake_order[11] = { 'F', 'i', 'r', 's', 't', 'S', 'e', 'c', 'o', 'n', 'd' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    // The header draws the collapse arrow as a stroke, so the fixture carries the line rows too.
+    ImGui::NewFrame();
+    WriteWindowIconsFixture(font, bake_order, 11);
+    ImGui::EndFrame();
+
+    // The headers sit at the top of the window: the first spans y 68 to 87, the second follows.
+    for (int i = 0; i < 3; i++)
+        FrameCollapsingHeader(0.0f, 0.0f, false);
+    // A click on the label of the first one: press, then release inside it opens it.
+    FrameCollapsingHeader(200.0f, 78.0f, false);
+    FrameCollapsingHeader(200.0f, 78.0f, true);
+    FrameCollapsingHeader(200.0f, 78.0f, false);
+    // Hovering while it is open, then a second click closes it.
+    FrameCollapsingHeader(200.0f, 78.0f, false);
+    FrameCollapsingHeader(200.0f, 78.0f, true);
+    FrameCollapsingHeader(200.0f, 78.0f, false);
+    // A click on the arrow toggles on press instead.
+    FrameCollapsingHeader(72.0f, 95.0f, false);
+    FrameCollapsingHeader(72.0f, 95.0f, true);
+    FrameCollapsingHeader(72.0f, 95.0f, false);
+}
+
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 
 static void DumpCmdOffsets()
@@ -2275,6 +2340,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_icons") == 0)
     {
         DumpWindowIcons();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "collapsing_header") == 0)
+    {
+        DumpCollapsingHeader();
         ImGui::DestroyContext();
         return 0;
     }

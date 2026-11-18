@@ -2,9 +2,9 @@
 
 _Actualizado: 2026-11-18. Generado desde `docs/progress.json`: no editar a mano._
 
-## Reescritura a Rust: **53.8 %**
+## Reescritura a Rust: **55.3 %**
 
-Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 57.0 %.
+Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 58.5 %.
 
 Qué cuenta como hecho: solo lo que tiene una prueba que lo compara con el código C++ original.
 Un cambio de estado sin evidencia no sube el porcentaje.
@@ -13,7 +13,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 | --- | ---: | ---: |
 | Núcleo: contexto, IO, ventanas, identificadores, layout | 58 | 76 % |
 | Listas de dibujo y primitivas | 17 | 88 % |
-| Widgets | 26 | 38 % |
+| Widgets | 26 | 46 % |
 | Fuentes y texto | 13 | 15 % |
 | Docking y viewports | 10 | 0 % |
 | Backends y ejemplos | 8 | 0 % |
@@ -77,6 +77,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Botón: borde de marco (FrameBorderSize)** — golden button_border
 - **Label y checkbox: rectángulo y alternancia** — golden widgets_basic
 - **Slider: región de agarre, arrastre y redondeo** — golden slider_basic
+- **Cabecera colapsable: marco, flecha, hover/activo y alternar (etiqueta al soltar, flecha al pulsar)** — golden collapsing_header (12 frames, lista completa de 79125 bytes)
 - **UVs de texto con el atlas fijado por fixture** — golden text_draw con UVs + fixture text_draw.glyphs.txt
 - **Medida de texto (CalcTextSize) con tabla de avances fijada** — golden font_metrics
 - **Oráculo de constantes y layouts desde el C++** — rust/tools/oracle
