@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "updated": "2026-11-18",
+  "note": "Rúbrica del progreso. Solo cuenta como hecho lo que tiene evidencia en un test o en el oráculo. Cambiar un done exige cambiar también su evidencia.",
+  "areas": [
+    {
+      "id": "core",
+      "title": "Núcleo: contexto, IO, ventanas, identificadores, layout",
+      "weight": 30,
+      "infra": false,
+      "items": [
+        { "id": "hash", "label": "Hash de identificadores (CRC32c, reinicio con ###)", "weight": 2, "done": true, "evidence": "id::tests::hashes_match_oracle (12 vectores del oráculo)" },
+        { "id": "id_stack", "label": "Pila de identificadores (get/push/pop)", "weight": 2, "done": true, "evidence": "context::tests::ids_nest_like_the_reference" },
+        { "id": "frame", "label": "Ciclo de frame y contexto completo", "weight": 6, "done": false, "evidence": "" },
+        { "id": "io", "label": "Entrada y salida: ratón, teclado, tiempo", "weight": 5, "done": false, "evidence": "" },
+        { "id": "windows", "label": "Pila de ventanas y gestión de ventanas", "weight": 6, "done": false, "evidence": "" },
+        { "id": "layout", "label": "Layout: cursor, espaciado, rectángulos de ítem", "weight": 5, "done": false, "evidence": "" },
+        { "id": "clip", "label": "Pila de recorte", "weight": 2, "done": false, "evidence": "" },
+        { "id": "settings", "label": "Persistencia de ajustes (.ini)", "weight": 2, "done": false, "evidence": "" }
+      ]
+    },
+    {
+      "id": "draw",
+      "title": "Listas de dibujo y primitivas",
+      "weight": 8,
+      "infra": false,
+      "items": [
+        { "id": "layout_parity", "label": "Estructuras con el layout exacto de C++", "weight": 1, "done": true, "evidence": "draw_list::tests::layouts_match_reference" },
+        { "id": "prim_rect_uv", "label": "PrimRectUV con paridad exacta", "weight": 1, "done": true, "evidence": "golden prim_rect_uv + prueba negativa" },
+        { "id": "shapes", "label": "Rect redondeado, línea, círculo, bézier (con AA)", "weight": 2, "done": false, "evidence": "" },
+        { "id": "text_draw", "label": "Texto dibujado en la lista", "weight": 2, "done": false, "evidence": "" },
+        { "id": "cmd_split", "label": "Cortes de comando y recorte por comando", "weight": 2, "done": false, "evidence": "" }
+      ]
+    },
+    {
+      "id": "widgets",
+      "title": "Widgets",
+      "weight": 22,
+      "infra": false,
+      "items": [
+        { "id": "w_basic", "label": "Botón, label, checkbox", "weight": 3, "done": false, "evidence": "" },
+        { "id": "w_slider", "label": "Sliders y drags", "weight": 3, "done": false, "evidence": "" },
+        { "id": "w_input", "label": "Entrada de texto", "weight": 4, "done": false, "evidence": "" },
+        { "id": "w_combo", "label": "Combo", "weight": 2, "done": false, "evidence": "" },
+        { "id": "w_tree", "label": "Árbol y cabeceras colapsables", "weight": 3, "done": false, "evidence": "" },
+        { "id": "w_scroll", "label": "Scroll y regiones hijas", "weight": 2, "done": false, "evidence": "" },
+        { "id": "w_popup", "label": "Tooltips, menús y popups", "weight": 3, "done": false, "evidence": "" },
+        { "id": "w_tables", "label": "Tablas", "weight": 2, "done": false, "evidence": "" }
+      ]
+    },
+    {
+      "id": "fonts",
+      "title": "Fuentes y texto",
+      "weight": 12,
+      "infra": false,
+      "items": [
+        { "id": "atlas", "label": "Construcción del atlas de fuentes", "weight": 3, "done": false, "evidence": "" },
+        { "id": "raster", "label": "Rasterizado (port de stb_truetype)", "weight": 3, "done": false, "evidence": "" },
+        { "id": "metrics", "label": "Métricas de glifos y kerning", "weight": 2, "done": false, "evidence": "" },
+        { "id": "wrap", "label": "Salto de línea y alineación", "weight": 2, "done": false, "evidence": "" },
+        { "id": "ime", "label": "Edición de texto e IME", "weight": 2, "done": false, "evidence": "" }
+      ]
+    },
+    {
+      "id": "docking",
+      "title": "Docking y viewports",
+      "weight": 10,
+      "infra": false,
+      "items": [
+        { "id": "dock_nodes", "label": "Nodos y disposición de dock", "weight": 4, "done": false, "evidence": "" },
+        { "id": "viewports", "label": "Viewports multi-ventana", "weight": 4, "done": false, "evidence": "" },
+        { "id": "dock_persist", "label": "Persistencia del layout de dock", "weight": 2, "done": false, "evidence": "" }
+      ]
+    },
+    {
+      "id": "backends",
+      "title": "Backends y ejemplos",
+      "weight": 8,
+      "infra": false,
+      "items": [
+        { "id": "platform", "label": "Integración de plataforma (ventana, entrada)", "weight": 3, "done": false, "evidence": "" },
+        { "id": "render", "label": "Render de los draw lists (GPU)", "weight": 3, "done": false, "evidence": "" },
+        { "id": "examples", "label": "Ejemplos de upstream funcionando", "weight": 2, "done": false, "evidence": "" }
+      ]
+    },
+    {
+      "id": "infra",
+      "title": "Infraestructura de verificación (no es la reescritura)",
+      "weight": 10,
+      "infra": true,
+      "items": [
+        { "id": "oracle", "label": "Oráculo de constantes y layouts desde el C++", "weight": 4, "done": true, "evidence": "rust/tools/oracle" },
+        { "id": "conformance", "label": "Comparador de draw lists con golden y prueba negativa", "weight": 4, "done": true, "evidence": "rust/tools/conformance + tests/golden" },
+        { "id": "ci", "label": "CI que corre fmt, clippy y tests", "weight": 2, "done": true, "evidence": ".github/workflows/oxidized-rust.yml" }
+      ]
+    }
+  ]
+}
