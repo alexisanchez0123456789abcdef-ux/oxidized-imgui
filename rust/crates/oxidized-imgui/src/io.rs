@@ -85,6 +85,9 @@ pub struct Io {
     pub mouse_double_click_time: f32,
     pub mouse_double_click_max_dist: f32,
     /// `ImGuiIO::MouseDragThreshold`: how far the mouse must travel before it counts as dragging.
+    /// io.MouseWheel / io.MouseWheelH: filled from the wheel events of the frame.
+    pub mouse_wheel: f32,
+    pub mouse_wheel_h: f32,
     pub mouse_drag_threshold: f32,
     /// `ImGuiIO::MouseDragMaxDistanceSqr`: the furthest the mouse went since it was pressed,
     /// squared. It is what turns a held button into a drag.
@@ -123,6 +126,8 @@ impl Default for Io {
             mouse_clicked_count: [0; BUTTONS],
             mouse_double_click_time: 0.30,
             mouse_double_click_max_dist: 6.0,
+            mouse_wheel: 0.0,
+            mouse_wheel_h: 0.0,
             mouse_drag_threshold: 6.0,
             mouse_drag_max_distance_sqr: [0.0; BUTTONS],
             keys: [KeyData::default(); Key::COUNT],

@@ -55,6 +55,7 @@ pub const SCENARIOS: &[&str] = &[
     "window_scroll",
     "window_scrollbar",
     "window_scrollbar_drag",
+    "window_wheel",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -2003,6 +2004,64 @@ pub fn window_scrollbar_drag_dump() -> String {
     out
 }
 
+/// The `window_wheel` scenario: the mouse wheel over a window scrolls it.
+///
+/// The step is five font sizes (65 pixels here), capped at two thirds of the interior, and it is
+/// symmetric: a notch up undoes a notch down.
+pub fn window_wheel_dump() -> String {
+    use oxidized_imgui::{Context, Vec2};
+
+    let mut ctx = Context::new();
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario window_wheel\n");
+
+    let frame = |ctx: &mut Context, out: &mut String, wheel_y: f32| {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: 200.0, y: 150.0 });
+        ctx.io_mut().mouse_down[0] = false;
+        ctx.io_mut().mouse_wheel = wheel_y;
+        ctx.begin_frame();
+        ctx.set_next_window_scrollbar(true);
+        ctx.begin_window(
+            "S",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        ctx.dummy(Vec2 { x: 100.0, y: 300.0 });
+        let window = ctx.window();
+        let text = format!(
+            "frame wheel {:08x} scroll {:08x} max {:08x}\n",
+            wheel_y.to_bits(),
+            window.scroll.y.to_bits(),
+            window.scroll_max.y.to_bits(),
+        );
+        let body = dump("window_wheel", ctx.draw_list());
+        ctx.end_window();
+        out.push_str(&text);
+        for line in body.lines().skip(2) {
+            out.push_str(line);
+            out.push('\n');
+        }
+        ctx.end_frame();
+    };
+
+    // The mouse sits over the window body, away from the scrollbar.
+    for _ in 0..4 {
+        frame(&mut ctx, &mut out, 0.0);
+    }
+    frame(&mut ctx, &mut out, -1.0);
+    frame(&mut ctx, &mut out, -1.0);
+    frame(&mut ctx, &mut out, 0.0);
+    frame(&mut ctx, &mut out, 1.0);
+    frame(&mut ctx, &mut out, 1.0);
+    frame(&mut ctx, &mut out, 0.5);
+    frame(&mut ctx, &mut out, 0.0);
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -2029,6 +2088,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "window_scroll" => Some(window_scroll_dump()),
         "window_scrollbar" => Some(window_scrollbar_dump()),
         "window_scrollbar_drag" => Some(window_scrollbar_drag_dump()),
+        "window_wheel" => Some(window_wheel_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),

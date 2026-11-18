@@ -739,10 +739,20 @@ impl Context {
         };
         // `CalcNextScrollFromScrollTargetAndClamp`: the requested scroll, clamped to the maximum.
         // window->Scroll survives between frames; SetNextWindowScroll overrides it.
-        let requested = self
+        let mut requested = self
             .next_scroll
             .take()
             .unwrap_or(remembered_scroll.unwrap_or_default());
+        // `UpdateMouseWheel` + `SetScrollY`: the wheel over the window scrolls it by five font
+        // sizes, capped at two thirds of the interior.
+        if self.io.mouse_wheel != 0.0
+            && self.hovered_window.as_deref() == Some(name)
+            && scroll_max.y != 0.0
+        {
+            let max_step = (inner_rect.1.y - inner_rect.0.y) * 0.67;
+            let scroll_step = (5.0 * self.font.size).min(max_step).trunc();
+            requested.y -= self.io.mouse_wheel * scroll_step;
+        }
         let mut scroll = Vec2 {
             x: requested.x.clamp(0.0, scroll_max.x),
             y: requested.y.clamp(0.0, scroll_max.y),
