@@ -33,6 +33,7 @@ pub const SCENARIOS: &[&str] = &[
     "button",
     "widgets_basic",
     "slider_basic",
+    "style_defaults",
 ];
 
 const COL: u32 = 0xFFFF_0000; // IM_COL32(0, 0, 255, 255)
@@ -687,6 +688,61 @@ pub fn slider_basic_dump() -> String {
     out
 }
 
+/// The `style_defaults` scenario: the default style's colours, roundings and border sizes — the
+/// value layer of appearance.
+pub fn style_defaults_dump() -> String {
+    use oxidized_imgui::{Col, Style};
+
+    let style = Style::default();
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario style_defaults\n");
+
+    let entries: [(&str, Col); 17] = [
+        ("Text", Col::Text),
+        ("TextDisabled", Col::TextDisabled),
+        ("WindowBg", Col::WindowBg),
+        ("FrameBg", Col::FrameBg),
+        ("FrameBgHovered", Col::FrameBgHovered),
+        ("FrameBgActive", Col::FrameBgActive),
+        ("Button", Col::Button),
+        ("ButtonHovered", Col::ButtonHovered),
+        ("ButtonActive", Col::ButtonActive),
+        ("CheckMark", Col::CheckMark),
+        ("SliderGrab", Col::SliderGrab),
+        ("SliderGrabActive", Col::SliderGrabActive),
+        ("Border", Col::Border),
+        ("Separator", Col::Separator),
+        ("Header", Col::Header),
+        ("HeaderHovered", Col::HeaderHovered),
+        ("HeaderActive", Col::HeaderActive),
+    ];
+    for (name, col) in entries {
+        out.push_str(&format!("col {name} {:08x}\n", style.color_u32(col)));
+    }
+
+    out.push_str(&format!(
+        "round frame {:08x} window {:08x} grab {:08x} child {:08x} popup {:08x} scrollbar {:08x} tab {:08x}\n",
+        bits(style.frame_rounding),
+        bits(style.window_rounding),
+        bits(style.grab_rounding),
+        bits(style.child_rounding),
+        bits(style.popup_rounding),
+        bits(style.scrollbar_rounding),
+        bits(style.tab_rounding),
+    ));
+    out.push_str(&format!(
+        "border window {:08x} frame {:08x} child {:08x} popup {:08x}\n",
+        bits(style.window_border_size),
+        bits(style.frame_border_size),
+        bits(style.child_border_size),
+        bits(style.popup_border_size),
+    ));
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -699,6 +755,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "button" => Some(button_dump()),
         "widgets_basic" => Some(widgets_basic_dump()),
         "slider_basic" => Some(slider_basic_dump()),
+        "style_defaults" => Some(style_defaults_dump()),
         _ => scene(name).map(|list| dump(name, &list)),
     }
 }
