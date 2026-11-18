@@ -62,9 +62,10 @@
       "items": [
         { "id": "atlas", "label": "Construcción del atlas de fuentes", "weight": 3, "done": false, "evidence": "" },
         { "id": "raster", "label": "Rasterizado (port de stb_truetype)", "weight": 3, "done": false, "evidence": "" },
-        { "id": "metrics", "label": "Métricas de glifos y kerning", "weight": 2, "done": false, "evidence": "" },
+        { "id": "metrics", "label": "Métricas de glifos completas (offsets, kerning)", "weight": 2, "done": false, "evidence": "" },
+        { "id": "text_metrics", "label": "Medida de texto (CalcTextSize) con tabla de avances fijada", "weight": 1, "done": true, "evidence": "golden font_metrics" },
         { "id": "wrap", "label": "Salto de línea y alineación", "weight": 2, "done": false, "evidence": "" },
-        { "id": "ime", "label": "Edición de texto e IME", "weight": 2, "done": false, "evidence": "" }
+        { "id": "ime", "label": "Edición de texto e IME", "weight": 1, "done": false, "evidence": "" }
       ]
     },
     {
