@@ -685,6 +685,80 @@ fn rsqrt_precise(x: f32) -> f32 {
     // both sides take this exact path, which is portable. See tools/conformance/gen-golden.ps1.
     1.0 / x.sqrt()
 }
+/// `PathBezierCubicCurveToCasteljau`: recursive subdivision until the flatness test passes. Pure
+/// arithmetic, so it is portable bit for bit.
+fn bezier_cubic_casteljau(
+    path: &mut Vec<Vec2>,
+    p1: Vec2,
+    p2: Vec2,
+    p3: Vec2,
+    p4: Vec2,
+    max_error_sqr: f32,
+    level: i32,
+) {
+    let dx = p4.x - p1.x;
+    let dy = p4.y - p1.y;
+    let mut d2 = (p2.x - p4.x) * dy - (p2.y - p4.y) * dx;
+    let mut d3 = (p3.x - p4.x) * dy - (p3.y - p4.y) * dx;
+    if d2 < 0.0 {
+        d2 = -d2;
+    }
+    if d3 < 0.0 {
+        d3 = -d3;
+    }
+    let sum = d2 + d3;
+    if sum * sum < max_error_sqr * (dx * dx + dy * dy) {
+        path.push(p4);
+        return;
+    }
+    if level < 10 {
+        let p12 = Vec2 {
+            x: (p1.x + p2.x) * 0.5,
+            y: (p1.y + p2.y) * 0.5,
+        };
+        let p23 = Vec2 {
+            x: (p2.x + p3.x) * 0.5,
+            y: (p2.y + p3.y) * 0.5,
+        };
+        let p34 = Vec2 {
+            x: (p3.x + p4.x) * 0.5,
+            y: (p3.y + p4.y) * 0.5,
+        };
+        let p123 = Vec2 {
+            x: (p12.x + p23.x) * 0.5,
+            y: (p12.y + p23.y) * 0.5,
+        };
+        let p234 = Vec2 {
+            x: (p23.x + p34.x) * 0.5,
+            y: (p23.y + p34.y) * 0.5,
+        };
+        let p1234 = Vec2 {
+            x: (p123.x + p234.x) * 0.5,
+            y: (p123.y + p234.y) * 0.5,
+        };
+        bezier_cubic_casteljau(path, p1, p12, p123, p1234, max_error_sqr, level + 1);
+        bezier_cubic_casteljau(path, p1234, p234, p34, p4, max_error_sqr, level + 1);
+    }
+}
+
+/// `ImDrawList::PathBezierCubicCurveTo` with automatic tessellation: appends the curve points to
+/// `path`, whose last element is the curve start.
+pub fn path_bezier_cubic_to(
+    path: &mut Vec<Vec2>,
+    p2: Vec2,
+    p3: Vec2,
+    p4: Vec2,
+    curve_max_error: f32,
+    fringe_scale: f32,
+) {
+    let Some(&p1) = path.last() else {
+        return;
+    };
+    let error = curve_max_error * fringe_scale;
+    let max_error_sqr = error * error;
+    bezier_cubic_casteljau(path, p1, p2, p3, p4, max_error_sqr, 0);
+}
+
 /// `IM_DRAWLIST_ARCFAST_SAMPLE_MAX`: samples around a full circle in the fast arc table.
 const ARC_SAMPLE_MAX: i32 = 48;
 
