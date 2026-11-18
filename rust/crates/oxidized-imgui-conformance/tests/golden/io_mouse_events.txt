@@ -1,0 +1,7 @@
+header imgui 1.93.1 WIP 19303
+scenario io_mouse_events
+f0 pos 41200000 41a00000 delta 00000000 00000000 clk 0 rel 0 count 0 dur bf800000
+f1 pos 41400000 41b00000 delta 40000000 40000000 clk 1 rel 0 count 1 dur 00000000
+f2 pos 41600000 41c00000 delta 40000000 40000000 clk 0 rel 0 count 0 dur 3dcccccd
+f3 pos 41600000 41c00000 delta 00000000 00000000 clk 0 rel 1 count 0 dur bf800000
+f4 pos 41600000 41c00000 delta 00000000 00000000 clk 1 rel 0 count 1 dur 00000000
