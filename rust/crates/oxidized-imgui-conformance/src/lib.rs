@@ -50,6 +50,7 @@ pub const SCENARIOS: &[&str] = &[
     "window_icons",
     "window_icons_states",
     "window_icons_drag",
+    "windows_order",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -1561,6 +1562,89 @@ pub fn window_icons_drag_dump() -> String {
     out
 }
 
+/// The `windows_order` scenario: two overlapping titled windows and what a click does to the order
+/// they are rendered in.
+///
+/// The dump is the renderer's view — the `ImDrawList`s `GetDrawData()` would hand the backend, in
+/// order — plus the window the mouse is over. The click's own frame already shows the raised order,
+/// because the reference raises before it builds the draw data.
+pub fn windows_order_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/windows_order.glyphs.txt"
+    );
+    let glyphs = std::fs::read_to_string(path).expect("glyph fixture");
+    let font = Font::from_pinned(&glyphs).expect("glyph fixture");
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario windows_order\n");
+
+    let frame =
+        |ctx: &mut Context, out: &mut String, n: usize, tag: &str, mx: f32, my: f32, down: bool| {
+            ctx.io_mut().delta_time = 0.1;
+            ctx.io_mut().mouse_pos = Some(Vec2 { x: mx, y: my });
+            ctx.io_mut().mouse_down[0] = down;
+            ctx.begin_frame();
+            ctx.begin_window_titled(
+                "A",
+                "A",
+                Some(Vec2 { x: 60.0, y: 60.0 }),
+                Some(Vec2 { x: 300.0, y: 200.0 }),
+            );
+            ctx.end_window();
+            ctx.begin_window_titled(
+                "B",
+                "B",
+                Some(Vec2 { x: 110.0, y: 100.0 }),
+                Some(Vec2 { x: 300.0, y: 200.0 }),
+            );
+            ctx.end_window();
+            let hovered = ctx.hovered_window_name().unwrap_or("-").to_string();
+            ctx.end_frame();
+            let lists = ctx.render_lists();
+            out.push_str(&format!(
+                "frame {n} {tag} hovered {hovered} lists {}\n",
+                lists.len()
+            ));
+            for (i, (name, list)) in lists.iter().enumerate() {
+                out.push_str(&format!("list {i} {name}\n"));
+                let body = dump("windows_order", list);
+                for line in body.lines().skip(2) {
+                    out.push_str(line);
+                    out.push('\n');
+                }
+            }
+        };
+
+    for _ in 0..6 {
+        frame(&mut ctx, &mut out, 0, "settle", 0.0, 0.0, false);
+    }
+    out.clear();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario windows_order\n");
+
+    frame(&mut ctx, &mut out, 0, "idle", 0.0, 0.0, false);
+    frame(&mut ctx, &mut out, 1, "press_a_only", 70.0, 70.0, true);
+    frame(&mut ctx, &mut out, 2, "release_a_only", 70.0, 70.0, false);
+    frame(&mut ctx, &mut out, 3, "idle_a_on_top", 0.0, 0.0, false);
+    frame(&mut ctx, &mut out, 4, "press_both", 200.0, 150.0, true);
+    frame(&mut ctx, &mut out, 5, "release_both", 200.0, 150.0, false);
+    frame(&mut ctx, &mut out, 6, "press_b_only", 400.0, 290.0, true);
+    frame(&mut ctx, &mut out, 7, "release_b_only", 400.0, 290.0, false);
+    frame(&mut ctx, &mut out, 8, "idle_b_on_top", 0.0, 0.0, false);
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -1582,6 +1666,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "window_icons" => Some(window_icons_dump()),
         "window_icons_states" => Some(window_icons_states_dump()),
         "window_icons_drag" => Some(window_icons_drag_dump()),
+        "windows_order" => Some(windows_order_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),

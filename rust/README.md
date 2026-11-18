@@ -30,6 +30,7 @@ instead of against our own expectations:
 | Window icons | collapse arrow (soft-join stroke with AA ends) and close cross (two lines), drawn between the border and the title, which shifts right to make room | `window_icons` golden |
 | Window icons, interaction | hover and held highlights, the press that only counts on release inside, the collapse that kicks in next frame (title bar only, arrow turned right) and the close that flips `p_open` | `window_icons_states` golden |
 | Window icons, dragging | the arrow drag: nothing under the 6 px threshold, then the window follows the mouse keeping the grab offset, and the release does not collapse | `window_icons_drag` golden |
+| Window stack, order | several windows each with their own list, rendered front to back, the top-most one hovered, a click raising the clicked window in the same frame, and the title bar colour following the focus | `windows_order` golden |
 | Command offsets | each command carries the index offset of the buffer when it opened | `cmd_offsets` golden |
 | Window close | clip starts below the title band; the empty command from the clip push is dropped and the pop adds one only after geometry | `window_bg`, `window_title` goldens |
 | Full scene | titled window with a button: background, band, border, title, fill, label and the three commands | `scene_window_button` golden |
