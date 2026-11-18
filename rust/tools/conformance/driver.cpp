@@ -656,6 +656,20 @@ static void DumpBezierPoints()
     ImGui::EndFrame();
 }
 
+// Open polyline with miter joins: a mitered body between two simple caps.
+static void SceneAaPolyline(ImDrawList& list)
+{
+    // No AntiAliasedLines flag: the reference then takes its untextured stroke path, which is the
+    // one this port implements (the textured line patterns live in the atlas).
+    list.Flags = 0;
+    const ImVec2 points[3] = {
+        ImVec2(10.5f, 10.25f),
+        ImVec2(60.5f, 45.75f),
+        ImVec2(120.25f, 20.5f),
+    };
+    list.AddPolyline(points, 3, COL, 3.0f, ImDrawFlags_JoinMiter);
+}
+
 // Explicit UVs: no atlas involved.
 static void ScenePrimRectUV(ImDrawList& list)
 {
@@ -773,6 +787,7 @@ int main(int argc, char** argv)
     else if (strcmp(name, "aa_rect") == 0) scene = SceneAaRect;
     else if (strcmp(name, "aa_line") == 0) scene = SceneAaLine;
     else if (strcmp(name, "aa_bevel") == 0) scene = SceneAaBevel;
+    else if (strcmp(name, "aa_polyline") == 0) scene = SceneAaPolyline;
     if (strcmp(name, "clip_stack") == 0)
     {
         ImGui::NewFrame();

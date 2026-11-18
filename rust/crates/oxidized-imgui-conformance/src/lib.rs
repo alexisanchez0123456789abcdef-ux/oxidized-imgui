@@ -40,6 +40,7 @@ pub const SCENARIOS: &[&str] = &[
     "aa_bevel",
     "arc_steps",
     "bezier_points",
+    "aa_polyline",
 ];
 
 const COL: u32 = 0xFFFF_0000; // IM_COL32(0, 0, 255, 255)
@@ -65,7 +66,17 @@ pub fn scene(name: &str) -> Option<DrawList> {
         }
         // Public API: horizontal line, default inside stroke, one pixel thick.
         "line_h" => list.add_line_h(10.0, 30.0, 20.0, COL, 1.0),
-        // A convex polygon with a sharp apex: the miter exceeds the limit, so it is bevelled.
+        // Open polyline with miter joins: a mitered body between two simple caps.
+        "aa_polyline" => {
+            list.white_uv = WHITE_UV;
+            list.fringe_scale = 1.0;
+            let points = [
+                Vec2 { x: 10.5, y: 10.25 },
+                Vec2 { x: 60.5, y: 45.75 },
+                Vec2 { x: 120.25, y: 20.5 },
+            ];
+            list.add_polyline_aa_miter(&points, COL, 3.0);
+        }
         "aa_bevel" => {
             list.white_uv = WHITE_UV;
             list.fringe_scale = 1.0;
