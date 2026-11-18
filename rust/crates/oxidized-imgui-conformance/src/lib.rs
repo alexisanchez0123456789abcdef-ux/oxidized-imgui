@@ -66,6 +66,7 @@ pub const SCENARIOS: &[&str] = &[
     "window_resize_grips",
     "window_resize_drag",
     "window_resize_edges",
+    "window_resize_cursor",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -2674,6 +2675,51 @@ pub fn window_resize_edges_dump() -> String {
     out
 }
 
+/// The `window_resize_cursor` scenario: the cursor the handles ask for. The reference resets it to
+/// the arrow at the top of every frame, and it waits 40 ms before it reports a border at all, so the
+/// first frame of hovering one still shows the arrow.
+pub fn window_resize_cursor_dump() -> String {
+    use oxidized_imgui::{Context, Vec2};
+
+    let mut ctx = Context::new();
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario window_resize_cursor\n");
+
+    let frame = |ctx: &mut Context, out: &mut String, mx: f32, my: f32, down: bool| {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: mx, y: my });
+        ctx.io_mut().mouse_down[0] = down;
+        ctx.begin_frame();
+        ctx.set_next_window_flags(WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR);
+        ctx.begin_window(
+            "C",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        ctx.end_window();
+        ctx.end_frame();
+        out.push_str(&format!("frame cursor {}\n", ctx.io().mouse_cursor as i32));
+    };
+
+    for _ in 0..3 {
+        frame(&mut ctx, &mut out, 0.0, 0.0, false);
+    }
+    // The lower-right grip, then the lower-left one.
+    frame(&mut ctx, &mut out, 357.0, 257.0, false);
+    frame(&mut ctx, &mut out, 357.0, 257.0, true);
+    frame(&mut ctx, &mut out, 63.0, 257.0, false);
+    // The right border needs two frames: the reference waits 40 ms before it reports a border.
+    frame(&mut ctx, &mut out, 362.0, 150.0, false);
+    frame(&mut ctx, &mut out, 362.0, 150.0, false);
+    frame(&mut ctx, &mut out, 200.0, 262.0, false);
+    // Back to nothing.
+    frame(&mut ctx, &mut out, 200.0, 150.0, false);
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -2710,6 +2756,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "window_resize_grips" => Some(window_resize_grips_dump()),
         "window_resize_drag" => Some(window_resize_drag_dump()),
         "window_resize_edges" => Some(window_resize_edges_dump()),
+        "window_resize_cursor" => Some(window_resize_cursor_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),

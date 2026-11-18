@@ -34,6 +34,7 @@ instead of against our own expectations:
 | Window auto-size, changing content | the size follows the content of the previous frame in both directions, so shrinking and growing both show up one frame later | `window_autosize_change` golden |
 | Window auto-size | the window takes its content size plus the padding (and the title bar), one frame behind the content, starting at padding-only on its first frame | `window_autosize` golden |
 | Mouse wheel | over a window it scrolls by five font sizes (capped at two thirds of the interior), symmetric up and down, and leaves the scroll alone when the wheel is silent | `window_wheel` golden |
+| Window resize cursor | the handles ask for the diagonal or axis arrow, and a border only reports after 40 ms of hover so brushing past an edge does not light it up | `window_resize_cursor` golden |
 | Window resize, edges | the lower-left grip and the four borders resize too, moving the opposite corner: a left drag moves the window and grows it at once | `window_resize_edges` golden (geometry) |
 | Window resize, dragging | dragging the lower-right grip resizes the window: the size is the mouse position minus the offset inside the handle, constrained by `WindowMinSize` | `window_resize_drag` golden |
 | Window resize grips | a resizable window shows the lower-right corner grip, the lower-left one appears only while hovered or held, and the three colours follow the mouse; dragging them does not resize yet | `window_resize_grips` golden |

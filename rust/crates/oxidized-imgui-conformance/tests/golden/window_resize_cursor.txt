@@ -1,0 +1,12 @@
+header imgui 1.93.1 WIP 19303
+scenario window_resize_cursor
+frame cursor 0
+frame cursor 0
+frame cursor 0
+frame cursor 6
+frame cursor 6
+frame cursor 5
+frame cursor 0
+frame cursor 4
+frame cursor 0
+frame cursor 0

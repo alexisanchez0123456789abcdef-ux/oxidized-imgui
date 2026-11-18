@@ -63,6 +63,31 @@ impl Default for KeyData {
     }
 }
 
+/// `ImGuiMouseCursor`: what the backend should show over the pointer.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[repr(i32)]
+pub enum MouseCursor {
+    /// The default arrow.
+    #[default]
+    Arrow = 0,
+    /// Over editable text.
+    TextInput = 1,
+    /// Over a resize handle that works in both directions.
+    ResizeAll = 2,
+    /// Vertical resize, such as the top or bottom border.
+    ResizeNS = 3,
+    /// Horizontal resize, such as the left or right border.
+    ResizeEW = 4,
+    /// The lower-left resize grip.
+    ResizeNESW = 5,
+    /// The lower-right resize grip.
+    ResizeNWSE = 6,
+    /// Over a hand-grab area.
+    Hand = 7,
+    /// Over something that cannot be acted on.
+    NotAllowed = 8,
+}
+
 /// `ImGuiIO`, restricted to what this crate models.
 #[derive(Clone, Debug)]
 pub struct Io {
@@ -91,6 +116,8 @@ pub struct Io {
     /// io.ConfigWindowsResizeFromEdges: the lower-left corner is a resize grip too, not only the
     /// lower-right one.
     pub config_windows_resize_from_edges: bool,
+    /// io.MouseCursor: reset to Arrow every frame, then set by whatever the mouse is over.
+    pub mouse_cursor: MouseCursor,
     /// io.ConfigScrollbarScrollByPage: a click on a scrollbar's track scrolls a page instead of
     /// jumping to the clicked position.
     pub config_scrollbar_scroll_by_page: bool,
@@ -134,6 +161,7 @@ impl Default for Io {
             mouse_double_click_max_dist: 6.0,
             config_scrollbar_scroll_by_page: false,
             config_windows_resize_from_edges: true,
+            mouse_cursor: MouseCursor::Arrow,
             mouse_wheel: 0.0,
             mouse_wheel_h: 0.0,
             mouse_drag_threshold: 6.0,

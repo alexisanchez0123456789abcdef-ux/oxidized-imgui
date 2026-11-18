@@ -1924,6 +1924,45 @@ static void DumpWindowResizeEdges()
     FrameResizeEdge(200.0f, 282.0f, false);
 }
 
+// window_resize_cursor: the mouse cursor the handles ask for. The reference sets it every frame and
+// resets it to the arrow at the top of the frame, so each line is what that frame ended with.
+static void FrameResizeCursor(float mx, float my, bool down)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = down;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("C", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar);
+    printf("frame cursor %d\n", (int)ImGui::GetMouseCursor());
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpWindowResizeCursor()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario window_resize_cursor\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
+    for (int i = 0; i < 3; i++)
+        FrameResizeCursor(0.0f, 0.0f, false);
+    // The lower-right grip, then the lower-left one.
+    FrameResizeCursor(357.0f, 257.0f, false);
+    FrameResizeCursor(357.0f, 257.0f, true);
+    FrameResizeCursor(63.0f, 257.0f, false);
+    // The right border, then the bottom border.
+    FrameResizeCursor(362.0f, 150.0f, false);
+    FrameResizeCursor(362.0f, 150.0f, false);
+    FrameResizeCursor(200.0f, 262.0f, false);
+    // Back to nothing.
+    FrameResizeCursor(200.0f, 150.0f, false);
+}
+
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 
 static void DumpCmdOffsets()
@@ -2173,6 +2212,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_icons") == 0)
     {
         DumpWindowIcons();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "window_resize_cursor") == 0)
+    {
+        DumpWindowResizeCursor();
         ImGui::DestroyContext();
         return 0;
     }

@@ -189,6 +189,12 @@ pub struct Context {
     active_click_offset: Vec2,
     /// `resize_grip_col[2]`: the colour each lower corner grip paints this frame, zero when hidden.
     resize_grip_cols: [u32; 2],
+    /// `g.HoveredIdTimer`: how long the border under the mouse has been hovered. The reference
+    /// waits WINDOWS_RESIZE_FROM_EDGES_FEEDBACK_TIMER before it reports a border, so brushing past
+    /// an edge on the way to a widget does not light it up.
+    resize_hover_timer: f32,
+    /// The border hovered last frame, so the timer knows when the hover started.
+    resize_border_prev: i32,
     /// `g.MovingWindow`: the window that follows the mouse while the move drag lasts.
     moving_window: Option<String>,
     /// The window's draw list: what this frame has drawn so far.
@@ -231,6 +237,8 @@ impl Default for Context {
             active_id: None,
             active_click_offset: Vec2::default(),
             resize_grip_cols: [0; 2],
+            resize_hover_timer: 0.0,
+            resize_border_prev: -1,
             moving_window: None,
             draw_list: crate::draw_list::DrawList::new(),
             slider_just_activated: false,
@@ -265,6 +273,8 @@ impl Context {
         // which turn on anti-aliased fills, lines and (textured) corners.
         self.draw_list = self.new_window_draw_list();
         self.frame_lists.clear();
+        // g.MouseCursor = ImGuiMouseCursor_Arrow: whatever the last frame asked for is gone.
+        self.io.mouse_cursor = crate::io::MouseCursor::Arrow;
         self.resize_grip_cols = [0; 2];
         self.hovered_id = None;
         self.time += self.io.delta_time as f64;
@@ -403,6 +413,11 @@ impl Context {
     }
 
     /// The `ImGuiWindowFlags` of the next window, as `ImGui::Begin` takes them.
+    /// ImGui::SetMouseCursor: what the backend should show for the rest of the frame.
+    pub fn set_mouse_cursor(&mut self, cursor: crate::io::MouseCursor) {
+        self.io.mouse_cursor = cursor;
+    }
+
     pub fn set_next_window_flags(&mut self, flags: WindowFlags) {
         self.next_flags = Some(flags);
     }
@@ -1740,6 +1755,13 @@ impl Context {
         let border_hover = self.style.window_border_hover_padding;
         let mouse = self.io.mouse_pos.unwrap_or_default();
         let base_id = self.get_id("#RESIZE");
+        // A handle drag whose button is already up is over: clearing it here, before the handles are
+        // tested, is what lets the frame that releases still hover the one under the mouse.
+        if let Some(id) = self.active_id {
+            if id >= base_id && id < base_id + 8 && !self.io.mouse_down[0] {
+                self.active_id = None;
+            }
+        }
         let mut result = None;
 
         // The two lower grips.
@@ -1796,6 +1818,14 @@ impl Context {
                 result =
                     Some(self.resize_from_corner(pos, size, corner_target, *corner_n, always_auto));
             }
+            if hovered || held {
+                // The lower-left grip is the north-east/south-west one.
+                self.set_mouse_cursor(if index == 1 {
+                    crate::io::MouseCursor::ResizeNESW
+                } else {
+                    crate::io::MouseCursor::ResizeNWSE
+                });
+            }
             if held || hovered || index == 0 {
                 let col = if held {
                     self.style.color_u32(crate::style::Col::ResizeGripActive)
@@ -1819,6 +1849,8 @@ impl Context {
             x: pos.x + size.x,
             y: pos.y + size.y,
         };
+        let prev_hovered_border = self.resize_border_prev;
+        self.resize_border_prev = -1;
         let border_defs = [
             (0usize, 0usize, Vec2 { x: 0.0, y: 0.0 }),
             (1, 0, Vec2 { x: 1.0, y: 0.0 }),
@@ -1869,7 +1901,25 @@ impl Context {
                 ),
             };
             let border_id = base_id + border_n as u32 + 4;
-            let (hovered, held) = self.item_behavior(name, border_id, border_rect.0, border_rect.1);
+            let (hovered_raw, held) =
+                self.item_behavior(name, border_id, border_rect.0, border_rect.1);
+            // `g.HoveredIdTimer`: zero on the frame the hover starts, then it accumulates.
+            self.resize_hover_timer = if hovered_raw && prev_hovered_border == border_n as i32 {
+                self.resize_hover_timer + self.io.delta_time
+            } else {
+                0.0
+            };
+            if hovered_raw {
+                self.resize_border_prev = border_n as i32;
+            }
+            let hovered = hovered_raw && self.resize_hover_timer > 0.04;
+            if hovered || held {
+                self.set_mouse_cursor(if axis == 0 {
+                    crate::io::MouseCursor::ResizeEW
+                } else {
+                    crate::io::MouseCursor::ResizeNS
+                });
+            }
             if hovered && self.io.mouse_clicked[0] {
                 self.active_click_offset = Vec2 {
                     x: mouse.x - border_rect.0.x,
