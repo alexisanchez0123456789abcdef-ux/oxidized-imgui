@@ -52,6 +52,7 @@ pub const SCENARIOS: &[&str] = &[
     "window_icons_drag",
     "windows_order",
     "windows_move",
+    "window_scroll",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -1784,6 +1785,87 @@ pub fn windows_move_dump() -> String {
     out
 }
 
+/// The `window_scroll` scenario: a window without a scrollbar whose content is taller than the
+/// window, scrolled by API. The scroll, its maximum and the interior rectangle are printed beside
+/// the draw list so a mismatch says which of them moved.
+pub fn window_scroll_dump() -> String {
+    use oxidized_imgui::{Context, Vec2};
+
+    let mut ctx = Context::new();
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario window_scroll\n");
+
+    let frame = |ctx: &mut Context, out: &mut String, scroll_y: Option<f32>| {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+        ctx.io_mut().mouse_down[0] = false;
+        ctx.begin_frame();
+        if let Some(y) = scroll_y {
+            ctx.set_next_window_scroll(Vec2 { x: 0.0, y });
+        }
+        ctx.begin_window(
+            "S",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        let start = ctx.cursor_screen_pos();
+        ctx.dummy(Vec2 { x: 100.0, y: 300.0 });
+        let after = ctx.cursor_screen_pos();
+        ctx.draw_list_mut().add_rect_filled(
+            Vec2 {
+                x: start.x,
+                y: after.y,
+            },
+            Vec2 {
+                x: start.x + 50.0,
+                y: after.y + 20.0,
+            },
+            0xFF00_00FF,
+        );
+        // Dumped before `end_window`, like the reference: the clip pop at End would open one more
+        // command.
+        let body_text = dump("window_scroll", ctx.draw_list());
+        let window = ctx.window();
+        let (inner_min, inner_max) = window.inner_rect;
+        let scroll_text = format!(
+            "frame scroll {:08x} max {:08x} content {:08x} {:08x} inner {:08x} {:08x} {:08x} {:08x} start {:08x} {:08x} after {:08x} {:08x}\n",
+            window.scroll.y.to_bits(),
+            window.scroll_max.y.to_bits(),
+            window.content_extent.x.to_bits(),
+            window.content_extent.y.to_bits(),
+            inner_min.x.to_bits(),
+            inner_min.y.to_bits(),
+            inner_max.x.to_bits(),
+            inner_max.y.to_bits(),
+            start.x.to_bits(),
+            start.y.to_bits(),
+            after.x.to_bits(),
+            after.y.to_bits(),
+        );
+        ctx.end_window();
+        out.push_str(&scroll_text);
+        for line in body_text.lines().skip(2) {
+            out.push_str(line);
+            out.push('\n');
+        }
+        ctx.end_frame();
+    };
+
+    for _ in 0..6 {
+        frame(&mut ctx, &mut out, None);
+    }
+    for _ in 0..2 {
+        frame(&mut ctx, &mut out, Some(40.0));
+    }
+    for _ in 0..2 {
+        frame(&mut ctx, &mut out, Some(10000.0));
+    }
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -1807,6 +1889,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "window_icons_drag" => Some(window_icons_drag_dump()),
         "windows_order" => Some(windows_order_dump()),
         "windows_move" => Some(windows_move_dump()),
+        "window_scroll" => Some(window_scroll_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),

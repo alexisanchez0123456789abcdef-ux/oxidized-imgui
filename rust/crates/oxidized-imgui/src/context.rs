@@ -44,11 +44,21 @@ pub struct Window {
     pub size_full: Vec2,
     pub collapsed: bool,
     pub want_collapse_toggle: bool,
-    /// `pos + style.WindowPadding`.
+    /// `window->Scroll`: how far the content is scrolled inside the window.
+    pub scroll: Vec2,
+    /// `window->ScrollMax`: the largest scroll the content allows.
+    pub scroll_max: Vec2,
+    /// `window->ContentSize`: how big the content was on the previous frame.
+    pub content_extent: Vec2,
+    /// `window->InnerRect`: the window rectangle without its decorations.
+    pub inner_rect: (Vec2, Vec2),
+    /// `pos + style.WindowPadding`, minus the scroll.
     pub content_origin: Vec2,
     /// `size - style.WindowPadding * 2`, what `GetContentRegionAvail` returns inside the window.
     pub content_size: Vec2,
     cursor: Vec2,
+    cursor_start: Vec2,
+    cursor_max: Vec2,
     line_start_x: f32,
     line_height: f32,
     last_min: Vec2,
@@ -72,6 +82,10 @@ pub struct Context {
     windows: Vec<Window>,
     /// (name, pos, size_full, collapsed, want_collapse_toggle) per window, between frames.
     remembered: Vec<(String, Vec2, Vec2, bool, bool)>,
+    /// `window->ContentSize` per window, from the previous frame: the scroll maximum needs it.
+    content_sizes: Vec<(String, Vec2)>,
+    /// `SetNextWindowScroll` for the window about to start.
+    next_scroll: Option<Vec2>,
     /// `g.Windows`, back to front: the order the lists are rendered in. It survives frames.
     display_order: Vec<String>,
     /// Names of the windows that were submitted on the previous frame (`WasActive`).
@@ -114,6 +128,8 @@ impl Default for Context {
             time: 0.0,
             windows: Vec::new(),
             remembered: Vec::new(),
+            content_sizes: Vec::new(),
+            next_scroll: None,
             display_order: Vec::new(),
             last_frame_windows: Vec::new(),
             frame_lists: Vec::new(),
@@ -267,6 +283,12 @@ impl Context {
         }
     }
 
+    /// `ImGui::SetNextWindowScroll`: the scroll the next window starts with. It is clamped to the
+    /// maximum the window computes, which lags one frame behind the content.
+    pub fn set_next_window_scroll(&mut self, scroll: Vec2) {
+        self.next_scroll = Some(scroll);
+    }
+
     /// Pins `ImDrawListSharedData::TexUvLines`: the atlas line-texture table a stroked primitive
     /// samples when the draw list has anti-aliased lines enabled.
     pub fn set_line_uv_lines(&mut self, table: Vec<[f32; 4]>) {
@@ -287,6 +309,11 @@ impl Context {
     /// Replaces the font used for drawing, e.g. with one built from a pinned glyph table.
     pub fn set_font_for_drawing(&mut self, font: crate::font::Font) {
         self.font = font;
+    }
+
+    /// The draw list of the open window, for adding geometry by hand.
+    pub fn draw_list_mut(&mut self) -> &mut crate::draw_list::DrawList {
+        &mut self.draw_list
     }
 
     /// The draw list of the open window, or of the last window that closed in this frame.
@@ -658,11 +685,40 @@ impl Context {
         } else {
             self.clamp_window_pos(pos, size)
         };
+        // `InnerRect`: the window rectangle without its decorations. A top-level window only gives
+        // up the title bar; scrollbars would take from the right and the bottom, not modelled yet.
+        let inner_rect = (
+            Vec2 {
+                x: pos.x,
+                y: pos.y + title_height,
+            },
+            Vec2 {
+                x: pos.x + size.x,
+                y: pos.y + size.y,
+            },
+        );
+        // `ScrollMax` uses the content size of the previous frame, so it lags one frame behind.
+        let content = self
+            .content_sizes
+            .iter()
+            .find(|(known, _)| known == name)
+            .map(|(_, size)| *size)
+            .unwrap_or_default();
+        let scroll_max = Vec2 {
+            x: (content.x + pad.x * 2.0 - (inner_rect.1.x - inner_rect.0.x)).max(0.0),
+            y: (content.y + pad.y * 2.0 - (inner_rect.1.y - inner_rect.0.y)).max(0.0),
+        };
+        // `CalcNextScrollFromScrollTargetAndClamp`: the requested scroll, clamped to the maximum.
+        let requested = self.next_scroll.take().unwrap_or_default();
+        let scroll = Vec2 {
+            x: requested.x.clamp(0.0, scroll_max.x),
+            y: requested.y.clamp(0.0, scroll_max.y),
+        };
         // With a title bar the content starts below it, which is why the settled reference lays a
-        // window out 19 pixels lower than its first frame does.
+        // window out 19 pixels lower than its first frame does. The scroll moves it up.
         let content_origin = Vec2 {
-            x: pos.x + pad.x,
-            y: pos.y + title_height + pad.y,
+            x: inner_rect.0.x + pad.x - scroll.x,
+            y: inner_rect.0.y + pad.y - scroll.y,
         };
 
         // The background is painted before the window clip is applied, with the fullscreen clip.
@@ -785,9 +841,15 @@ impl Context {
             size_full,
             collapsed,
             want_collapse_toggle,
+            scroll,
+            scroll_max,
+            content_extent: content,
+            inner_rect,
             content_origin,
             content_size,
             cursor: content_origin,
+            cursor_start: content_origin,
+            cursor_max: content_origin,
             line_start_x: content_origin.x,
             line_height: 0.0,
             last_min: Vec2::default(),
@@ -1077,6 +1139,20 @@ impl Context {
                 Some(slot) => *slot = entry,
                 None => self.remembered.push(entry),
             }
+            // `CalcWindowContentSizes`: the extent the layout reached, measured from the scrolled
+            // start so scrolling does not change it.
+            let size = Vec2 {
+                x: (window.cursor_max.x - window.cursor_start.x).trunc(),
+                y: (window.cursor_max.y - window.cursor_start.y).trunc(),
+            };
+            match self
+                .content_sizes
+                .iter_mut()
+                .find(|(known, _)| *known == window.name)
+            {
+                Some(slot) => slot.1 = size,
+                None => self.content_sizes.push((window.name.clone(), size)),
+            }
             // The frame's list for this window, kept for `render_lists`.
             let list = core::mem::take(&mut self.draw_list);
             self.frame_lists.push((window.name.clone(), list.clone()));
@@ -1206,6 +1282,11 @@ impl Context {
         window.last_max = max;
         window.has_item = true;
         window.line_height = window.line_height.max(size.y);
+        // `ItemSize`: remember the furthest point the layout reached; that is the content extent.
+        window.cursor_max = Vec2 {
+            x: window.cursor_max.x.max(max.x),
+            y: window.cursor_max.y.max(max.y),
+        };
         // The line ends here: the cursor moves below it and back to the line start.
         window.cursor = Vec2 {
             x: window.line_start_x,

@@ -2,16 +2,16 @@
 
 _Actualizado: 2026-11-18. Generado desde `docs/progress.json`: no editar a mano._
 
-## Reescritura a Rust: **47.4 %**
+## Reescritura a Rust: **47.9 %**
 
-Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 51.6 %.
+Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 52.0 %.
 
 Qué cuenta como hecho: solo lo que tiene una prueba que lo compara con el código C++ original.
 Un cambio de estado sin evidencia no sube el porcentaje.
 
 | Área | Peso | Avance |
 | --- | ---: | ---: |
-| Núcleo: contexto, IO, ventanas, identificadores, layout | 42 | 67 % |
+| Núcleo: contexto, IO, ventanas, identificadores, layout | 43 | 67 % |
 | Listas de dibujo y primitivas | 17 | 88 % |
 | Widgets | 26 | 38 % |
 | Fuentes y texto | 13 | 15 % |
@@ -34,6 +34,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Iconos de ventana: flecha de colapso y cruz de cierre** — golden window_icons (flecha, cruz y texto desplazado por los iconos)
 - **Iconos de ventana: hover, pulsación, colapso y cierre** — golden window_icons_states (14 estados: resalte, pulsado, soltar dentro y fuera, colapsada y expandida)
 - **Arrastrar la ventana desde la flecha (umbral de arrastre y desplazamiento)** — golden window_icons_drag (8 estados con la posición de la ventana)
+- **Scroll por API: máximo desde el contenido, desplazamiento del contenido y recorte** — golden window_scroll (10 frames con scroll, máximo, contenido y rectángulo interior)
 - **Mover una ventana: arrastre desde la barra y desde el cuerpo, con recorte al salir de pantalla** — golden windows_move (15 estados con la posición de la ventana)
 - **Pila de ventanas: orden de dibujo, hover entre ventanas y foco al hacer clic** — golden windows_order (9 frames con la lista de dibujo de cada ventana en orden)
 - **Desplazamiento de índices por comando** — golden cmd_offsets

@@ -1306,6 +1306,54 @@ static void DumpWindowsMove()
     section("release_far_right", 2000.0f, 2000.0f, false);
 }
 
+// window_scroll: a window without a scrollbar whose content is taller than the window, scrolled by
+// API. Printing the scroll, its maximum and the interior rectangle makes a mismatch explainable.
+static void FrameScrolledWindow(int scroll_y)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    if (scroll_y >= 0)
+        ImGui::SetNextWindowScroll(ImVec2(0.0f, (float)scroll_y));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar;
+    ImGui::Begin("S", NULL, flags);
+    ImGuiWindow* w = ImGui::GetCurrentWindow();
+    const ImVec2 start = ImGui::GetCursorScreenPos();
+    ImGui::Dummy(ImVec2(100.0f, 300.0f));
+    const ImVec2 after = ImGui::GetCursorScreenPos();
+    ImGui::GetWindowDrawList()->AddRectFilled(
+        ImVec2(start.x, after.y), ImVec2(start.x + 50.0f, after.y + 20.0f), IM_COL32(255, 0, 0, 255));
+    printf("frame scroll %08x max %08x content %08x %08x inner %08x %08x %08x %08x start %08x %08x after %08x %08x\n",
+        Bits(w->Scroll.y), Bits(w->ScrollMax.y), Bits(w->ContentSize.x), Bits(w->ContentSize.y),
+        Bits(w->InnerRect.Min.x), Bits(w->InnerRect.Min.y), Bits(w->InnerRect.Max.x), Bits(w->InnerRect.Max.y),
+        Bits(start.x), Bits(start.y), Bits(after.x), Bits(after.y));
+    DumpDrawListBody(*w->DrawList);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpWindowScroll()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario window_scroll\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
+    for (int i = 0; i < 6; i++)
+        FrameScrolledWindow(-1);
+    // A scroll inside the range: applied from that frame on.
+    for (int i = 0; i < 2; i++)
+        FrameScrolledWindow(40);
+    // Far past the maximum: clamped to it.
+    for (int i = 0; i < 2; i++)
+        FrameScrolledWindow(10000);
+}
+
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 static void DumpCmdOffsets()
 {
@@ -1554,6 +1602,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_icons") == 0)
     {
         DumpWindowIcons();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "window_scroll") == 0)
+    {
+        DumpWindowScroll();
         ImGui::DestroyContext();
         return 0;
     }
