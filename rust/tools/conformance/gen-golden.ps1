@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 $cargoBin = Join-Path $env:USERPROFILE '.cargo\bin'
 if (Test-Path $cargoBin) { $env:PATH = "$cargoBin;$env:PATH" }
 
-$scenarios = @('prim_rect_uv', 'prim_rect', 'rect_filled', 'line_h', 'window_layout', 'io_mouse_events', 'io_keyboard_events', 'font_metrics', 'clip_stack', 'text_draw', 'button', 'widgets_basic', 'slider_basic', 'style_defaults', 'aa_rect', 'aa_round_rect', 'aa_line', 'aa_strokes', 'aa_bevel', 'arc_steps', 'bezier_points', 'aa_polyline', 'aa_border', 'button_draw', 'window_bg', 'window_border', 'window_title', 'window_icons', 'window_icons_states', 'cmd_offsets', 'scene_window_button', 'button_states', 'button_border')
+$scenarios = @('prim_rect_uv', 'prim_rect', 'rect_filled', 'line_h', 'window_layout', 'io_mouse_events', 'io_keyboard_events', 'font_metrics', 'clip_stack', 'text_draw', 'button', 'widgets_basic', 'slider_basic', 'style_defaults', 'aa_rect', 'aa_round_rect', 'aa_line', 'aa_strokes', 'aa_bevel', 'arc_steps', 'bezier_points', 'aa_polyline', 'aa_border', 'button_draw', 'window_bg', 'window_border', 'window_title', 'window_icons', 'window_icons_states', 'window_icons_drag', 'cmd_offsets', 'scene_window_button', 'button_states', 'button_border')
 
 $conformance = $PSScriptRoot
 $root   = (Resolve-Path "$conformance\..\..\..").Path
@@ -57,6 +57,7 @@ $fixture_names = @{
     'aa_strokes'          = 'aa_strokes.lineuvs.txt'
     'window_icons'        = 'window_icons.fixture.txt'
     'window_icons_states' = 'window_icons_states.fixture.txt'
+    'window_icons_drag'   = 'window_icons_drag.fixture.txt'
 }
 
 foreach ($name in $scenarios) {

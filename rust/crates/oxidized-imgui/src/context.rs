@@ -29,6 +29,8 @@ struct WindowOptions<'a> {
     open: Option<&'a mut bool>,
     /// `!(flags & ImGuiWindowFlags_NoCollapse)`: the title bar gets a collapse arrow.
     collapsible: bool,
+    /// `ImGuiWindowFlags_NoMove`: the window cannot be moved by dragging its title bar.
+    no_move: bool,
 }
 
 /// An open window. Only the geometry the harness checks is modelled.
@@ -71,6 +73,10 @@ pub struct Context {
     /// (name, pos, size_full, collapsed, want_collapse_toggle) per window, between frames.
     remembered: Vec<(String, Vec2, Vec2, bool, bool)>,
     active_id: Option<ImGuiID>,
+    /// `ActiveIdClickOffset`: where inside the window the move drag started.
+    active_click_offset: Vec2,
+    /// `g.MovingWindow`: the window that follows the mouse while the move drag lasts.
+    moving_window: Option<String>,
     /// The window's draw list: what this frame has drawn so far.
     draw_list: crate::draw_list::DrawList,
     slider_just_activated: bool,
@@ -93,6 +99,8 @@ impl Default for Context {
             windows: Vec::new(),
             remembered: Vec::new(),
             active_id: None,
+            active_click_offset: Vec2::default(),
+            moving_window: None,
             draw_list: crate::draw_list::DrawList::new(),
             slider_just_activated: false,
             slider_grab_offset: 0.0,
@@ -134,6 +142,36 @@ impl Context {
         self.time += self.io.delta_time as f64;
         self.update_keyboard_inputs();
         self.update_mouse_inputs();
+        // `UpdateMouseMovingWindowNewFrame`: the window being dragged follows the mouse, and the
+        // drag ends the moment the button comes up.
+        self.update_mouse_moving_window_new_frame();
+    }
+
+    /// `ImGui::UpdateMouseMovingWindowNewFrame`: while `g.MovingWindow` is set and the mouse is
+    /// down, the window's position becomes the mouse minus where inside it the drag started.
+    fn update_mouse_moving_window_new_frame(&mut self) {
+        let Some(name) = self.moving_window.clone() else {
+            return;
+        };
+        if !self.io.mouse_down[0] || self.io.mouse_pos.is_none() {
+            // `StopMouseMovingWindow()` plus the reference's `ClearActiveID()`.
+            self.moving_window = None;
+            self.active_id = None;
+            return;
+        }
+        let mouse = self.io.mouse_pos.unwrap_or_default();
+        let pos = Vec2 {
+            x: mouse.x - self.active_click_offset.x,
+            y: mouse.y - self.active_click_offset.y,
+        };
+        // `SetWindowPos(..., ImGuiCond_Always)`.
+        if let Some(entry) = self
+            .remembered
+            .iter_mut()
+            .find(|(known, ..)| *known == name)
+        {
+            entry.1 = pos;
+        }
     }
 
     /// Pins `ImDrawListSharedData::TexUvLines`: the atlas line-texture table a stroked primitive
@@ -262,6 +300,22 @@ impl Context {
                 self.io.mouse_clicked_time[i] = time;
                 self.io.mouse_clicked_pos[i] = self.io.mouse_pos.unwrap_or_default();
                 self.io.mouse_clicked_count[i] = self.io.mouse_clicked_last_count[i];
+                // A fresh press starts the drag distance over.
+                self.io.mouse_drag_max_distance_sqr[i] = 0.0;
+            } else if self.io.mouse_down[i] {
+                // Keep the furthest distance from the press: this is what turns a held button
+                // into a drag once it passes `MouseDragThreshold`.
+                let delta_sqr = self
+                    .io
+                    .mouse_pos
+                    .map(|pos| {
+                        let dx = pos.x - self.io.mouse_clicked_pos[i].x;
+                        let dy = pos.y - self.io.mouse_clicked_pos[i].y;
+                        dx * dx + dy * dy
+                    })
+                    .unwrap_or(0.0);
+                self.io.mouse_drag_max_distance_sqr[i] =
+                    self.io.mouse_drag_max_distance_sqr[i].max(delta_sqr);
             }
         }
 
@@ -318,6 +372,7 @@ impl Context {
                 background: true,
                 open: None,
                 collapsible: false,
+                no_move: true,
             },
         )
     }
@@ -339,6 +394,7 @@ impl Context {
                 background: true,
                 open: None,
                 collapsible: false,
+                no_move: true,
             },
         )
     }
@@ -354,8 +410,8 @@ impl Context {
     /// The arrow toggles the collapsed state from the next frame on; the cross sets `*open` to
     /// `false` when it is released inside. Returns `false` while the window is collapsed.
     ///
-    /// Not modelled yet: dragging the title bar with the arrow (the reference starts moving the
-    /// window when the arrow is dragged past the threshold).
+    /// Not modelled yet: dragging the title bar itself (only the arrow drag works, which is the
+    /// reference's `CollapseButton` path).
     pub fn begin_window_titled_with_icons(
         &mut self,
         name: &str,
@@ -363,6 +419,7 @@ impl Context {
         pos: Option<Vec2>,
         size: Option<Vec2>,
         open: Option<&mut bool>,
+        no_move: bool,
     ) -> bool {
         self.begin_window_impl(
             name,
@@ -373,6 +430,7 @@ impl Context {
                 background: true,
                 open,
                 collapsible: true,
+                no_move,
             },
         )
     }
@@ -395,6 +453,7 @@ impl Context {
                 background,
                 open: None,
                 collapsible: false,
+                no_move: true,
             },
         )
     }
@@ -528,12 +587,14 @@ impl Context {
         // order of the list.
         if let Some(title) = title {
             let (pressed_collapse, pressed_close) = self.render_title_bar_contents(
+                name,
                 title,
                 pos,
                 size,
                 opts.open.is_some(),
                 opts.collapsible,
                 collapsed,
+                !opts.no_move,
             );
             if pressed_collapse {
                 want_collapse_toggle = true;
@@ -587,14 +648,17 @@ impl Context {
 
     /// `ImGui::RenderWindowTitleBarContents`: the collapse arrow, the close cross and the title,
     /// laid out so the buttons never overlap the text.
+    #[allow(clippy::too_many_arguments)]
     fn render_title_bar_contents(
         &mut self,
+        name: &str,
         title: &str,
         pos: Vec2,
         size: Vec2,
         closable: bool,
         collapsible: bool,
         collapsed: bool,
+        can_move: bool,
     ) -> (bool, bool) {
         use crate::style::Col;
 
@@ -647,8 +711,8 @@ impl Context {
         let mut pressed_close = false;
 
         if let Some(min) = collapse_pos {
-            let (pressed, hovered, held) =
-                self.icon_button(self.get_id("#COLLAPSE"), min, button_sz, pos, size);
+            let collapse_id = self.get_id("#COLLAPSE");
+            let (pressed, hovered, held) = self.icon_button(collapse_id, min, button_sz, pos, size);
             pressed_collapse = pressed;
             // `(held && hovered) ? ButtonActive : hovered ? ButtonHovered : Button`, and the
             // background is drawn whenever the button is hovered or held.
@@ -685,6 +749,11 @@ impl Context {
                 self.style.symbol_arrow_size_factor,
                 self.style.symbol_arrow_thickness_factor,
             );
+
+            // Dragging past the threshold while the arrow is active moves the window instead.
+            if self.active_id == Some(collapse_id) && self.io.is_mouse_dragging(0, -1.0) {
+                self.start_mouse_moving_window(name, pos, can_move);
+            }
         }
 
         if let Some(min) = close_pos {
@@ -776,7 +845,9 @@ impl Context {
         window_pos: Vec2,
         window_size: Vec2,
     ) -> (bool, bool, bool) {
-        let hovered = self.icon_hovered(min, button_sz, window_pos, window_size);
+        // `ItemHoverable`: while another item owns the mouse, nothing else is hovered.
+        let hovered = self.icon_hovered(min, button_sz, window_pos, window_size)
+            && (self.active_id.is_none() || self.active_id == Some(id));
 
         if hovered && self.io.mouse_clicked[0] && self.active_id != Some(id) {
             self.active_id = Some(id);
@@ -794,6 +865,25 @@ impl Context {
             }
         }
         (pressed, hovered, held)
+    }
+
+    /// `ImGui::StartMouseMovingWindow`: the drag takes over the active id, remembers where inside
+    /// the window it started, and (when the window may move) makes it follow the mouse.
+    ///
+    /// The reference also focuses the window and claims the keyboard; there is no focus stack or
+    /// keyboard model here yet, so neither is done.
+    fn start_mouse_moving_window(&mut self, name: &str, window_pos: Vec2, can_move: bool) {
+        // `window->MoveId`. The reference seeds it with the window id; here the identifier stack is
+        // not window-scoped yet, so it is a plain hash. What matters for the port is that it is a
+        // different id from the icons', which is what cancels their press.
+        self.active_id = Some(self.get_id("#MOVE"));
+        self.active_click_offset = Vec2 {
+            x: self.io.mouse_clicked_pos[0].x - window_pos.x,
+            y: self.io.mouse_clicked_pos[0].y - window_pos.y,
+        };
+        if can_move {
+            self.moving_window = Some(name.to_string());
+        }
     }
 
     /// Whether the mouse is over an icon: inside the window's rectangle and inside its square.

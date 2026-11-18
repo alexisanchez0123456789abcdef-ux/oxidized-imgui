@@ -49,6 +49,7 @@ pub const SCENARIOS: &[&str] = &[
     "window_title",
     "window_icons",
     "window_icons_states",
+    "window_icons_drag",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -1209,6 +1210,7 @@ pub fn window_icons_dump() -> String {
             Some(Vec2 { x: 60.0, y: 60.0 }),
             Some(Vec2 { x: 300.0, y: 200.0 }),
             Some(&mut open),
+            true,
         );
         ctx.end_window();
         if frame == 13 {
@@ -1257,6 +1259,7 @@ pub fn window_icons_states_dump() -> String {
             Some(Vec2 { x: 60.0, y: 60.0 }),
             Some(Vec2 { x: 300.0, y: 200.0 }),
             Some(&mut open),
+            true,
         );
         ctx.end_window();
         ctx.end_frame();
@@ -1408,6 +1411,7 @@ fn icons_state_section(
         Some(Vec2 { x: 60.0, y: 60.0 }),
         Some(Vec2 { x: 300.0, y: 200.0 }),
         Some(open),
+        true,
     );
     let collapsed = ctx.window().collapsed;
     ctx.end_window();
@@ -1422,6 +1426,139 @@ fn icons_state_section(
         out.push('\n');
     }
     ctx.end_frame();
+}
+
+/// The `window_icons_drag` scenario: the mouse grabs the collapse arrow and drags past the
+/// threshold, which starts moving the window (the reference's `CollapseButton` calls
+/// `StartMouseMovingWindow`). Each state prints the window position, so a mismatch says where the
+/// window actually was.
+///
+/// The window is movable here — no `ImGuiWindowFlags_NoMove` — and its position is only requested
+/// on the first frame, because asking for it every frame would override the drag.
+pub fn window_icons_drag_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/window_icons_drag.fixture.txt"
+    );
+    let text = std::fs::read_to_string(path).expect("window icons fixture");
+    let font = Font::from_pinned(&text).expect("font fixture");
+    let line_uvs = parse_line_uvs(&text);
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    ctx.set_line_uv_lines(line_uvs);
+    let mut open = true;
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario window_icons_drag\n");
+
+    let frame = |ctx: &mut Context, out: &mut String, open: &mut bool, first: bool| {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+        ctx.io_mut().mouse_down[0] = false;
+        ctx.begin_frame();
+        let pos = if first {
+            Some(Vec2 { x: 60.0, y: 60.0 })
+        } else {
+            None
+        };
+        let size = if first {
+            Some(Vec2 { x: 300.0, y: 200.0 })
+        } else {
+            None
+        };
+        ctx.begin_window_titled_with_icons("W", "W", pos, size, Some(open), false);
+        ctx.end_window();
+        ctx.end_frame();
+        let _ = out;
+    };
+
+    // Settle: the first frame places the window, the rest keep it where it is.
+    frame(&mut ctx, &mut out, &mut open, true);
+    for _ in 0..13 {
+        frame(&mut ctx, &mut out, &mut open, false);
+    }
+
+    let section = |ctx: &mut Context,
+                   out: &mut String,
+                   open: &mut bool,
+                   name: &str,
+                   mx: f32,
+                   my: f32,
+                   down: bool| {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: mx, y: my });
+        ctx.io_mut().mouse_down[0] = down;
+        ctx.begin_frame();
+        let began = ctx.begin_window_titled_with_icons("W", "W", None, None, Some(open), false);
+        let pos = ctx.window().pos;
+        let collapsed = ctx.window().collapsed;
+        ctx.end_window();
+        out.push_str(&format!(
+            "state {name} pos {:08x} {:08x} open {} collapsed {} began {} down {}\n",
+            pos.x.to_bits(),
+            pos.y.to_bits(),
+            *open as u8,
+            collapsed as u8,
+            began as u8,
+            down as u8
+        ));
+        let body = dump("window_icons_drag", ctx.draw_list());
+        for line in body.lines().skip(2) {
+            out.push_str(line);
+            out.push('\n');
+        }
+        ctx.end_frame();
+    };
+
+    section(&mut ctx, &mut out, &mut open, "idle", 0.0, 0.0, false);
+    section(
+        &mut ctx,
+        &mut out,
+        &mut open,
+        "hover_arrow",
+        70.0,
+        69.0,
+        false,
+    );
+    section(&mut ctx, &mut out, &mut open, "press", 70.0, 69.0, true);
+    section(
+        &mut ctx,
+        &mut out,
+        &mut open,
+        "below_threshold",
+        74.0,
+        70.0,
+        true,
+    );
+    section(
+        &mut ctx,
+        &mut out,
+        &mut open,
+        "drag_start",
+        90.0,
+        90.0,
+        true,
+    );
+    section(&mut ctx, &mut out, &mut open, "dragged", 110.0, 100.0, true);
+    section(
+        &mut ctx, &mut out, &mut open, "released", 110.0, 100.0, false,
+    );
+    section(
+        &mut ctx,
+        &mut out,
+        &mut open,
+        "after_release",
+        0.0,
+        0.0,
+        false,
+    );
+    out
 }
 
 /// The dump for a scenario, whichever family it belongs to.
@@ -1444,6 +1581,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "window_title" => Some(window_title_dump()),
         "window_icons" => Some(window_icons_dump()),
         "window_icons_states" => Some(window_icons_states_dump()),
+        "window_icons_drag" => Some(window_icons_drag_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),
