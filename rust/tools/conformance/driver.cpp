@@ -1354,6 +1354,49 @@ static void DumpWindowScroll()
         FrameScrolledWindow(10000);
 }
 
+// window_scrollbar: a window whose content does not fit, so the vertical scrollbar appears. Only
+// the drawing is covered here: the mouse stays away, so the grab is neither hovered nor held.
+static void FrameScrollbarWindow(int scroll_y)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    if (scroll_y >= 0)
+        ImGui::SetNextWindowScroll(ImVec2(0.0f, (float)scroll_y));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
+    ImGui::Begin("S", NULL, flags);
+    ImGuiWindow* w = ImGui::GetCurrentWindow();
+    ImGui::Dummy(ImVec2(100.0f, 300.0f));
+    const ImRect bar = ImGui::GetWindowScrollbarRect(w, ImGuiAxis_Y);
+    printf("frame scrollbar %d scroll %08x max %08x inner %08x %08x %08x %08x bar %08x %08x %08x %08x\n",
+        w->ScrollbarY ? 1 : 0, Bits(w->Scroll.y), Bits(w->ScrollMax.y), Bits(w->InnerRect.Min.x),
+        Bits(w->InnerRect.Min.y), Bits(w->InnerRect.Max.x), Bits(w->InnerRect.Max.y), Bits(bar.Min.x),
+        Bits(bar.Min.y), Bits(bar.Max.x), Bits(bar.Max.y));
+    DumpDrawListBody(*w->DrawList);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpWindowScrollbar()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario window_scrollbar\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
+    // The first frame has no content size yet, so the bar only appears on the second.
+    for (int i = 0; i < 3; i++)
+        FrameScrollbarWindow(-1);
+    // With the content scrolled the grab moves down.
+    FrameScrollbarWindow(40);
+    FrameScrollbarWindow(40);
+}
+
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 static void DumpCmdOffsets()
 {
@@ -1602,6 +1645,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_icons") == 0)
     {
         DumpWindowIcons();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "window_scrollbar") == 0)
+    {
+        DumpWindowScrollbar();
         ImGui::DestroyContext();
         return 0;
     }

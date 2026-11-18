@@ -53,6 +53,7 @@ pub const SCENARIOS: &[&str] = &[
     "windows_order",
     "windows_move",
     "window_scroll",
+    "window_scrollbar",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -1866,6 +1867,78 @@ pub fn window_scroll_dump() -> String {
     out
 }
 
+/// The `window_scrollbar` scenario: a window whose content does not fit, so the vertical scrollbar
+/// appears and takes its width out of the interior. Drawing only — the mouse stays away, so the
+/// grab is neither hovered nor held and cannot be dragged yet.
+pub fn window_scrollbar_dump() -> String {
+    use oxidized_imgui::{Context, Vec2};
+
+    let mut ctx = Context::new();
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario window_scrollbar\n");
+
+    let frame = |ctx: &mut Context, out: &mut String, scroll_y: Option<f32>| {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+        ctx.io_mut().mouse_down[0] = false;
+        ctx.begin_frame();
+        if let Some(y) = scroll_y {
+            ctx.set_next_window_scroll(Vec2 { x: 0.0, y });
+        }
+        ctx.set_next_window_scrollbar(true);
+        ctx.begin_window(
+            "S",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        ctx.dummy(Vec2 { x: 100.0, y: 300.0 });
+        let window = ctx.window();
+        let (inner_min, inner_max) = window.inner_rect;
+        let border = 1.0;
+        let bar_min = Vec2 {
+            x: window.pos.x + window.size.x - border - if window.scrollbar_y { 14.0 } else { 0.0 },
+            y: inner_min.y + border,
+        };
+        let bar_max = Vec2 {
+            x: window.pos.x + window.size.x - border,
+            y: inner_max.y - border,
+        };
+        let text = format!(
+            "frame scrollbar {} scroll {:08x} max {:08x} inner {:08x} {:08x} {:08x} {:08x} bar {:08x} {:08x} {:08x} {:08x}\n",
+            window.scrollbar_y as u8,
+            window.scroll.y.to_bits(),
+            window.scroll_max.y.to_bits(),
+            inner_min.x.to_bits(),
+            inner_min.y.to_bits(),
+            inner_max.x.to_bits(),
+            inner_max.y.to_bits(),
+            bar_min.x.to_bits(),
+            bar_min.y.to_bits(),
+            bar_max.x.to_bits(),
+            bar_max.y.to_bits(),
+        );
+        let body = dump("window_scrollbar", ctx.draw_list());
+        ctx.end_window();
+        out.push_str(&text);
+        for line in body.lines().skip(2) {
+            out.push_str(line);
+            out.push('\n');
+        }
+        ctx.end_frame();
+    };
+
+    for _ in 0..3 {
+        frame(&mut ctx, &mut out, None);
+    }
+    for _ in 0..2 {
+        frame(&mut ctx, &mut out, Some(40.0));
+    }
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -1890,6 +1963,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "windows_order" => Some(windows_order_dump()),
         "windows_move" => Some(windows_move_dump()),
         "window_scroll" => Some(window_scroll_dump()),
+        "window_scrollbar" => Some(window_scrollbar_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),
