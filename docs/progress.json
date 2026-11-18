@@ -34,7 +34,7 @@
         { "id": "prim_rect", "label": "PrimRect con el UV del píxel blanco fijado", "weight": 1, "done": true, "evidence": "golden prim_rect" },
         { "id": "pixel_shapes", "label": "Formas alineadas a píxel: AddRectFilled sin redondeo y AddLineH", "weight": 1, "done": true, "evidence": "golden rect_filled y line_h" },
         { "id": "aa_shapes", "label": "Formas con antialiasing: rect redondeado, línea diagonal, círculo, bézier", "weight": 2, "done": false, "evidence": "" },
-        { "id": "text_draw", "label": "Texto dibujado en la lista", "weight": 1, "done": false, "evidence": "" },
+        { "id": "text_draw", "label": "Texto dibujado en la lista (geometría, sin UVs)", "weight": 1, "done": true, "evidence": "golden text_draw (geometría; UVs omitidos por no ser reproducibles)" },
         { "id": "cmd_split", "label": "Cortes de comando y recorte por comando", "weight": 1, "done": false, "evidence": "" }
       ]
     },

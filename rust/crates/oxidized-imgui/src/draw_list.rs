@@ -198,6 +198,84 @@ impl DrawList {
         }
     }
 
+    /// `ImDrawList::PrimQuadUV`: four vertices with explicit UVs and six indices.
+    // One argument per corner and per UV: the reference's signature, kept on purpose.
+    #[allow(clippy::too_many_arguments)]
+    pub fn prim_quad_uv(
+        &mut self,
+        a: Vec2,
+        b: Vec2,
+        c: Vec2,
+        d: Vec2,
+        uv_a: Vec2,
+        uv_b: Vec2,
+        uv_c: Vec2,
+        uv_d: Vec2,
+        col: ImU32,
+    ) {
+        let base = self.vtx_buffer.len() as u32;
+        for (pos, uv) in [(a, uv_a), (b, uv_b), (c, uv_c), (d, uv_d)] {
+            self.vtx_buffer.push(DrawVert { pos, uv, col });
+        }
+        for i in [0u32, 1, 2, 0, 2, 3] {
+            self.idx_buffer.push((base + i) as ImDrawIdx);
+        }
+        if let Some(cmd) = self.cmd_buffer.last_mut() {
+            cmd.elem_count += 6;
+        }
+    }
+
+    /// `ImFont::RenderText` for a single line without wrapping or fine clipping: one quad per
+    /// visible glyph, positioned by the glyph offsets and advanced by `AdvanceX`.
+    ///
+    /// The glyph data is pinned in [`crate::font::Font::reference_default`]; the atlas is not
+    /// built yet.
+    pub fn add_text(
+        &mut self,
+        font: &crate::font::Font,
+        size: f32,
+        pos: Vec2,
+        col: ImU32,
+        text: &str,
+    ) {
+        let scale = size / font.size;
+        let mut pen_x = pos.x;
+        for ch in text.chars() {
+            let Some(glyph) = font.glyph(ch) else {
+                continue;
+            };
+            let x0 = pen_x + glyph.offset[0] * scale;
+            let y0 = pos.y + glyph.offset[1] * scale;
+            let x1 = pen_x + glyph.offset[2] * scale;
+            let y1 = pos.y + glyph.offset[3] * scale;
+            if x1 > x0 && y1 > y0 {
+                self.prim_quad_uv(
+                    Vec2 { x: x0, y: y0 },
+                    Vec2 { x: x1, y: y0 },
+                    Vec2 { x: x1, y: y1 },
+                    Vec2 { x: x0, y: y1 },
+                    Vec2 {
+                        x: glyph.uv[0],
+                        y: glyph.uv[1],
+                    },
+                    Vec2 {
+                        x: glyph.uv[2],
+                        y: glyph.uv[1],
+                    },
+                    Vec2 {
+                        x: glyph.uv[2],
+                        y: glyph.uv[3],
+                    },
+                    Vec2 {
+                        x: glyph.uv[0],
+                        y: glyph.uv[3],
+                    },
+                    col,
+                );
+            }
+            pen_x += glyph.advance_x * scale;
+        }
+    }
     /// `ImDrawList::PrimRect`: a rectangle filled with the white pixel, no explicit UVs.
     pub fn prim_rect(&mut self, a: Vec2, c: Vec2, col: ImU32) {
         let uv = self.white_uv;

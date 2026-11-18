@@ -26,10 +26,8 @@ static void P(const char* key, ImVec2 v)
     printf("%s %08x %08x\n", key, Bits(v.x), Bits(v.y));
 }
 
-static void DumpDrawList(const char* scenario, const ImDrawList& list)
+static void DumpDrawListBody(const ImDrawList& list)
 {
-    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
-    printf("scenario %s\n", scenario);
     // The white-pixel UV comes from the font atlas: it is an input to the geometry, so the dump
     // records it and the Rust side pins the same value.
     printf("white_uv %08x %08x\n",
@@ -55,6 +53,13 @@ static void DumpDrawList(const char* scenario, const ImDrawList& list)
     printf("idx_count %d\n", list.IdxBuffer.Size);
     for (int i = 0; i < list.IdxBuffer.Size; i++)
         printf("idx %u\n", (unsigned int)list.IdxBuffer[i]);
+}
+
+static void DumpDrawList(const char* scenario, const ImDrawList& list)
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario %s\n", scenario);
+    DumpDrawListBody(list);
 }
 
 // window_layout: style, a fixed-size window, two items, a same-line item, and the remembered
@@ -212,7 +217,7 @@ static void DumpFontMetrics()
     printf("font size %08x ascent %08x descent %08x\n",
         Bits(baked->Size), Bits(baked->Ascent), Bits(baked->Descent));
 
-    const char glyphs[5] = { 'H', 'i', 'W', ' ', 'o' };
+    const char glyphs[5] = { 'H', 'i', 'e', 'l', 'o' };
     for (char c : glyphs)
     {
         ImFontGlyph* glyph = baked->FindGlyph((ImWchar)c);
@@ -282,6 +287,63 @@ static void DumpClipStack()
     }
 }
 
+// Text dump: same shape as a draw list dump but without UVs, which depend on the atlas packer and
+// are not reproducible across runs.
+static void DumpTextBody(const ImDrawList& list)
+{
+    printf("uv omitted: atlas packing is not reproducible across runs\n");
+    printf("cmd_count %d\n", list.CmdBuffer.Size);
+    for (int i = 0; i < list.CmdBuffer.Size; i++)
+    {
+        const ImDrawCmd& cmd = list.CmdBuffer[i];
+        printf("cmd %d clip %08x %08x %08x %08x elems %u\n", i,
+            Bits(cmd.ClipRect.x), Bits(cmd.ClipRect.y), Bits(cmd.ClipRect.z), Bits(cmd.ClipRect.w),
+            cmd.ElemCount);
+    }
+    printf("vtx_count %d\n", list.VtxBuffer.Size);
+    for (int i = 0; i < list.VtxBuffer.Size; i++)
+    {
+        const ImDrawVert& v = list.VtxBuffer[i];
+        printf("vtx %d pos %08x %08x col %08x\n", i, Bits(v.pos.x), Bits(v.pos.y), v.col);
+    }
+    printf("idx_count %d\n", list.IdxBuffer.Size);
+    for (int i = 0; i < list.IdxBuffer.Size; i++)
+        printf("idx %u\n", (unsigned int)list.IdxBuffer[i]);
+}
+
+// text_draw: two glyph quads from the default font, using the legacy atlas build.
+static void DumpTextDraw()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario text_draw\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    // The atlas layout depends on when (and in which order) glyphs are baked, so bake a fixed set
+    // before starting the frame. This makes the UVs reproducible and turns them into pinned inputs.
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[5] = { 'H', 'i', 'e', 'l', 'o' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+
+    ImGui::NewFrame();
+    {
+        ImDrawList list(ImGui::GetDrawListSharedData());
+        list._ResetForNewFrame();
+        list._SetPixelDensity(1.0f);
+        list.Flags = 0;
+        font->RenderText(&list, 13.0f, ImVec2(10.0f, 20.0f), IM_COL32(255, 255, 255, 255),
+            ImVec4(0.0f, 0.0f, 1280.0f, 720.0f), "Hi", NULL, 0.0f);
+        DumpTextBody(list);
+    }
+    ImGui::EndFrame();
+}
+
 // Explicit UVs: no atlas involved.
 static void ScenePrimRectUV(ImDrawList& list)
 {
@@ -334,6 +396,13 @@ int main(int argc, char** argv)
     }
 
     io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
+    if (strcmp(name, "text_draw") == 0)
+    {
+        DumpTextDraw();
+        ImGui::DestroyContext();
+        return 0;
+    }
 
     if (strcmp(name, "window_layout") == 0)
     {
