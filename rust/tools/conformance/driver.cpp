@@ -12,6 +12,9 @@
 #include <fcntl.h>
 #include <io.h>
 
+/// Optional path where a scenario can write the fixture the Rust side consumes.
+static const char* g_fixture_path = NULL;
+
 static const ImU32 COL = IM_COL32(0, 0, 255, 255);
 
 static unsigned int Bits(float f)
@@ -331,6 +334,25 @@ static void DumpTextDraw()
     for (char c : bake_order)
         baked->FindGlyph((ImWchar)c);
 
+    // The atlas coordinates are only stable inside this process, so the fixture the Rust side
+    // consumes is written by the same run that produced the golden.
+    if (g_fixture_path != NULL)
+    {
+        if (FILE* f = fopen(g_fixture_path, "wb"))
+        {
+            fprintf(f, "font size %08x ascent %08x descent %08x\n", Bits(baked->Size),
+                Bits(baked->Ascent), Bits(baked->Descent));
+            for (char c : bake_order)
+            {
+                ImFontGlyph* g = baked->FindGlyph((ImWchar)c);
+                fprintf(f, "g %d %08x %08x %08x %08x %08x %08x %08x %08x %08x\n", (int)c,
+                    Bits(g->AdvanceX), Bits(g->U0), Bits(g->V0), Bits(g->U1), Bits(g->V1),
+                    Bits(g->X0), Bits(g->Y0), Bits(g->X1), Bits(g->Y1));
+            }
+            fclose(f);
+        }
+    }
+
     ImGui::NewFrame();
     {
         ImDrawList list(ImGui::GetDrawListSharedData());
@@ -339,7 +361,7 @@ static void DumpTextDraw()
         list.Flags = 0;
         font->RenderText(&list, 13.0f, ImVec2(10.0f, 20.0f), IM_COL32(255, 255, 255, 255),
             ImVec4(0.0f, 0.0f, 1280.0f, 720.0f), "Hi", NULL, 0.0f);
-        DumpTextBody(list);
+        DumpDrawListBody(list);
     }
     ImGui::EndFrame();
 }
@@ -708,6 +730,9 @@ static void SceneLineH(ImDrawList& list)
 
 int main(int argc, char** argv)
 {
+    if (argc > 2)
+        g_fixture_path = argv[2];
+
     if (argc < 2)
     {
         fprintf(stderr, "usage: driver <scenario>\n");

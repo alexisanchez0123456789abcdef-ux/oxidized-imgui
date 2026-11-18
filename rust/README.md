@@ -19,7 +19,7 @@ instead of against our own expectations:
 | Mouse input | rounded position, delta, click/release from the down duration, double-click counter | `io_mouse_events` golden |
 | Keyboard input | queued events with duplicate filtering, down durations, `IsKeyPressed`, modifiers from `ImGuiMod_*` | `io_keyboard_events` golden |
 | Text measurement | `CalcTextSize` over a pinned advance table (the atlas is **not** built: see `font.rs`) | `font_metrics` golden |
-| Text geometry | glyph quads (positions, colours, indices) for a short string; **UVs are not compared** | `text_draw` golden |
+| Text | glyph quads including UVs, from the pinned glyph table written by the reference run | `text_draw` golden + `tests/fixtures/text_draw.glyphs.txt` |
 | Button | item rect from text metrics, hover, active, release-inside result | `button` golden |
 | Label, checkbox | text item rect; checkbox box from frame height plus inner spacing, toggling on release | `widgets_basic` golden |
 | Slider (float) | grab region (`GrabMinSize`, 2 px padding), click offset, drag ratio, 3-decimal rounding | `slider_basic` golden |

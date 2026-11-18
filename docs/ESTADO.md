@@ -2,9 +2,9 @@
 
 _Actualizado: 2026-11-18. Generado desde `docs/progress.json`: no editar a mano._
 
-## Reescritura a Rust: **37.8 %**
+## Reescritura a Rust: **38.4 %**
 
-Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 43.5 %.
+Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 44.0 %.
 
 Qué cuenta como hecho: solo lo que tiene una prueba que lo compara con el código C++ original.
 Un cambio de estado sin evidencia no sube el porcentaje.
@@ -14,7 +14,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 | Núcleo: contexto, IO, ventanas, identificadores, layout | 30 | 53 % |
 | Listas de dibujo y primitivas | 16 | 88 % |
 | Widgets | 22 | 27 % |
-| Fuentes y texto | 12 | 8 % |
+| Fuentes y texto | 13 | 15 % |
 | Docking y viewports | 10 | 0 % |
 | Backends y ejemplos | 8 | 0 % |
 | Infraestructura de verificación (no es la reescritura) | 10 | 100 % |
@@ -46,6 +46,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Botón: geometría, hover, estado activo y valor de retorno** — golden button
 - **Label y checkbox: rectángulo y alternancia** — golden widgets_basic
 - **Slider: región de agarre, arrastre y redondeo** — golden slider_basic
+- **UVs de texto con el atlas fijado por fixture** — golden text_draw con UVs + fixture text_draw.glyphs.txt
 - **Medida de texto (CalcTextSize) con tabla de avances fijada** — golden font_metrics
 - **Oráculo de constantes y layouts desde el C++** — rust/tools/oracle
 - **Comparador de draw lists con golden y prueba negativa** — rust/tools/conformance + tests/golden
