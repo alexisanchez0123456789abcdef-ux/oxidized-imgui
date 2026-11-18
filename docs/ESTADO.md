@@ -2,16 +2,16 @@
 
 _Actualizado: 2026-11-18. Generado desde `docs/progress.json`: no editar a mano._
 
-## Reescritura a Rust: **45.0 %**
+## Reescritura a Rust: **45.5 %**
 
-Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 49.6 %.
+Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 50.0 %.
 
 Qué cuenta como hecho: solo lo que tiene una prueba que lo compara con el código C++ original.
 Un cambio de estado sin evidencia no sube el porcentaje.
 
 | Área | Peso | Avance |
 | --- | ---: | ---: |
-| Núcleo: contexto, IO, ventanas, identificadores, layout | 37 | 62 % |
+| Núcleo: contexto, IO, ventanas, identificadores, layout | 38 | 63 % |
 | Listas de dibujo y primitivas | 17 | 88 % |
 | Widgets | 26 | 38 % |
 | Fuentes y texto | 13 | 15 % |
@@ -31,6 +31,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Fondo de ventana y orden del recorte** — golden window_bg
 - **Borde de ventana (marco alineado de dos anillos)** — golden window_border
 - **Barra de título: banda, texto y orden de dibujo** — golden window_title
+- **Iconos de ventana: flecha de colapso y cruz de cierre** — golden window_icons (flecha, cruz y texto desplazado por los iconos)
 - **Desplazamiento de índices por comando** — golden cmd_offsets
 - **Cierre de ventana: recorte bajo la banda y limpieza de comandos** — goldens window_bg y window_title + sonda de comandos
 - **Escena completa: ventana con título y botón, comparada entera** — golden scene_window_button

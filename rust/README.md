@@ -27,6 +27,7 @@ instead of against our own expectations:
 | Window background | background rect before the window clip, with empty trailing commands dropped at close | `window_bg` golden |
 | Window border | aligned two-ring frame, drawn only when the window has a background | `window_border` golden |
 | Title bar | band below the window top, title text inset by border plus padding, drawn after the border | `window_title` golden |
+| Window icons | collapse arrow (soft-join stroke with AA ends) and close cross (two lines), drawn between the border and the title, which shifts right to make room | `window_icons` golden |
 | Command offsets | each command carries the index offset of the buffer when it opened | `cmd_offsets` golden |
 | Window close | clip starts below the title band; the empty command from the clip push is dropped and the pop adds one only after geometry | `window_bg`, `window_title` goldens |
 | Full scene | titled window with a button: background, band, border, title, fill, label and the three commands | `scene_window_button` golden |

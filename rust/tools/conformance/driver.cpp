@@ -916,6 +916,102 @@ static void DumpAaStrokes()
     ImGui::EndFrame();
 }
 
+// Writes the glyph table and the atlas line rows a window icon needs: the title is text, and both
+// the collapse arrow and the close cross are strokes that sample the line textures.
+static void WriteWindowIconsFixture(ImFont* font, const char* bake_order, int bake_count)
+{
+    if (g_fixture_path == NULL)
+        return;
+    FILE* f = fopen(g_fixture_path, "wb");
+    if (f == NULL)
+        return;
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    fprintf(f, "font size %08x ascent %08x descent %08x\n", Bits(baked->Size), Bits(baked->Ascent),
+        Bits(baked->Descent));
+    for (int i = 0; i < bake_count; i++)
+    {
+        ImFontGlyph* g = baked->FindGlyph((ImWchar)bake_order[i]);
+        fprintf(f, "g %d %08x %08x %08x %08x %08x %08x %08x %08x %08x\n", (int)bake_order[i],
+            Bits(g->AdvanceX), Bits(g->U0), Bits(g->V0), Bits(g->U1), Bits(g->V1),
+            Bits(g->X0), Bits(g->Y0), Bits(g->X1), Bits(g->Y1));
+    }
+    ImDrawListSharedData* sd = ImGui::GetDrawListSharedData();
+    const int count = IM_DRAWLIST_TEX_LINES_WIDTH_MAX + 1 + IM_DRAWLIST_TEX_LINES_DETAILED_WIDTH_COUNT;
+    for (int n = 0; n < count; n++)
+    {
+        const ImVec4& e = sd->TexUvLines[n];
+        fprintf(f, "line %d %08x %08x %08x %08x\n", n, Bits(e.x), Bits(e.y), Bits(e.z), Bits(e.w));
+    }
+    fclose(f);
+}
+
+// One frame of the icon window. The window does not know its title bar height during its first
+// frame, so the scene settles before anything is dumped.
+static void FrameWindowIcons(ImDrawList** out_list, bool diagnostics)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    static bool open = true;
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoScrollbar;
+    ImGui::Begin("W", &open, flags);
+    if (out_list != NULL)
+        *out_list = ImGui::GetWindowDrawList();
+    if (diagnostics)
+    {
+        ImGuiWindow* window = ImGui::GetCurrentWindow();
+        ImRect title_bar = window->TitleBarRect();
+        fprintf(stderr, "diag title_h %08x rect %08x %08x %08x %08x\n", Bits(window->TitleBarHeight),
+            Bits(title_bar.Min.x), Bits(title_bar.Min.y), Bits(title_bar.Max.x), Bits(title_bar.Max.y));
+        fprintf(stderr, "diag font_size %08x frame_pad %08x %08x inner %08x menu_pos %d\n",
+            Bits(ImGui::GetFontSize()), Bits(ImGui::GetStyle().FramePadding.x),
+            Bits(ImGui::GetStyle().FramePadding.y), Bits(ImGui::GetStyle().ItemInnerSpacing.x),
+            (int)ImGui::GetStyle().WindowMenuButtonPosition);
+        fprintf(stderr, "diag title_align %08x %08x\n", Bits(ImGui::GetStyle().WindowTitleAlign.x),
+            Bits(ImGui::GetStyle().WindowTitleAlign.y));
+        const ImVec2 text_size = ImGui::CalcTextSize("W", NULL, true);
+        fprintf(stderr, "diag text_size %08x %08x\n", Bits(text_size.x), Bits(text_size.y));
+    }
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+// window_icons: a titled window that carries both window icons (a close button because p_open is
+// not null, a collapse arrow because NoCollapse is not set).
+static void DumpWindowIcons()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario window_icons\n");
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[6] = { 'W', 'H', 'i', 'e', 'l', 'o' };
+    for (char ch : bake_order)
+        baked->FindGlyph((ImWchar)ch);
+
+    const int settle_frames = 12;
+    for (int i = 0; i < settle_frames; i++)
+        FrameWindowIcons(NULL, false);
+    // A frame to wire the atlas tables, then the fixture and the frame that is dumped.
+    FrameWindowIcons(NULL, false);
+    WriteWindowIconsFixture(font, bake_order, 6);
+
+    ImDrawList* dl = NULL;
+    FrameWindowIcons(&dl, true);
+    if (dl != NULL)
+        DumpDrawListBody(*dl);
+}
+
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 static void DumpCmdOffsets()
 {
@@ -1157,6 +1253,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "button_states") == 0)
     {
         DumpButtonStates();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "window_icons") == 0)
+    {
+        DumpWindowIcons();
         ImGui::DestroyContext();
         return 0;
     }

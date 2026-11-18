@@ -52,6 +52,12 @@ pub mod draw_flags {
     pub const STROKE_MASK: u32 = 7 << 17;
 }
 
+/// The reference writes `0.7071f` literally when it needs a diagonal. That is **not** an exact
+/// `1/sqrt(2)`, and the difference shows up in the low bits of the geometry, so it stays as the
+/// reference wrote it instead of a "better" constant.
+#[allow(clippy::approx_constant)]
+pub(crate) const REF_0_7071: f32 = 0.7071;
+
 /// `_GetStrokePos`: the stroke position a call asked for, or the caller's default.
 fn stroke_pos(flags: u32, default: u32) -> u32 {
     if flags & draw_flags::STROKE_MASK != 0 {
@@ -60,6 +66,14 @@ fn stroke_pos(flags: u32, default: u32) -> u32 {
         default
     }
 }
+
+/// `ImDrawListSharedData::InitialDrawFlags` for the default style: what a window's draw list starts
+/// each frame with. Anti-aliased fills and lines, textured rounded corners; **not** anti-aliased
+/// line ends, which the default style leaves off.
+pub const WINDOW_DRAW_FLAGS: u32 = draw_flags::AAFILL
+    | draw_flags::AALINES
+    | draw_flags::USE_TEX_FOR_ROUND_CORNERS
+    | draw_flags::ALLOW_TEX_FOR_ROUND_CORNERS;
 
 /// `ImAlphaMultiply`: scales the alpha of a colour, used for sub-pixel thick strokes.
 fn alpha_multiply(col: ImU32, alpha_mul: f32) -> ImU32 {
@@ -718,6 +732,82 @@ impl DrawList {
     /// `ImDrawList::AddPolyline`, which is `_AddPolyline` with no clamp on the inner stroke.
     pub fn add_polyline(&mut self, points: &[Vec2], col: ImU32, thickness: f32, flags: u32) {
         self.add_polyline_max(points, col, thickness, flags, f32::MAX);
+    }
+
+    /// `ImGui::RenderArrowEx`: the triangle an arrow button and a window icon draw.
+    ///
+    /// `cos_a`/`sin_a` are the direction of the arrow (`g_ImGuiDirCosSin`), `scale` multiplies the
+    /// radius and `arrow_th` is the stroke weight relative to it: `0.0` fills the triangle instead
+    /// of stroking it. `font_size` is `ImDrawListSharedData::FontSize`, the radius reference.
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_arrow(
+        &mut self,
+        pos: Vec2,
+        col: ImU32,
+        cos_a: f32,
+        sin_a: f32,
+        scale: f32,
+        font_size: f32,
+        arrow_sizes: Vec2,
+        arrow_th: f32,
+    ) {
+        let is_fill = arrow_th <= 0.0;
+        let r = font_size * 0.50 * scale;
+        let thickness = if is_fill {
+            0.0
+        } else {
+            // `IM_ROUND(ImClamp(r * arrow_th, 1.0f, r * 0.5f))`.
+            let clamped = (r * arrow_th).max(1.0).min(r * 0.5);
+            ((clamped + 0.5) as i32) as f32
+        };
+
+        // Bias so the shape looks centred in its box.
+        let bias = if is_fill {
+            r * 0.05
+        } else {
+            thickness * 0.8 * REF_0_7071
+        };
+        let center = Vec2 {
+            x: pos.x + r + bias * cos_a,
+            y: pos.y + r + bias * sin_a,
+        };
+
+        let arrow_h = arrow_sizes.y * r;
+        let arrow_w = arrow_sizes.x * r;
+        let mut p = [
+            Vec2 {
+                x: center.x - arrow_h * cos_a - arrow_w * -sin_a,
+                y: center.y - arrow_h * sin_a - arrow_w * cos_a,
+            },
+            Vec2 {
+                x: center.x + arrow_h * cos_a,
+                y: center.y + arrow_h * sin_a,
+            },
+            Vec2 {
+                x: center.x - arrow_h * cos_a + arrow_w * -sin_a,
+                y: center.y - arrow_h * sin_a + arrow_w * cos_a,
+            },
+        ];
+
+        // Pixel align when the arrow points at a right angle.
+        let cross = cos_a * sin_a;
+        if is_fill && (-f32::EPSILON..=f32::EPSILON).contains(&cross) {
+            for point in &mut p {
+                point.x = ((point.x + 0.5) as i32) as f32;
+                point.y = ((point.y + 0.5) as i32) as f32;
+            }
+        }
+
+        if is_fill {
+            self.add_convex_poly_filled_aa(&p, col);
+        } else {
+            self.add_polyline(
+                &p,
+                col,
+                thickness,
+                draw_flags::STROKE_INSIDE | draw_flags::AALINE_ENDS,
+            );
+        }
     }
 
     /// `ImDrawList::_AddLine`: one segment, selectable cap ends and stroke position.
@@ -1501,7 +1591,16 @@ impl DrawList {
         } else {
             WIDTH_MAX - 1
         };
-        let entry = self.tex_uv_lines[texture_idx as usize];
+        let entry = *self
+            .tex_uv_lines
+            .get(texture_idx as usize)
+            .unwrap_or_else(|| {
+                panic!(
+                    "the atlas line-texture table is not pinned (index {texture_idx}); \
+                 a stroked primitive with anti-aliased lines needs it, see \
+                 Context::set_line_uv_lines"
+                )
+            });
         (
             Vec2 {
                 x: entry[0],
