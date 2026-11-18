@@ -3,49 +3,54 @@
 Pre-alpha. This directory is where the implementation lives; everything outside it is upstream
 Dear ImGui, kept unmodified as the reference.
 
-## Verified so far
+## Verified against the reference
 
-Nothing here is "done"; these are the pieces that already have a test proving them against the
-C++ reference instead of against our own expectations:
+Nothing here is "done"; these are the pieces that have a test proving them against the C++ tree
+instead of against our own expectations:
 
-| Area | Check | Test |
+| Area | Check | Where |
 | --- | --- | --- |
 | `ImHashStr` / `ImHashData` | CRC32c, seeding, `###` reset: same 32-bit values as `imgui.cpp` | `id::tests::hashes_match_oracle` |
-| `ImDrawVert` | 20 bytes, `pos`/`uv`/`col` at 0/8/16 | `draw_list::tests::layouts_match_reference` |
-| `ImDrawCmd` | 72 bytes, `ClipRect`/`TexRef`/`VtxOffset`/`IdxOffset`/`ElemCount`/`UserCallback` at 0/16/32/36/40/48 | same |
-| ID stack | `get_id`, `push_id`, `pop_id` seed like the reference | `context::tests::ids_nest_like_the_reference` |
+| `ImDrawVert` / `ImDrawCmd` / `TexRef` | same size and field offsets as the C++ compiler | `draw_list::tests::layouts_match_reference` |
+| Identifier stack | `get_id`, `push_id`, `pop_id` seed like the reference | `context::tests::ids_nest_like_the_reference` |
+| `PrimRectUV` | identical draw-list dump, byte for byte | `oxidized-imgui-conformance/tests/golden.rs` |
 
-Provisional, **not** parity-checked: `DrawList::add_rect_filled` geometry. Producing the reference's
-vertices and indices for the same calls is the M1 exit test.
+Provisional, **not** parity-checked: everything else, including `add_rect_filled` beyond the plain
+quad (rounding, anti-aliasing, sub-pixel paths).
 
 ## Commands
 
 ```sh
-cargo test          # the contract above
+cargo test          # unit tests + golden dump comparison
 cargo clippy --all-targets -- -D warnings
-cargo fmt --check
+cargo fmt --all -- --check
 ```
 
-## The oracle
+## The oracle (constants and layout)
 
-`tools/oracle/build.bat` compiles the upstream `imgui.cpp` and friends with MSVC and runs a probe
-that prints version, struct sizes/offsets and hash values. Its output is what the Rust tests
-assert. When you add a case, add it to the probe first and let the reference decide the expected
-value:
+`tools/oracle/build.bat` compiles `imgui.cpp` and friends with MSVC and runs a probe that prints the
+version, struct sizes and offsets, and hash values. Its output is what the Rust unit tests assert.
+When you add a case, add it to the probe first and let the reference decide the expected value.
 
-```sh
-tools\oracle\build.bat
+## The conformance harness (geometry)
+
+`tools/conformance/driver.cpp` runs a scenario against the reference and prints a deterministic
+dump: floats as raw bit patterns, LF only, one line per vertex and index. The Rust side must
+reproduce it exactly.
+
+```powershell
+# builds the driver, regenerates the golden from the reference, and proves the
+# comparison can fail (a one-bit mutation must be detected)
+rust\tools\conformance\gen-golden.ps1
+
+cargo test -p oxidized-imgui-conformance   # compares against the stored golden
 ```
 
-Expected first lines (x86_64 MSVC, 1.93.1):
+The golden files are committed with `-text` so no checkout can convert their line endings. CI runs
+the Rust comparison only; the C++ driver needs Windows and the Visual Studio C++ toolchain, and is
+run locally when a scenario is added or the upstream pin changes.
 
-```
-version 1.93.1 WIP 19303
-size ImVec2 8
-size ImDrawVert 20
-size ImDrawCmd 72
-```
-
-The probe is a first step of the conformance harness, not the whole thing: it covers constants and
-layout. Comparing draw lists from the same widget script needs a scriptable driver on both sides
-and comes with M1.
+Adding a scenario means, in this order: add it to `driver.cpp`, add the same calls to
+`scenarios` in `oxidized-imgui-conformance`, regenerate the golden, and only then make the Rust
+match. If the Rust already produces the golden without changes, the scenario proves less than it
+looks.

@@ -1,0 +1,16 @@
+[package]
+name = "oxidized-imgui-conformance"
+description = "Scenario dumps compared against the Dear ImGui C++ reference."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+oxidized-imgui = { path = "../oxidized-imgui" }
+
+[[bin]]
+name = "conformance-dump"
+path = "src/main.rs"
