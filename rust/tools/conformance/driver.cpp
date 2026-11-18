@@ -1156,6 +1156,94 @@ static void DumpWindowIconsDrag()
     section("after_release", 0.0f, 0.0f, false);
 }
 
+// windows_order: two overlapping titled windows, and what a click does to the order they are
+// rendered in. The dump is the renderer's view: the list of ImDrawList the backend would draw, in
+// order, with the hovered window beside it.
+static void FrameTwoWindows(float mx, float my, bool down)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = down;
+    ImGui::NewFrame();
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar;
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("A", NULL, flags);
+    ImGui::End();
+    ImGui::SetNextWindowPos(ImVec2(110.0f, 100.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("B", NULL, flags);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpWindowOrderFrame(int frame, const char* tag)
+{
+    ImGui::Render();
+    ImDrawData* dd = ImGui::GetDrawData();
+    ImGuiContext& g = *GImGui;
+    const char* hovered = g.HoveredWindow ? g.HoveredWindow->Name : "-";
+    printf("frame %d %s hovered %s lists %d\n", frame, tag, hovered, dd->CmdListsCount);
+    for (int i = 0; i < dd->CmdListsCount; i++)
+    {
+        const ImDrawList* list = dd->CmdLists[i];
+        // The list has no name; identify it by the window whose list pointer it is.
+        const char* name = "?";
+        for (int w = 0; w < g.Windows.Size; w++)
+            if (g.Windows[w]->DrawList == list)
+                name = g.Windows[w]->Name;
+        printf("list %d %s\n", i, name);
+        DumpDrawListBody(*list);
+    }
+}
+
+static void DumpWindowsOrder()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario windows_order\n");
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[2] = { 'A', 'B' };
+    for (char ch : bake_order)
+        baked->FindGlyph((ImWchar)ch);
+
+    // A = (60,60)-(360,260), B = (110,100)-(410,300).
+    for (int i = 0; i < 6; i++)
+        FrameTwoWindows(0.0f, 0.0f, false);
+    WriteGlyphFixture(font, bake_order, 2);
+    int frame = 0;
+
+    FrameTwoWindows(0.0f, 0.0f, false);
+    DumpWindowOrderFrame(frame++, "idle");
+    // Inside A only.
+    FrameTwoWindows(70.0f, 70.0f, true);
+    DumpWindowOrderFrame(frame++, "press_a_only");
+    FrameTwoWindows(70.0f, 70.0f, false);
+    DumpWindowOrderFrame(frame++, "release_a_only");
+    FrameTwoWindows(0.0f, 0.0f, false);
+    DumpWindowOrderFrame(frame++, "idle_a_on_top");
+    // Inside both: the top-most window takes the click and stays on top.
+    FrameTwoWindows(200.0f, 150.0f, true);
+    DumpWindowOrderFrame(frame++, "press_both");
+    FrameTwoWindows(200.0f, 150.0f, false);
+    DumpWindowOrderFrame(frame++, "release_both");
+    // Inside B only: B comes to the front.
+    FrameTwoWindows(400.0f, 290.0f, true);
+    DumpWindowOrderFrame(frame++, "press_b_only");
+    FrameTwoWindows(400.0f, 290.0f, false);
+    DumpWindowOrderFrame(frame++, "release_b_only");
+    FrameTwoWindows(0.0f, 0.0f, false);
+    DumpWindowOrderFrame(frame++, "idle_b_on_top");
+}
+
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 static void DumpCmdOffsets()
 {
@@ -1404,6 +1492,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_icons") == 0)
     {
         DumpWindowIcons();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "windows_order") == 0)
+    {
+        DumpWindowsOrder();
         ImGui::DestroyContext();
         return 0;
     }

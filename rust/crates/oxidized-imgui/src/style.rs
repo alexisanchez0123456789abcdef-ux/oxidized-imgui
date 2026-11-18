@@ -24,6 +24,7 @@ pub enum Col {
     Border,
     Separator,
     Header,
+    TitleBg,
     TitleBgActive,
     TitleBgCollapsed,
     HeaderHovered,
@@ -31,7 +32,7 @@ pub enum Col {
 }
 
 impl Col {
-    pub const COUNT: usize = 19;
+    pub const COUNT: usize = 20;
 
     pub(crate) fn index(self) -> usize {
         match self {
@@ -52,8 +53,9 @@ impl Col {
             Col::Header => 14,
             Col::HeaderHovered => 15,
             Col::HeaderActive => 16,
-            Col::TitleBgActive => 17,
-            Col::TitleBgCollapsed => 18,
+            Col::TitleBg => 17,
+            Col::TitleBgActive => 18,
+            Col::TitleBgCollapsed => 19,
         }
     }
 }
@@ -141,6 +143,7 @@ impl Default for Style {
                 0x4FFA_9642, // Header
                 0xCCFA_9642, // HeaderHovered
                 0xFFFA_9642, // HeaderActive
+                0xFF0A_0A0A, // TitleBg (pinned from the reference)
                 0xFF7A_4A29, // TitleBgActive (pinned from the reference)
                 0x8200_0000, // TitleBgCollapsed (IM_COL32(0, 0, 0, 130), pinned)
             ],

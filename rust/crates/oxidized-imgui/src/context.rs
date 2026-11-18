@@ -72,6 +72,20 @@ pub struct Context {
     windows: Vec<Window>,
     /// (name, pos, size_full, collapsed, want_collapse_toggle) per window, between frames.
     remembered: Vec<(String, Vec2, Vec2, bool, bool)>,
+    /// `g.Windows`, back to front: the order the lists are rendered in. It survives frames.
+    display_order: Vec<String>,
+    /// Names of the windows that were submitted on the previous frame (`WasActive`).
+    last_frame_windows: Vec<String>,
+    /// The lists closed this frame, by name, in the order their windows were opened.
+    frame_lists: Vec<(String, crate::draw_list::DrawList)>,
+    /// The list of the last window that closed, so `draw_list()` still answers outside a window.
+    last_list: crate::draw_list::DrawList,
+    /// `g.HoveredWindow`: the top-most window under the mouse, recomputed each frame.
+    hovered_window: Option<String>,
+    /// `g.NavWindow` as far as the port needs it: the window whose title bar is highlighted.
+    focused_window: Option<String>,
+    /// `g.HoveredId`: the widget under the mouse, which blocks the click-to-raise.
+    hovered_id: Option<ImGuiID>,
     active_id: Option<ImGuiID>,
     /// `ActiveIdClickOffset`: where inside the window the move drag started.
     active_click_offset: Vec2,
@@ -98,6 +112,13 @@ impl Default for Context {
             time: 0.0,
             windows: Vec::new(),
             remembered: Vec::new(),
+            display_order: Vec::new(),
+            last_frame_windows: Vec::new(),
+            frame_lists: Vec::new(),
+            last_list: crate::draw_list::DrawList::new(),
+            hovered_window: None,
+            focused_window: None,
+            hovered_id: None,
             active_id: None,
             active_click_offset: Vec2::default(),
             moving_window: None,
@@ -132,19 +153,83 @@ impl Context {
         self.frame_count += 1;
         // A window's draw list is not a bare list: the reference gives it `InitialDrawFlags`,
         // which turn on anti-aliased fills, lines and (textured) corners.
-        let mut draw_list = crate::draw_list::DrawList::new();
-        draw_list.flags = crate::draw_list::WINDOW_DRAW_FLAGS;
-        // `_FringeScale` at pixel density 1: the window list is not created bare, it is re-scaled
-        // every frame from the current density.
-        draw_list.fringe_scale = 1.0;
-        draw_list.tex_uv_lines.clone_from(&self.line_uv_lines);
-        self.draw_list = draw_list;
+        self.draw_list = self.new_window_draw_list();
+        self.frame_lists.clear();
+        self.hovered_id = None;
         self.time += self.io.delta_time as f64;
         self.update_keyboard_inputs();
         self.update_mouse_inputs();
+        self.update_hovered_window();
         // `UpdateMouseMovingWindowNewFrame`: the window being dragged follows the mouse, and the
         // drag ends the moment the button comes up.
         self.update_mouse_moving_window_new_frame();
+    }
+
+    /// `FindHoveredWindowEx` for top-level windows: walk the display order from the front and take
+    /// the first window that was active last frame and whose rectangle contains the mouse.
+    ///
+    /// A window being dragged is hovered by definition, which is what the reference does too.
+    fn update_hovered_window(&mut self) {
+        if let Some(moving) = &self.moving_window {
+            self.hovered_window = Some(moving.clone());
+            return;
+        }
+        let Some(mouse) = self.io.mouse_pos else {
+            self.hovered_window = None;
+            return;
+        };
+        let mut found = None;
+        for name in self.display_order.iter().rev() {
+            if !self.last_frame_windows.contains(name) {
+                continue;
+            }
+            let Some((_, pos, size_full, collapsed, _)) =
+                self.remembered.iter().find(|(known, ..)| known == name)
+            else {
+                continue;
+            };
+            let height = if *collapsed {
+                self.frame_height()
+            } else {
+                size_full.y
+            };
+            if mouse.x >= pos.x
+                && mouse.x < pos.x + size_full.x
+                && mouse.y >= pos.y
+                && mouse.y < pos.y + height
+            {
+                found = Some(name.clone());
+                break;
+            }
+        }
+        self.hovered_window = found;
+    }
+
+    /// The window the mouse is over, as `ImGui::GetHoveredWindow` would report it.
+    pub fn hovered_window_name(&self) -> Option<&str> {
+        self.hovered_window.as_deref()
+    }
+
+    /// `g.Windows` order, back to front: the order the lists are drawn in.
+    pub fn display_order(&self) -> &[String] {
+        &self.display_order
+    }
+
+    /// `ImGui::Render` + `ImGui::GetDrawData`: the draw lists of the frame in display order.
+    ///
+    /// A window that drew nothing is left out, exactly like `AddDrawListToDrawDataEx` does.
+    pub fn render_lists(&self) -> Vec<(String, crate::draw_list::DrawList)> {
+        let mut out = Vec::new();
+        for name in &self.display_order {
+            let Some((_, list)) = self.frame_lists.iter().find(|(known, _)| known == name) else {
+                continue;
+            };
+            if list.is_empty() {
+                continue;
+            }
+            out.push((name.clone(), list.clone()));
+        }
+        out
     }
 
     /// `ImGui::UpdateMouseMovingWindowNewFrame`: while `g.MovingWindow` is set and the mouse is
@@ -180,9 +265,6 @@ impl Context {
         self.line_uv_lines = table;
     }
 
-    /// Ends a frame.
-    pub fn end_frame(&mut self) {}
-
     /// `ImGuiIO` for reading the computed state.
     pub fn io(&self) -> &Io {
         &self.io
@@ -199,9 +281,13 @@ impl Context {
         self.font = font;
     }
 
-    /// The draw list for the current frame.
+    /// The draw list of the open window, or of the last window that closed in this frame.
     pub fn draw_list(&self) -> &crate::draw_list::DrawList {
-        &self.draw_list
+        if self.windows.is_empty() {
+            &self.last_list
+        } else {
+            &self.draw_list
+        }
     }
 
     pub fn time(&self) -> f64 {
@@ -355,6 +441,16 @@ impl Context {
         self.id_stack.len()
     }
 
+    /// A fresh draw list with the flags and atlas tables a window's list starts with.
+    fn new_window_draw_list(&self) -> crate::draw_list::DrawList {
+        let mut draw_list = crate::draw_list::DrawList::new();
+        draw_list.flags = crate::draw_list::WINDOW_DRAW_FLAGS;
+        // `_FringeScale` at pixel density 1.
+        draw_list.fringe_scale = 1.0;
+        draw_list.tex_uv_lines.clone_from(&self.line_uv_lines);
+        draw_list
+    }
+
     /// `ImGui::Begin` with `SetNextWindowPos`/`SetNextWindowSize` already applied.
     ///
     /// `None` keeps the position or size the window had in a previous frame, as the reference does.
@@ -483,6 +579,15 @@ impl Context {
             ),
         };
 
+        // Each window draws into its own list for the frame.
+        self.draw_list = self.new_window_draw_list();
+        // A window that has never been seen goes on top of the display order and takes the focus;
+        // an existing one keeps its place until something raises it.
+        if !self.display_order.iter().any(|known| known == name) {
+            self.display_order.push(name.to_string());
+            self.focused_window = Some(name.to_string());
+        }
+
         // The arrow asks for the toggle; Begin applies it at the start of the next frame.
         if opts.collapsible && want_collapse_toggle {
             collapsed = !collapsed;
@@ -562,7 +667,7 @@ impl Context {
                         x: pos.x + size.x,
                         y: pos.y + title_height,
                     },
-                    self.style.color_u32(crate::style::Col::TitleBgActive),
+                    self.title_bar_color(name),
                 );
             }
 
@@ -849,6 +954,9 @@ impl Context {
         let hovered = self.icon_hovered(min, button_sz, window_pos, window_size)
             && (self.active_id.is_none() || self.active_id == Some(id));
 
+        if hovered {
+            self.hovered_id = Some(id);
+        }
         if hovered && self.io.mouse_clicked[0] && self.active_id != Some(id) {
             self.active_id = Some(id);
         }
@@ -921,6 +1029,50 @@ impl Context {
                 Some(slot) => *slot = entry,
                 None => self.remembered.push(entry),
             }
+            // The frame's list for this window, kept for `render_lists`.
+            let list = core::mem::take(&mut self.draw_list);
+            self.frame_lists.push((window.name.clone(), list.clone()));
+            self.last_list = list;
+        }
+    }
+
+    /// `ImGui::EndFrame`: what the reference does once every window has been submitted.
+    ///
+    /// A left click on a window's empty space raises it. The raise happens here, before the frame
+    /// is rendered, which is why the click's own frame already draws the window on top.
+    pub fn end_frame(&mut self) {
+        // `WasActive` for the next frame's hover search.
+        self.last_frame_windows = self
+            .frame_lists
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect();
+        // `UpdateMouseMovingWindowEndFrame` bails out while an item owns the mouse.
+        if self.active_id.is_some() || self.hovered_id.is_some() {
+            return;
+        }
+        if !self.io.mouse_clicked[0] {
+            return;
+        }
+        let Some(hovered) = self.hovered_window.clone() else {
+            return;
+        };
+        // `FocusWindow`: the window moves to the end of the display order.
+        if let Some(index) = self.display_order.iter().position(|name| *name == hovered) {
+            let name = self.display_order.remove(index);
+            self.display_order.push(name);
+        }
+        self.focused_window = Some(hovered);
+    }
+
+    /// `GetColorU32(title_bar_is_highlight ? ImGuiCol_TitleBgActive : ImGuiCol_TitleBg)`: the
+    /// focused window's bar stands out. Only the focused-window part of `title_bar_is_highlight`
+    /// is modelled.
+    fn title_bar_color(&self, name: &str) -> u32 {
+        if self.focused_window.as_deref() == Some(name) {
+            self.style.color_u32(crate::style::Col::TitleBgActive)
+        } else {
+            self.style.color_u32(crate::style::Col::TitleBg)
         }
     }
 
@@ -1038,6 +1190,9 @@ impl Context {
                 .map(|m| m.x >= min.x && m.x < max.x && m.y >= min.y && m.y < max.y)
                 .unwrap_or(false);
 
+        if hovered {
+            self.hovered_id = Some(id);
+        }
         if hovered && self.io.mouse_clicked[0] {
             self.active_id = Some(id);
         }
@@ -1158,6 +1313,9 @@ impl Context {
                 })
                 .unwrap_or(false);
 
+        if hovered {
+            self.hovered_id = Some(id);
+        }
         if hovered && self.io.mouse_clicked[0] {
             self.active_id = Some(id);
             self.slider_just_activated = true;
