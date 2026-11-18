@@ -19,7 +19,7 @@
         { "id": "io_keyboard", "label": "Teclado: cola de eventos, duplicados, duraciones y modificadores", "weight": 2, "done": true, "evidence": "golden io_keyboard_events" },
         { "id": "windows_stack", "label": "Pila de ventanas: colapso, scroll, foco, orden, auto-tamaño", "weight": 4, "done": false, "evidence": "" },
         { "id": "layout_full", "label": "Layout completo: wrap, columnas, alineación, grupos", "weight": 4, "done": false, "evidence": "" },
-        { "id": "clip", "label": "Pila de recorte", "weight": 2, "done": false, "evidence": "" },
+        { "id": "clip", "label": "Pila de recorte y cortes de comando", "weight": 2, "done": true, "evidence": "golden clip_stack" },
         { "id": "settings", "label": "Persistencia de ajustes (.ini)", "weight": 2, "done": false, "evidence": "" }
       ]
     },

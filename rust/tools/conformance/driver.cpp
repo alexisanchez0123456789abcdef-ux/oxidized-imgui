@@ -233,6 +233,55 @@ static void DumpFontMetrics()
     }
 }
 
+static void DumpList(const char* name, const ImDrawList& list)
+{
+    printf("%s cmds %d vtx %d idx %d\n", name, list.CmdBuffer.Size, list.VtxBuffer.Size, list.IdxBuffer.Size);
+    for (int i = 0; i < list.CmdBuffer.Size; i++)
+    {
+        const ImDrawCmd& cmd = list.CmdBuffer[i];
+        printf("  cmd %d clip %08x %08x %08x %08x elems %u\n", i,
+            Bits(cmd.ClipRect.x), Bits(cmd.ClipRect.y), Bits(cmd.ClipRect.z), Bits(cmd.ClipRect.w),
+            cmd.ElemCount);
+    }
+}
+
+// clip_stack: the clip stack of a draw list and the command splits it causes.
+static void DumpClipStack()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario clip_stack\n");
+
+    ImDrawListSharedData* sd = ImGui::GetDrawListSharedData();
+    {
+        ImDrawList list(sd);
+        list._ResetForNewFrame();
+        list._SetPixelDensity(1.0f);
+        list.Flags = 0;
+        list.PushClipRect(ImVec2(70.0f, 70.0f), ImVec2(170.0f, 170.0f), false);
+        list.PrimReserve(6, 4);
+        list.PrimRect(ImVec2(60.0f, 60.0f), ImVec2(200.0f, 200.0f), COL);
+        list.PopClipRect();
+        list.PrimReserve(6, 4);
+        list.PrimRect(ImVec2(210.0f, 210.0f), ImVec2(250.0f, 250.0f), COL);
+        DumpList("clip_simple", list);
+    }
+    {
+        ImDrawList list(sd);
+        list._ResetForNewFrame();
+        list._SetPixelDensity(1.0f);
+        list.Flags = 0;
+        list.PushClipRect(ImVec2(60.0f, 60.0f), ImVec2(200.0f, 200.0f), false);
+        list.PushClipRect(ImVec2(70.0f, 70.0f), ImVec2(300.0f, 300.0f), true);
+        list.PrimReserve(6, 4);
+        list.PrimRect(ImVec2(65.0f, 65.0f), ImVec2(290.0f, 290.0f), COL);
+        list.PopClipRect();
+        list.PrimReserve(6, 4);
+        list.PrimRect(ImVec2(65.0f, 65.0f), ImVec2(190.0f, 190.0f), COL);
+        list.PopClipRect();
+        DumpList("clip_intersect", list);
+    }
+}
+
 // Explicit UVs: no atlas involved.
 static void ScenePrimRectUV(ImDrawList& list)
 {
@@ -312,6 +361,15 @@ int main(int argc, char** argv)
     else if (strcmp(name, "prim_rect") == 0) scene = ScenePrimRect;
     else if (strcmp(name, "rect_filled") == 0) scene = SceneRectFilled;
     else if (strcmp(name, "line_h") == 0) scene = SceneLineH;
+    if (strcmp(name, "clip_stack") == 0)
+    {
+        ImGui::NewFrame();
+        DumpClipStack();
+        ImGui::EndFrame();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
     if (scene == NULL)
     {
         fprintf(stderr, "unknown scenario: %s\n", name);
@@ -320,6 +378,7 @@ int main(int argc, char** argv)
     }
 
     ImGui::NewFrame();
+
     {
         ImDrawList list(ImGui::GetDrawListSharedData());
         list._ResetForNewFrame();
