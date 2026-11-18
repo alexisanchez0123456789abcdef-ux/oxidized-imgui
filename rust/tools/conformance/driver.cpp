@@ -700,6 +700,65 @@ static void SceneAaBorder(ImDrawList& list)
     list.AddRect(ImVec2(10.5f, 10.25f), ImVec2(60.5f, 45.75f), COL, 0.0f, 0, 1.0f);
 }
 
+// Writes the glyph table the scenario used, so the Rust side can bake the same numbers. The atlas
+// is only stable inside this process, so the fixture must come from the same run as the golden.
+static void WriteGlyphFixture(ImFont* font, const char* bake_order, int bake_count)
+{
+    if (g_fixture_path == NULL)
+        return;
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    FILE* f = fopen(g_fixture_path, "wb");
+    if (f == NULL)
+        return;
+    fprintf(f, "font size %08x ascent %08x descent %08x\n", Bits(baked->Size), Bits(baked->Ascent),
+        Bits(baked->Descent));
+    for (int i = 0; i < bake_count; i++)
+    {
+        ImFontGlyph* g = baked->FindGlyph((ImWchar)bake_order[i]);
+        fprintf(f, "g %d %08x %08x %08x %08x %08x %08x %08x %08x %08x\n", (int)bake_order[i],
+            Bits(g->AdvanceX), Bits(g->U0), Bits(g->V0), Bits(g->U1), Bits(g->V1),
+            Bits(g->X0), Bits(g->Y0), Bits(g->X1), Bits(g->Y1));
+    }
+    fclose(f);
+}
+
+// button_draw: a frame with a single button in a window without background, so the draw list holds
+// only the widget.
+static void DumpButtonDraw()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario button_draw\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[5] = { 'H', 'i', 'e', 'l', 'o' };
+    for (char ch : bake_order)
+        baked->FindGlyph((ImWchar)ch);
+    WriteGlyphFixture(font, bake_order, 5);
+
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground;
+    ImGui::Begin("W", NULL, flags);
+    ImGui::SetCursorScreenPos(ImVec2(80.0f, 80.0f));
+    ImGui::Button("Hi");
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    DumpDrawListBody(*dl);
+    ImGui::End();
+    ImGui::EndFrame();
+}
 // Explicit UVs: no atlas involved.
 static void ScenePrimRectUV(ImDrawList& list)
 {
@@ -756,9 +815,15 @@ int main(int argc, char** argv)
 
     io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
 
-    if (strcmp(name, "text_draw") == 0)
+    if (strcmp(name, "button_draw") == 0)
     {
-        DumpTextDraw();
+        DumpButtonDraw();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "text_draw") == 0)
+    {        DumpTextDraw();
         ImGui::DestroyContext();
         return 0;
     }
