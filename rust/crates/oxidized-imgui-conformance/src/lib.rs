@@ -62,6 +62,7 @@ pub const SCENARIOS: &[&str] = &[
     "window_wheel_lock",
     "window_hscrollbar",
     "window_scrollbar_page",
+    "window_min_size",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -2418,6 +2419,75 @@ pub fn window_scrollbar_page_dump() -> String {
     out
 }
 
+/// The `window_min_size` scenario: `WindowMinSize` clamps a size asked for by API, while an
+/// auto-sized window uses the 1 pixel hard minimum instead and can end up smaller than the style.
+pub fn window_min_size_dump() -> String {
+    use oxidized_imgui::{Context, Vec2};
+
+    let mut ctx = Context::new();
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario window_min_size\n");
+
+    let frame =
+        |ctx: &mut Context, out: &mut String, w: f32, h: f32, auto: bool, dump_frame: bool| {
+            ctx.io_mut().delta_time = 0.1;
+            ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+            ctx.io_mut().mouse_down[0] = false;
+            ctx.begin_frame();
+            if auto {
+                // An auto-sized window ignores the requested size, because the size was set by API.
+                ctx.set_next_window_flags(WindowFlags::NO_MOVE | WindowFlags::ALWAYS_AUTO_RESIZE);
+            }
+            ctx.begin_window(
+                "M",
+                Some(Vec2 { x: 60.0, y: 60.0 }),
+                Some(Vec2 { x: w, y: h }),
+            );
+            if auto {
+                ctx.dummy(Vec2 { x: 1.0, y: 1.0 });
+            }
+            let window = ctx.window();
+            if !dump_frame {
+                ctx.end_window();
+                ctx.end_frame();
+                return;
+            }
+            let text = format!(
+                "frame requested {:08x} {:08x} auto {} size {:08x} {:08x} min {:08x} {:08x}\n",
+                w.to_bits(),
+                h.to_bits(),
+                auto as u8,
+                window.size.x.to_bits(),
+                window.size.y.to_bits(),
+                ctx.style().window_min_size.x.to_bits(),
+                ctx.style().window_min_size.y.to_bits(),
+            );
+            let body = dump("window_min_size", ctx.draw_list());
+            ctx.end_window();
+            out.push_str(&text);
+            for line in body.lines().skip(2) {
+                out.push_str(line);
+                out.push('\n');
+            }
+            ctx.end_frame();
+        };
+
+    // A tiny requested size is bumped to the minimum.
+    frame(&mut ctx, &mut out, 10.0, 10.0, false, true);
+    frame(&mut ctx, &mut out, 10.0, 10.0, false, true);
+    // Just under: also bumped.
+    frame(&mut ctx, &mut out, 31.0, 31.0, false, true);
+    // Exactly at the minimum: unchanged.
+    frame(&mut ctx, &mut out, 32.0, 32.0, false, true);
+    // Above it: unchanged.
+    frame(&mut ctx, &mut out, 120.0, 80.0, false, true);
+    frame(&mut ctx, &mut out, 10.0, 10.0, true, true);
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -2450,6 +2520,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "window_wheel_lock" => Some(window_wheel_lock_dump()),
         "window_hscrollbar" => Some(window_hscrollbar_dump()),
         "window_scrollbar_page" => Some(window_scrollbar_page_dump()),
+        "window_min_size" => Some(window_min_size_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),

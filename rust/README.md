@@ -34,6 +34,7 @@ instead of against our own expectations:
 | Window auto-size, changing content | the size follows the content of the previous frame in both directions, so shrinking and growing both show up one frame later | `window_autosize_change` golden |
 | Window auto-size | the window takes its content size plus the padding (and the title bar), one frame behind the content, starting at padding-only on its first frame | `window_autosize` golden |
 | Mouse wheel | over a window it scrolls by five font sizes (capped at two thirds of the interior), symmetric up and down, and leaves the scroll alone when the wheel is silent | `window_wheel` golden |
+| Window minimum size | a size asked for by API is clamped up to `WindowMinSize`, while an auto-sized window uses the 1 pixel hard minimum and can end up smaller; a squeezed vertical bar also fades out and stops taking clicks | `window_min_size` golden |
 | Scrollbar by page | with `ConfigScrollbarScrollByPage` a click outside the grab scrolls one page, and Shift turns any click back into an absolute seek | `window_scrollbar_page` golden |
 | Horizontal scrollbar | shown once the content is wider than the window, taking its height off the bottom of the interior, drawn and draggable through the same axis-generic code as the vertical one | `window_hscrollbar` golden |
 | Vertical scrollbar, input | the grab can be grabbed and dragged (absolute seek, so the offset it was grabbed with is kept), a click on the track jumps to that point, and the grab paints its hovered and active colours | `window_scrollbar_drag` golden |

@@ -66,6 +66,9 @@ struct WindowMemory {
     scroll: Vec2,
     /// `window->ContentSize` of the previous frame: the scroll maximum and the auto-fit size use it.
     content_size: Vec2,
+    /// The interior size of the previous frame, before the scrollbars took their share: the
+    /// scrollbar decision compares the content against this, not against the current size.
+    inner_size: Vec2,
     flags: WindowFlags,
 }
 
@@ -740,25 +743,34 @@ impl Context {
         let flags = self.next_flags.take().unwrap_or(opts.flags);
         let remembered = WindowMemory::find(&self.memory, name);
         let pos_was_set = pos.is_some();
-        let (pos, size_full, mut collapsed, mut want_collapse_toggle, remembered_scroll, content) =
-            match remembered {
-                Some(memory) => (
-                    pos.unwrap_or(memory.pos),
-                    size.unwrap_or(memory.size_full),
-                    memory.collapsed,
-                    memory.want_collapse_toggle,
-                    Some(memory.scroll),
-                    memory.content_size,
-                ),
-                None => (
-                    pos.unwrap_or_default(),
-                    size.unwrap_or_default(),
-                    false,
-                    false,
-                    None,
-                    Vec2::default(),
-                ),
-            };
+        let (
+            pos,
+            size_full,
+            mut collapsed,
+            mut want_collapse_toggle,
+            remembered_scroll,
+            content,
+            inner_before,
+        ) = match remembered {
+            Some(memory) => (
+                pos.unwrap_or(memory.pos),
+                size.unwrap_or(memory.size_full),
+                memory.collapsed,
+                memory.want_collapse_toggle,
+                Some(memory.scroll),
+                memory.content_size,
+                memory.inner_size,
+            ),
+            None => (
+                pos.unwrap_or_default(),
+                size.unwrap_or_default(),
+                false,
+                false,
+                None,
+                Vec2::default(),
+                Vec2::default(),
+            ),
+        };
 
         // Each window draws into its own list for the frame.
         self.draw_list = self.new_window_draw_list();
@@ -787,7 +799,26 @@ impl Context {
         // shows the unclamped value here, and no scenario content is small enough to tell them
         // apart otherwise.
         let mut size_full = size_full;
-        if flags.contains(WindowFlags::ALWAYS_AUTO_RESIZE) {
+        // `CalcWindowMinSize`: `WindowMinSize` for a normal window, the 1 pixel hard minimum for an
+        // auto-sized one, which is why an auto-sized window can end up smaller than the style says.
+        // A size *asked for* by API also wins over the auto-fit, as `!window_size_x_set_by_api`.
+        let size_was_set = size.is_some();
+        let auto_resize = flags.contains(WindowFlags::ALWAYS_AUTO_RESIZE) && !size_was_set;
+        // `CalcWindowSizeAfterConstraint`.
+        // The hard minimum depends on the flag alone, not on whether the size was asked for.
+        let always_auto = flags.contains(WindowFlags::ALWAYS_AUTO_RESIZE);
+        let hard_min = 1.0;
+        size_full.x = size_full.x.max(if always_auto {
+            hard_min
+        } else {
+            self.style.window_min_size.x
+        });
+        size_full.y = size_full.y.max(if always_auto {
+            hard_min
+        } else {
+            self.style.window_min_size.y
+        });
+        if auto_resize {
             let decoration = title_height;
             size_full = Vec2 {
                 x: (content.x + pad.x * 2.0).min(self.io.display_size.x),
@@ -827,17 +858,25 @@ impl Context {
         // `window->ScrollbarY`: the content of the previous frame did not fit.
         let wants_scrollbar = !flags.contains(WindowFlags::NO_SCROLLBAR);
         let wants_horizontal = wants_scrollbar && flags.contains(WindowFlags::HORIZONTAL_SCROLLBAR);
-        let scrollbar_y =
-            wants_scrollbar && content.y + pad.y * 2.0 > inner_rect.1.y - inner_rect.0.y;
+        // vail_size_from_last_frame: a window that just changed size decides with the size it had
+        // before, which is why a tiny window can skip a scrollbar its content would need.
+        let avail_before = if inner_before.x > 0.0 || inner_before.y > 0.0 {
+            inner_before
+        } else {
+            Vec2 {
+                x: inner_rect.1.x - inner_rect.0.x,
+                y: inner_rect.1.y - inner_rect.0.y,
+            }
+        };
+        let scrollbar_y = wants_scrollbar && content.y + pad.y * 2.0 > avail_before.y;
         if scrollbar_y {
             inner_rect.1.x -= self.style.scrollbar_size;
         }
         // `window->ScrollbarX`: the content did not fit horizontally either. It is decided after the
         // vertical one, so the interior is already narrower by that bar, and it gives up its height
         // on the bottom.
-        let scrollbar_x = wants_scrollbar
-            && wants_horizontal
-            && content.x + pad.x * 2.0 > inner_rect.1.x - inner_rect.0.x;
+        let scrollbar_x =
+            wants_scrollbar && wants_horizontal && content.x + pad.x * 2.0 > avail_before.x;
         if scrollbar_x {
             inner_rect.1.y -= self.style.scrollbar_size;
         }
@@ -1337,6 +1376,12 @@ impl Context {
                 want_collapse_toggle: window.want_collapse_toggle,
                 scroll: window.scroll,
                 content_size,
+                inner_size: Vec2 {
+                    x: window.size.x,
+                    y: (window.size.y
+                        - (window.size.y - window.inner_rect.1.y + window.inner_rect.0.y))
+                        .max(0.0),
+                },
                 flags: window.flags,
             };
             match WindowMemory::find_mut(&mut self.memory, &window.name) {
@@ -1417,7 +1462,10 @@ impl Context {
             (inner_rect.0.x + border, inner_rect.1.x - border)
         } else {
             (
-                outer.1.x - border - self.style.scrollbar_size,
+                outer
+                    .0
+                    .x
+                    .max(outer.1.x - border - self.style.scrollbar_size),
                 outer.1.x - border,
             )
         };
@@ -1438,6 +1486,13 @@ impl Context {
         if frame_size_v <= 0.0 || frame_size_o <= 0.0 {
             return None;
         }
+        // A vertical bar squeezed thinner than it is wide fades out, and stops taking clicks
+        // while it is faded.
+        let alpha = if !horizontal && frame_size_v < frame_size_o {
+            (frame_size_v / (frame_size_o * 2.0).max(1.0)).clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
 
         let padding = self
             .style
@@ -1457,8 +1512,9 @@ impl Context {
         let visible = get(inner_rect.1) - get(inner_rect.0);
         let contents = get(content) + get(self.style.window_padding) * 2.0;
         let win_size_v = contents.max(visible).max(1.0);
-        let grab_min = geto(bar_max) - geto(bar_min);
-        let grab_min = grab_min.min(self.style.grab_min_size);
+        // ImMin(bb.GetSize()[axis], style.GrabMinSize): the minimum is measured *along* the bar,
+        // not across it, which only matters once the clamp engages (a very small window).
+        let grab_min = scrollbar_size_v.min(self.style.grab_min_size);
         // `(float)(int)ImClamp(...)`: the reference truncates the grab to whole pixels.
         let grab_h_pixels = (scrollbar_size_v * (visible / win_size_v))
             .clamp(grab_min, scrollbar_size_v)
@@ -1497,7 +1553,7 @@ impl Context {
             / scrollbar_size_v;
         let mut new_scroll = None;
 
-        if held && grab_h_norm < 1.0 {
+        if held && alpha >= 1.0 && grab_h_norm < 1.0 {
             let mouse_v = if horizontal { mouse.x } else { mouse.y };
             let clicked_v_norm = ((mouse_v - get(bar_min)) / scrollbar_size_v).clamp(0.0, 1.0);
             let held_dir = if clicked_v_norm < grab_v_norm {
@@ -1553,8 +1609,15 @@ impl Context {
         } else {
             self.style.color_u32(Col::ScrollbarGrab)
         };
-        self.draw_list
-            .prim_rect(frame_min, frame_max, self.style.color_u32(Col::ScrollbarBg));
+        // `GetColorU32(col, alpha)`: the alpha argument scales the colour's own alpha.
+        let scale = |color: u32| {
+            let a = ((color >> 24) & 0xFF) as f32;
+            let a = (a * alpha) as u32;
+            (color & 0x00FF_FFFF) | (a << 24)
+        };
+        let grab_col = scale(grab_col);
+        let bg_col = scale(self.style.color_u32(Col::ScrollbarBg));
+        self.draw_list.prim_rect(frame_min, frame_max, bg_col);
         let grab_start = get(bar_min) + (get(bar_max) - get(bar_min)) * grab_v_norm;
         let mut grab_min = bar_min;
         let mut grab_max = bar_max;
