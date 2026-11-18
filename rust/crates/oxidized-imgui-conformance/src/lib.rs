@@ -2619,7 +2619,17 @@ pub fn window_resize_drag_dump() -> String {
 pub fn window_resize_edges_dump() -> String {
     use oxidized_imgui::{Context, Vec2};
 
+    // The grabbed border is stroked with the atlas line texture, so the same pinned table the
+    // stroked scenarios use has to travel with the golden.
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/window_resize_edges.lineuvs.txt"
+    );
+    let text = std::fs::read_to_string(path).expect("resize edges fixture");
+    let line_uvs = parse_line_uvs(&text);
+
     let mut ctx = Context::new();
+    ctx.set_line_uv_lines(line_uvs);
     let mut out = String::new();
     out.push_str(&format!(
         "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
@@ -2645,10 +2655,13 @@ pub fn window_resize_edges_dump() -> String {
             window.pos.x.to_bits(),
             window.pos.y.to_bits(),
         );
+        let body = dump("window_resize_edges", ctx.draw_list());
         ctx.end_window();
-        // Only the geometry is pinned here: the reference also strokes the grabbed border with the
-        // separator colour, which the port does not draw yet.
         out.push_str(&text);
+        for line in body.lines().skip(2) {
+            out.push_str(line);
+            out.push('\n');
+        }
         ctx.end_frame();
     };
 
@@ -2682,7 +2695,16 @@ pub fn window_resize_edges_dump() -> String {
 pub fn window_resize_cursor_dump() -> String {
     use oxidized_imgui::{Context, Vec2};
 
+    // Hovering a border strokes it, which samples the atlas line texture.
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/window_resize_cursor.lineuvs.txt"
+    );
+    let text = std::fs::read_to_string(path).expect("resize cursor fixture");
+    let line_uvs = parse_line_uvs(&text);
+
     let mut ctx = Context::new();
+    ctx.set_line_uv_lines(line_uvs);
     let mut out = String::new();
     out.push_str(&format!(
         "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
