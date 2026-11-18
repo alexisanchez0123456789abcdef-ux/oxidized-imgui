@@ -285,6 +285,8 @@ impl DrawList {
     /// first edge's two triangles patched to wrap onto the last outer vertex.
     pub fn add_convex_poly_filled_aa(&mut self, points: &[Vec2], col: ImU32) -> u32 {
         const MITER_ANGLE_LIMIT: f32 = -0.999_961_9;
+        const MITER_LIMIT_SQR: f32 = 4.0 * 4.0;
+        const MAX_BEVELS: i32 = 2;
         const A_MASK: u32 = 0xFF00_0000;
 
         let n = points.len();
@@ -295,8 +297,9 @@ impl DrawList {
         let half_aa = self.fringe_scale * 0.5;
         let col_trans = col & !A_MASK;
 
-        // Perimeter normals, one per point, oriented by the incoming edge.
+        // Perimeter normals and the squared length of each incoming edge.
         let mut normals = vec![Vec2 { x: 0.0, y: 0.0 }; n];
+        let mut lengths = vec![0.0f32; n];
         for i1 in 0..n {
             let i0 = (i1 + n - 1) % n;
             let (p0, p1) = (points[i0], points[i1]);
@@ -309,6 +312,7 @@ impl DrawList {
                 dy *= inv;
             }
             normals[i0] = Vec2 { x: dy, y: -dx };
+            lengths[i0] = d2;
         }
 
         let inner_base = self.vtx_buffer.len() as u32;
@@ -320,18 +324,40 @@ impl DrawList {
                 col,
             },
         );
-        let outer_base = self.vtx_buffer.len() as u32;
+
+        // Per edge: where its outer vertex starts and whether a bevel added a second one.
+        let mut outer_start = vec![0u32; n];
+        let mut beveled = vec![false; n];
+        let mut bevel_count = 0i32;
 
         for i1 in 0..n {
             let i0 = (i1 + n - 1) % n;
             let n0 = normals[i0];
             let n1 = normals[i1];
+            let p1 = points[i1];
+
             let cos_theta = n0.x * n1.x + n0.y * n1.y;
             let cos_clamped = cos_theta.max(MITER_ANGLE_LIMIT);
             let miter_scale = (1.0 / (1.0 + cos_clamped)).min(1000.0);
-            let offset_x = (n0.x + n1.x) * miter_scale * half_aa;
-            let offset_y = (n0.y + n1.y) * miter_scale * half_aa;
-            let p1 = points[i1];
+            let mut offset_x = (n0.x + n1.x) * miter_scale;
+            let mut offset_y = (n0.y + n1.y) * miter_scale;
+
+            let miter_distance_sqr = offset_x * offset_x + offset_y * offset_y;
+            let bevel = miter_distance_sqr > MITER_LIMIT_SQR;
+            if bevel {
+                // Keep the worst-case overshoot no bigger than the polygon itself.
+                let reference = half_aa * half_aa;
+                let limit_sqr = lengths[i0].max(lengths[i1]);
+                let reference_dist_sqr = miter_distance_sqr * reference;
+                if reference_dist_sqr > limit_sqr {
+                    let scale = (limit_sqr / reference_dist_sqr).sqrt();
+                    offset_x *= scale;
+                    offset_y *= scale;
+                }
+            }
+            offset_x *= half_aa;
+            offset_y *= half_aa;
+
             self.vtx_buffer[inner_base as usize + i1] = DrawVert {
                 pos: Vec2 {
                     x: p1.x - offset_x,
@@ -340,29 +366,61 @@ impl DrawList {
                 uv: self.white_uv,
                 col,
             };
-            self.vtx_buffer.push(DrawVert {
-                pos: Vec2 {
-                    x: p1.x + offset_x,
-                    y: p1.y + offset_y,
-                },
-                uv: self.white_uv,
-                col: col_trans,
-            });
+
+            outer_start[i1] = self.vtx_buffer.len() as u32;
+            if bevel && bevel_count < MAX_BEVELS {
+                bevel_count += 1;
+                beveled[i1] = true;
+                self.vtx_buffer.push(DrawVert {
+                    pos: Vec2 {
+                        x: p1.x + n0.x * half_aa,
+                        y: p1.y + n0.y * half_aa,
+                    },
+                    uv: self.white_uv,
+                    col: col_trans,
+                });
+                self.vtx_buffer.push(DrawVert {
+                    pos: Vec2 {
+                        x: p1.x + n1.x * half_aa,
+                        y: p1.y + n1.y * half_aa,
+                    },
+                    uv: self.white_uv,
+                    col: col_trans,
+                });
+            } else {
+                self.vtx_buffer.push(DrawVert {
+                    pos: Vec2 {
+                        x: p1.x + offset_x,
+                        y: p1.y + offset_y,
+                    },
+                    uv: self.white_uv,
+                    col: col_trans,
+                });
+            }
         }
+
+        let last_outer = |i: usize| outer_start[i] + u32::from(beveled[i]);
 
         let mut idx_count = 0u32;
         for i1 in 0..n {
             let i0 = (i1 + n - 1) % n;
             let prev_outer = if i1 == 0 {
-                outer_base + n as u32 - 1
+                last_outer(n - 1)
             } else {
-                outer_base + i1 as u32 - 1
+                last_outer(i1 - 1)
             };
-            let outer = outer_base + i1 as u32;
+            let outer = outer_start[i1];
             let inner = inner_base + i1 as u32;
             let prev_inner = inner_base + i0 as u32;
-            for tri in [[prev_outer, outer, inner], [prev_outer, inner, prev_inner]] {
-                for vertex in tri {
+            for vertex in [prev_outer, outer, inner] {
+                self.idx_buffer.push(vertex as ImDrawIdx);
+            }
+            for vertex in [prev_outer, inner, prev_inner] {
+                self.idx_buffer.push(vertex as ImDrawIdx);
+            }
+            idx_count += 6;
+            if beveled[i1] {
+                for vertex in [outer, outer + 1, inner] {
                     self.idx_buffer.push(vertex as ImDrawIdx);
                 }
                 idx_count += 3;
@@ -627,18 +685,10 @@ impl DrawList {
 /// by one Newton step, so the last bits matter and a plain `1/sqrt` can differ. Mirror it with the
 /// same intrinsic where it exists, and fall back to `1/sqrt` elsewhere.
 fn rsqrt_precise(x: f32) -> f32 {
-    #[cfg(target_arch = "x86_64")]
-    {
-        if std::is_x86_feature_detected!("sse") {
-            // SAFETY: the SSE intrinsic only computes a value; no memory is touched.
-            unsafe {
-                let estimate = core::arch::x86_64::_mm_cvtss_f32(core::arch::x86_64::_mm_rsqrt_ss(
-                    core::arch::x86_64::_mm_set_ss(x),
-                ));
-                return estimate * (1.5 - x * 0.5 * estimate * estimate);
-            }
-        }
-    }
+    // The reference can use the SSE reciprocal-square-root estimate, but that estimate is
+    // microarchitecture dependent: two machines produce different last bits, and the golden
+    // comparison cannot survive it. The conformance driver is compiled with IMGUI_DISABLE_SSE so
+    // both sides take this exact path, which is portable. See tools/conformance/gen-golden.ps1.
     1.0 / x.sqrt()
 }
 /// `IM_DRAWLIST_ARCFAST_SAMPLE_MAX`: samples around a full circle in the fast arc table.

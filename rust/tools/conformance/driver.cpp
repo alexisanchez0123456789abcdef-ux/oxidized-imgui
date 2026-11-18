@@ -600,6 +600,18 @@ static void SceneAaLine(ImDrawList& list)
     list.AddLine(ImVec2(10.0f, 10.0f), ImVec2(50.0f, 30.0f), COL, 2.0f);
 }
 
+// A convex polygon with a sharp apex: the miter exceeds the limit, so the corner is bevelled.
+static void SceneAaBevel(ImDrawList& list)
+{
+    list.Flags = ImDrawListFlags_AntiAliasedFill;
+    const ImVec2 points[3] = {
+        ImVec2(10.5f, 50.25f),
+        ImVec2(200.5f, 20.5f),
+        ImVec2(200.5f, 80.5f),
+    };
+    list.AddConvexPolyFilled(points, 3, COL);
+}
+
 // Explicit UVs: no atlas involved.
 static void ScenePrimRectUV(ImDrawList& list)
 {
@@ -716,6 +728,7 @@ int main(int argc, char** argv)
     else if (strcmp(name, "line_h") == 0) scene = SceneLineH;
     else if (strcmp(name, "aa_rect") == 0) scene = SceneAaRect;
     else if (strcmp(name, "aa_line") == 0) scene = SceneAaLine;
+    else if (strcmp(name, "aa_bevel") == 0) scene = SceneAaBevel;
     if (strcmp(name, "clip_stack") == 0)
     {
         ImGui::NewFrame();

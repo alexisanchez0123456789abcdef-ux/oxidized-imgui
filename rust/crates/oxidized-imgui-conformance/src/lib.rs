@@ -37,6 +37,7 @@ pub const SCENARIOS: &[&str] = &[
     "aa_rect",
     "aa_round_rect",
     "aa_line",
+    "aa_bevel",
 ];
 
 const COL: u32 = 0xFFFF_0000; // IM_COL32(0, 0, 255, 255)
@@ -62,7 +63,17 @@ pub fn scene(name: &str) -> Option<DrawList> {
         }
         // Public API: horizontal line, default inside stroke, one pixel thick.
         "line_h" => list.add_line_h(10.0, 30.0, 20.0, COL, 1.0),
-        // Anti-aliased fill of a rectangle that is not pixel aligned: the miter fringe path.
+        // A convex polygon with a sharp apex: the miter exceeds the limit, so it is bevelled.
+        "aa_bevel" => {
+            list.white_uv = WHITE_UV;
+            list.fringe_scale = 1.0;
+            let points = [
+                Vec2 { x: 10.5, y: 50.25 },
+                Vec2 { x: 200.5, y: 20.5 },
+                Vec2 { x: 200.5, y: 80.5 },
+            ];
+            list.add_convex_poly_filled_aa(&points, COL);
+        }
         "aa_line" => {
             list.white_uv = WHITE_UV;
             list.fringe_scale = 1.0;
