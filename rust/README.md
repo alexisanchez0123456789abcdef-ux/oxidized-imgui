@@ -20,6 +20,7 @@ instead of against our own expectations:
 | Keyboard input | queued events with duplicate filtering, down durations, `IsKeyPressed`, modifiers from `ImGuiMod_*` | `io_keyboard_events` golden |
 | Text measurement | `CalcTextSize` over a pinned advance table (the atlas is **not** built: see `font.rs`) | `font_metrics` golden |
 | Text geometry | glyph quads (positions, colours, indices) for a short string; **UVs are not compared** | `text_draw` golden |
+| Button | item rect from text metrics, hover, active, release-inside result | `button` golden |
 | Clip stack | `PushClipRect`/`PopClipRect`, intersection, fullscreen fallback, command splitting | `clip_stack` golden |
 
 Provisional, **not** parity-checked: everything else. In particular the anti-aliased and rounded

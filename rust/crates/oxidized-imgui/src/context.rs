@@ -7,6 +7,7 @@
 //! Numbers here are verified against the reference by the `window_layout` conformance scenario.
 
 use crate::draw_list::Vec2;
+use crate::font::Font;
 use crate::id::{ImGuiID, hash_str_utf8};
 use crate::io::{BUTTONS, Io, Key};
 use crate::style::Style;
@@ -30,17 +31,40 @@ pub struct Window {
 }
 
 /// Frame state, identifier stack, style, input state and the open window stack.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Context {
     id_stack: Vec<ImGuiID>,
     frame_count: u64,
     last_frame_draw_calls: usize,
     style: Style,
+    font: Font,
     io: Io,
     /// `g.Time`: the reference keeps it as a `double` and `GetTime()` returns it as such.
     time: f64,
     windows: Vec<Window>,
     remembered: Vec<(String, Vec2, Vec2)>,
+    active_id: Option<ImGuiID>,
+    last_item_hovered: bool,
+    last_item_active: bool,
+}
+
+impl Default for Context {
+    fn default() -> Self {
+        Self {
+            id_stack: Vec::new(),
+            frame_count: 0,
+            last_frame_draw_calls: 0,
+            style: Style::default(),
+            font: Font::reference_default(),
+            io: Io::default(),
+            time: 0.0,
+            windows: Vec::new(),
+            remembered: Vec::new(),
+            active_id: None,
+            last_item_hovered: false,
+            last_item_active: false,
+        }
+    }
 }
 
 impl Context {
@@ -328,6 +352,78 @@ impl Context {
                 y: window.last_min.y,
             };
         }
+    }
+
+    /// `SetCursorScreenPos`: place the next item at an absolute position.
+    pub fn set_cursor_screen_pos(&mut self, pos: Vec2) {
+        if let Some(window) = self.windows.last_mut() {
+            window.cursor = pos;
+        }
+    }
+
+    pub fn last_item_hovered(&self) -> bool {
+        self.last_item_hovered
+    }
+
+    pub fn last_item_active(&self) -> bool {
+        self.last_item_active
+    }
+
+    /// `ImGui::Button`: a framed label. Returns true on the frame the mouse is released inside,
+    /// which is the reference's behaviour for the default press/release policy.
+    pub fn button(&mut self, label: &str) -> bool {
+        let id = self.get_id(label);
+        let padding = self.style.frame_padding;
+        let text = self.font.calc_text_size(label, self.font.size);
+        let size = Vec2 {
+            x: text.x + padding.x * 2.0,
+            y: self.font.size + padding.y * 2.0,
+        };
+
+        let (min, window_pos, window_size) = {
+            let window = self.window();
+            (window.cursor, window.pos, window.size)
+        };
+        let max = Vec2 {
+            x: min.x + size.x,
+            y: min.y + size.y,
+        };
+
+        let over_window = self
+            .io
+            .mouse_pos
+            .map(|m| {
+                m.x >= window_pos.x
+                    && m.x < window_pos.x + window_size.x
+                    && m.y >= window_pos.y
+                    && m.y < window_pos.y + window_size.y
+            })
+            .unwrap_or(false);
+        let hovered = over_window
+            && self
+                .io
+                .mouse_pos
+                .map(|m| m.x >= min.x && m.x < max.x && m.y >= min.y && m.y < max.y)
+                .unwrap_or(false);
+
+        if hovered && self.io.mouse_clicked[0] {
+            self.active_id = Some(id);
+        }
+
+        // On release the reference clears the active id before returning, so `IsItemActive()`
+        // queried afterwards is already false on that frame.
+        let was_active = self.active_id == Some(id);
+        let mut pressed = false;
+        if was_active && self.io.mouse_released[0] {
+            pressed = hovered;
+            self.active_id = None;
+        }
+        let active = self.active_id == Some(id);
+
+        self.dummy(size);
+        self.last_item_hovered = hovered;
+        self.last_item_active = active;
+        pressed
     }
 }
 
