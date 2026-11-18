@@ -1629,6 +1629,55 @@ static void DumpWindowWheelLock()
     FrameWheelLock(500.0f, 150.0f, 0.0f);
 }
 
+// window_hscrollbar: a window whose content is too wide, so the horizontal scrollbar shows up. It
+// takes its height off the bottom of the interior and can be grabbed and dragged along.
+static void FrameHScrollWindow(float scroll_x, float mx, float my, bool down)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = down;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    if (scroll_x >= 0.0f)
+        ImGui::SetNextWindowScroll(ImVec2(scroll_x, 0.0f));
+    ImGui::Begin("H", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_HorizontalScrollbar);
+    ImGuiWindow* w = ImGui::GetCurrentWindow();
+    ImGui::Dummy(ImVec2(400.0f, 100.0f));
+    const ImRect bar = ImGui::GetWindowScrollbarRect(w, ImGuiAxis_X);
+    printf("frame scroll %08x max %08x %08x inner %08x %08x %08x %08x bar %08x %08x %08x %08x sb %d %d\n",
+        Bits(w->Scroll.x), Bits(w->ScrollMax.x), Bits(w->ScrollMax.y), Bits(w->InnerRect.Min.x),
+        Bits(w->InnerRect.Min.y), Bits(w->InnerRect.Max.x), Bits(w->InnerRect.Max.y), Bits(bar.Min.x),
+        Bits(bar.Min.y), Bits(bar.Max.x), Bits(bar.Max.y), w->ScrollbarX ? 1 : 0,
+        w->ScrollbarY ? 1 : 0);
+    DumpDrawListBody(*w->DrawList);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpWindowHScrollbar()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario window_hscrollbar\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
+    // No content size on the first frame, so the bar appears on the second.
+    FrameHScrollWindow(-1.0f, 0.0f, 0.0f, false);
+    FrameHScrollWindow(-1.0f, 0.0f, 0.0f, false);
+    // Scrolled by API: the grab moves right.
+    FrameHScrollWindow(60.0f, 0.0f, 0.0f, false);
+    // Grab the bar and drag it, then release.
+    FrameHScrollWindow(-1.0f, 100.0f, 253.0f, false);
+    FrameHScrollWindow(-1.0f, 100.0f, 253.0f, true);
+    FrameHScrollWindow(-1.0f, 140.0f, 253.0f, true);
+    FrameHScrollWindow(-1.0f, 140.0f, 253.0f, false);
+    FrameHScrollWindow(-1.0f, 0.0f, 0.0f, false);
+}
+
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 
 static void DumpCmdOffsets()
@@ -1878,6 +1927,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_icons") == 0)
     {
         DumpWindowIcons();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "window_hscrollbar") == 0)
+    {
+        DumpWindowHScrollbar();
         ImGui::DestroyContext();
         return 0;
     }
