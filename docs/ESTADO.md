@@ -2,9 +2,9 @@
 
 _Actualizado: 2026-11-18. Generado desde `docs/progress.json`: no editar a mano._
 
-## Reescritura a Rust: **56.1 %**
+## Reescritura a Rust: **56.8 %**
 
-Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 59.2 %.
+Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 59.9 %.
 
 Qué cuenta como hecho: solo lo que tiene una prueba que lo compara con el código C++ original.
 Un cambio de estado sin evidencia no sube el porcentaje.
@@ -13,7 +13,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 | --- | ---: | ---: |
 | Núcleo: contexto, IO, ventanas, identificadores, layout | 58 | 76 % |
 | Listas de dibujo y primitivas | 17 | 88 % |
-| Widgets | 26 | 50 % |
+| Widgets | 26 | 54 % |
 | Fuentes y texto | 13 | 15 % |
 | Docking y viewports | 10 | 0 % |
 | Backends y ejemplos | 8 | 0 % |
@@ -79,6 +79,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Slider: región de agarre, arrastre y redondeo** — golden slider_basic
 - **Cabecera colapsable: marco, flecha, hover/activo y alternar (etiqueta al soltar, flecha al pulsar)** — golden collapsing_header (12 frames, lista completa de 79125 bytes)
 - **Nodos de árbol: fila estrecha, resaltado a todo el ancho, sangría y árbol anidado** — golden tree_node (13 frames, lista completa de 56344 bytes)
+- **Región hija: lista de dibujo propia, recorte interior, borde en la lista del padre y avance del layout** — golden child_region (4 frames, dos listas cada uno, 22092 bytes)
 - **UVs de texto con el atlas fijado por fixture** — golden text_draw con UVs + fixture text_draw.glyphs.txt
 - **Medida de texto (CalcTextSize) con tabla de avances fijada** — golden font_metrics
 - **Oráculo de constantes y layouts desde el C++** — rust/tools/oracle

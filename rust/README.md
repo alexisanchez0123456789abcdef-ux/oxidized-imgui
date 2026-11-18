@@ -34,6 +34,7 @@ instead of against our own expectations:
 | Window auto-size, changing content | the size follows the content of the previous frame in both directions, so shrinking and growing both show up one frame later | `window_autosize_change` golden |
 | Window auto-size | the window takes its content size plus the padding (and the title bar), one frame behind the content, starting at padding-only on its first frame | `window_autosize` golden |
 | Mouse wheel | over a window it scrolls by five font sizes (capped at two thirds of the interior), symmetric up and down, and leaves the scroll alone when the wheel is silent | `window_wheel` golden |
+| Child region | `BeginChild` gives a region its own layout, padding, border and **own draw list**, submitted right after its host's; the host's list keeps the border and the child's list carries its own clip | `child_region` golden (two lists per frame) |
 | Tree node | an unframed tree node: the row only reacts where the arrow and text are while the hover highlight spans the work area, children indent by `IndentSpacing`, and the arrow opens on press | `tree_node` golden |
 | Collapsing header | a framed full-width header with the collapsing arrow, header colours on hover and press, and the open state remembered per id; a click on the label toggles on release, a click on the arrow toggles on press | `collapsing_header` golden |
 | Window resize, border highlight | the grabbed border is stroked thicker in the separator colour, drawn after the frame so it sits on top | `window_resize_edges` golden (full draw list) |

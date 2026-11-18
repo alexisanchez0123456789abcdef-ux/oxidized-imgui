@@ -210,6 +210,22 @@ impl DrawList {
         self.on_changed_clip_rect();
     }
 
+    /// `_PopUnusedDrawCmd`: drop trailing commands that carry no geometry. The reference does this
+    /// when a list is presented, which is why a list never ends with an empty command.
+    pub fn pop_unused_draw_cmd(&mut self) {
+        while self.cmd_buffer.len() > 1 {
+            let last_empty = self
+                .cmd_buffer
+                .last()
+                .map(|cmd| cmd.elem_count == 0)
+                .unwrap_or(false);
+            if !last_empty {
+                break;
+            }
+            self.cmd_buffer.pop();
+        }
+    }
+
     /// Sets the current clip on the command being built, without opening a new one. The window
     /// draw list starts with the fullscreen clip before its background is drawn.
     pub fn set_current_clip(&mut self, rect: [f32; 4]) {
