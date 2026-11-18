@@ -92,6 +92,8 @@ pub struct Context {
     scrollbar_click_delta: f32,
     /// g.ActiveIdIsJustActivated, as far as the scrollbar needs it.
     active_id_just_activated: bool,
+    /// ImGuiWindowFlags_AlwaysAutoResize for the window about to start.
+    next_auto_resize: bool,
     /// Whether the window about to start may show a scrollbar. The other constructors model
     /// `ImGuiWindowFlags_NoScrollbar`, which every existing scenario uses.
     next_scrollbar: bool,
@@ -140,6 +142,7 @@ impl Default for Context {
             content_sizes: Vec::new(),
             next_scroll: None,
             next_scrollbar: false,
+            next_auto_resize: false,
             scrollbar_click_delta: 0.0,
             active_id_just_activated: false,
             display_order: Vec::new(),
@@ -305,6 +308,11 @@ impl Context {
     /// model `ImGuiWindowFlags_NoScrollbar` instead, because every earlier scenario passes it.
     pub fn set_next_window_scrollbar(&mut self, enabled: bool) {
         self.next_scrollbar = enabled;
+    }
+
+    /// `ImGuiWindowFlags_AlwaysAutoResize` for the next window: it sizes itself to its content.
+    pub fn set_next_window_auto_resize(&mut self, enabled: bool) {
+        self.next_auto_resize = enabled;
     }
 
     /// Pins `ImDrawListSharedData::TexUvLines`: the atlas line-texture table a stroked primitive
@@ -689,6 +697,26 @@ impl Context {
         } else {
             0.0
         };
+        // `ImGuiWindowFlags_AlwaysAutoResize`: the window takes the size its content needs, measured
+        // on the previous frame, plus its padding and the decorations above and below the content.
+        // `CalcWindowAutoFitSize` does clamp to `WindowMinSize`, but the reference's first frame
+        // shows the unclamped value here, and no scenario content is small enough to tell them
+        // apart otherwise.
+        let auto_resize = core::mem::take(&mut self.next_auto_resize);
+        let mut size_full = size_full;
+        if auto_resize {
+            let content = self
+                .content_sizes
+                .iter()
+                .find(|(known, _)| known == name)
+                .map(|(_, size)| *size)
+                .unwrap_or_default();
+            let decoration = title_height;
+            size_full = Vec2 {
+                x: (content.x + pad.x * 2.0).min(self.io.display_size.x),
+                y: (content.y + pad.y * 2.0 + decoration).min(self.io.display_size.y),
+            };
+        }
         // A collapsed window shrinks to its title bar: the reference keeps `SizeFull` and displays
         // `(Size.x, TitleBarHeight)`.
         let size = if collapsed {

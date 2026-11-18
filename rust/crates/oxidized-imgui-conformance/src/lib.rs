@@ -56,6 +56,7 @@ pub const SCENARIOS: &[&str] = &[
     "window_scrollbar",
     "window_scrollbar_drag",
     "window_wheel",
+    "window_autosize",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -2062,6 +2063,59 @@ pub fn window_wheel_dump() -> String {
     out
 }
 
+/// The `window_autosize` scenario: a window that takes the size its content needs.
+///
+/// The size is the content of the previous frame plus the window padding (and the title bar when
+/// there is one), which is why the first frame shows only the padding: the content is not known yet.
+pub fn window_autosize_dump() -> String {
+    use oxidized_imgui::{Context, Vec2};
+
+    let mut ctx = Context::new();
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario window_autosize\n");
+
+    let frame = |ctx: &mut Context, out: &mut String| {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+        ctx.io_mut().mouse_down[0] = false;
+        ctx.begin_frame();
+        ctx.set_next_window_auto_resize(true);
+        ctx.begin_window("A", Some(Vec2 { x: 60.0, y: 60.0 }), None);
+        ctx.dummy(Vec2 { x: 100.0, y: 300.0 });
+        let window = ctx.window();
+        let (inner_min, inner_max) = window.inner_rect;
+        let text = format!(
+            "frame size {:08x} {:08x} sizefull {:08x} {:08x} inner {:08x} {:08x} {:08x} {:08x} content {:08x} {:08x}\n",
+            window.size.x.to_bits(),
+            window.size.y.to_bits(),
+            window.size_full.x.to_bits(),
+            window.size_full.y.to_bits(),
+            inner_min.x.to_bits(),
+            inner_min.y.to_bits(),
+            inner_max.x.to_bits(),
+            inner_max.y.to_bits(),
+            window.content_extent.x.to_bits(),
+            window.content_extent.y.to_bits(),
+        );
+        let body = dump("window_autosize", ctx.draw_list());
+        ctx.end_window();
+        out.push_str(&text);
+        for line in body.lines().skip(2) {
+            out.push_str(line);
+            out.push('\n');
+        }
+        ctx.end_frame();
+    };
+
+    for _ in 0..6 {
+        frame(&mut ctx, &mut out);
+    }
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -2089,6 +2143,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "window_scrollbar" => Some(window_scrollbar_dump()),
         "window_scrollbar_drag" => Some(window_scrollbar_drag_dump()),
         "window_wheel" => Some(window_wheel_dump()),
+        "window_autosize" => Some(window_autosize_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),

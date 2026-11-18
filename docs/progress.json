@@ -6,7 +6,7 @@
     {
       "id": "core",
       "title": "Núcleo: contexto, IO, ventanas, identificadores, layout",
-      "weight": 46,
+      "weight": 47,
       "infra": false,
       "items": [
         { "id": "hash", "label": "Hash de identificadores (CRC32c, reinicio con ###)", "weight": 2, "done": true, "evidence": "id::tests::hashes_match_oracle (12 vectores del oráculo)" },
@@ -23,6 +23,7 @@
         { "id": "win_icons", "label": "Iconos de ventana: flecha de colapso y cruz de cierre", "weight": 1, "done": true, "evidence": "golden window_icons (flecha, cruz y texto desplazado por los iconos)" },
         { "id": "win_icons_input", "label": "Iconos de ventana: hover, pulsación, colapso y cierre", "weight": 1, "done": true, "evidence": "golden window_icons_states (14 estados: resalte, pulsado, soltar dentro y fuera, colapsada y expandida)" },
         { "id": "win_icons_drag", "label": "Arrastrar la ventana desde la flecha (umbral de arrastre y desplazamiento)", "weight": 1, "done": true, "evidence": "golden window_icons_drag (8 estados con la posición de la ventana)" },
+        { "id": "win_autosize", "label": "Auto-tamaño: la ventana toma el tamaño que pide su contenido", "weight": 1, "done": true, "evidence": "golden window_autosize (6 frames con tamaño, área interior y contenido)" },
         { "id": "win_wheel", "label": "Rueda del ratón: paso de cinco tamaños de fuente y desplazamiento simétrico", "weight": 1, "done": true, "evidence": "golden window_wheel (11 frames: dos muescas abajo, una arriba y media muesca)" },
         { "id": "win_scrollbar_drag", "label": "Arrastrar el agarre y clicar la pista (búsqueda absoluta, con colores de hover y pulsado)", "weight": 1, "done": true, "evidence": "golden window_scrollbar_drag (16 frames: hover, agarre, arrastre, clic en pista)" },
         { "id": "win_scrollbar", "label": "Barra de scroll vertical: aparición, ancho del área interior y dibujo del agarre", "weight": 1, "done": true, "evidence": "golden window_scrollbar (5 frames con rectángulo de barra, área interior y volcado)" },
