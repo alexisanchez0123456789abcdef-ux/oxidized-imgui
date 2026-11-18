@@ -1445,6 +1445,54 @@ static void DumpWindowScrollbarDrag()
     FrameScrollbarDrag(0.0f, 0.0f, false);
 }
 
+// window_wheel: the mouse wheel over a window scrolls it. The target is set in NewFrame and applied
+// by the Begin of the same frame, so the dump of that frame already shows the new scroll.
+static void FrameWheelWindow(float mx, float my, float wheel_y)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = false;
+    if (wheel_y != 0.0f)
+        io.AddMouseWheelEvent(0.0f, wheel_y);
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
+    ImGui::Begin("S", NULL, flags);
+    ImGuiWindow* w = ImGui::GetCurrentWindow();
+    ImGui::Dummy(ImVec2(100.0f, 300.0f));
+    printf("frame wheel %08x scroll %08x max %08x\n", Bits(io.MouseWheel), Bits(w->Scroll.y),
+        Bits(w->ScrollMax.y));
+    DumpDrawListBody(*w->DrawList);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpWindowWheel()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario window_wheel\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
+    // The mouse sits over the window body, away from the scrollbar.
+    for (int i = 0; i < 4; i++)
+        FrameWheelWindow(200.0f, 150.0f, 0.0f);
+    // Two notches down, one frame each.
+    FrameWheelWindow(200.0f, 150.0f, -1.0f);
+    FrameWheelWindow(200.0f, 150.0f, -1.0f);
+    // A frame without wheel keeps the scroll.
+    FrameWheelWindow(200.0f, 150.0f, 0.0f);
+    // Back up: the step is symmetric.
+    FrameWheelWindow(200.0f, 150.0f, 1.0f);
+    FrameWheelWindow(200.0f, 150.0f, 1.0f);
+    // A half notch keeps the fractional part of the step.
+    FrameWheelWindow(200.0f, 150.0f, 0.5f);
+    FrameWheelWindow(200.0f, 150.0f, 0.0f);
+}
+
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 static void DumpCmdOffsets()
 {
@@ -1693,6 +1741,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_icons") == 0)
     {
         DumpWindowIcons();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "window_wheel") == 0)
+    {
+        DumpWindowWheel();
         ImGui::DestroyContext();
         return 0;
     }
