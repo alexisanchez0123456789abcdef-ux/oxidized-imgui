@@ -612,6 +612,29 @@ static void SceneAaBevel(ImDrawList& list)
     list.AddConvexPolyFilled(points, 3, COL);
 }
 
+// arc_steps: the automatic corner sampling for a range of corner radii.
+static void DumpArcSteps()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario arc_steps\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    ImGui::NewFrame();
+    ImDrawListSharedData* sd = ImGui::GetDrawListSharedData();
+    for (int r = 1; r <= 14; r++)
+    {
+        ImDrawList list(sd);
+        list._ResetForNewFrame();
+        list._SetPixelDensity(1.0f);
+        list.PathRect(ImVec2(10.5f, 20.25f), ImVec2(200.5f, 150.75f), (float)r, ImDrawFlags_RoundAll);
+        const int per_corner = list._Path.Size / 4;
+        const int step = 12 / (per_corner - 1);
+        printf("r %d rect_pts %d step %d\n", r, list._Path.Size, step);
+    }
+    ImGui::EndFrame();
+}
+
 // Explicit UVs: no atlas involved.
 static void ScenePrimRectUV(ImDrawList& list)
 {
@@ -741,6 +764,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "aa_round_rect") == 0)
     {
         DumpAaRoundRect();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "arc_steps") == 0)
+    {
+        DumpArcSteps();
         ImGui::DestroyContext();
         return 0;
     }
