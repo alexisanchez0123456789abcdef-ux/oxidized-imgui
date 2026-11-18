@@ -27,12 +27,14 @@ pub enum Col {
     TitleBg,
     TitleBgActive,
     TitleBgCollapsed,
+    ScrollbarBg,
+    ScrollbarGrab,
     HeaderHovered,
     HeaderActive,
 }
 
 impl Col {
-    pub const COUNT: usize = 20;
+    pub const COUNT: usize = 22;
 
     pub(crate) fn index(self) -> usize {
         match self {
@@ -56,6 +58,8 @@ impl Col {
             Col::TitleBg => 17,
             Col::TitleBgActive => 18,
             Col::TitleBgCollapsed => 19,
+            Col::ScrollbarBg => 20,
+            Col::ScrollbarGrab => 21,
         }
     }
 }
@@ -68,6 +72,10 @@ pub struct Style {
     pub item_inner_spacing: Vec2,
     /// `Style::GrabMinSize`: the grab of a slider.
     pub grab_min_size: f32,
+    /// `Style::ScrollbarSize`: the width of a scrollbar, taken out of the window's interior.
+    pub scrollbar_size: f32,
+    /// `Style::ScrollbarPadding`: the gap between the scrollbar frame and its grab.
+    pub scrollbar_padding: f32,
 
     pub frame_rounding: f32,
     pub window_rounding: f32,
@@ -115,6 +123,8 @@ impl Default for Style {
             frame_padding: Vec2 { x: 4.0, y: 3.0 },
             item_inner_spacing: Vec2 { x: 4.0, y: 4.0 },
             grab_min_size: 12.0,
+            scrollbar_size: 14.0,
+            scrollbar_padding: 2.0,
             frame_rounding: 0.0,
             window_rounding: 0.0,
             grab_rounding: 0.0,
@@ -152,6 +162,8 @@ impl Default for Style {
                 0xFF0A_0A0A, // TitleBg (pinned from the reference)
                 0xFF7A_4A29, // TitleBgActive (pinned from the reference)
                 0x8200_0000, // TitleBgCollapsed (IM_COL32(0, 0, 0, 130), pinned)
+                0x8705_0505, // ScrollbarBg (pinned from the reference)
+                0xFF4F_4F4F, // ScrollbarGrab (pinned from the reference)
             ],
         }
     }

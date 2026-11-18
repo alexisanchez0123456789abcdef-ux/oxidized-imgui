@@ -50,6 +50,8 @@ pub struct Window {
     pub scroll_max: Vec2,
     /// `window->ContentSize`: how big the content was on the previous frame.
     pub content_extent: Vec2,
+    /// `window->ScrollbarY`: whether the vertical scrollbar is shown this frame.
+    pub scrollbar_y: bool,
     /// `window->InnerRect`: the window rectangle without its decorations.
     pub inner_rect: (Vec2, Vec2),
     /// `pos + style.WindowPadding`, minus the scroll.
@@ -86,6 +88,9 @@ pub struct Context {
     content_sizes: Vec<(String, Vec2)>,
     /// `SetNextWindowScroll` for the window about to start.
     next_scroll: Option<Vec2>,
+    /// Whether the window about to start may show a scrollbar. The other constructors model
+    /// `ImGuiWindowFlags_NoScrollbar`, which every existing scenario uses.
+    next_scrollbar: bool,
     /// `g.Windows`, back to front: the order the lists are rendered in. It survives frames.
     display_order: Vec<String>,
     /// Names of the windows that were submitted on the previous frame (`WasActive`).
@@ -130,6 +135,7 @@ impl Default for Context {
             remembered: Vec::new(),
             content_sizes: Vec::new(),
             next_scroll: None,
+            next_scrollbar: false,
             display_order: Vec::new(),
             last_frame_windows: Vec::new(),
             frame_lists: Vec::new(),
@@ -287,6 +293,12 @@ impl Context {
     /// maximum the window computes, which lags one frame behind the content.
     pub fn set_next_window_scroll(&mut self, scroll: Vec2) {
         self.next_scroll = Some(scroll);
+    }
+
+    /// Allows the next window to show a scrollbar. The reference's default; the constructors here
+    /// model `ImGuiWindowFlags_NoScrollbar` instead, because every earlier scenario passes it.
+    pub fn set_next_window_scrollbar(&mut self, enabled: bool) {
+        self.next_scrollbar = enabled;
     }
 
     /// Pins `ImDrawListSharedData::TexUvLines`: the atlas line-texture table a stroked primitive
@@ -685,9 +697,9 @@ impl Context {
         } else {
             self.clamp_window_pos(pos, size)
         };
-        // `InnerRect`: the window rectangle without its decorations. A top-level window only gives
-        // up the title bar; scrollbars would take from the right and the bottom, not modelled yet.
-        let inner_rect = (
+        // `InnerRect`: the window rectangle without its decorations. A top-level window gives up
+        // the title bar, and a vertical scrollbar its width on the right.
+        let mut inner_rect = (
             Vec2 {
                 x: pos.x,
                 y: pos.y + title_height,
@@ -704,6 +716,13 @@ impl Context {
             .find(|(known, _)| known == name)
             .map(|(_, size)| *size)
             .unwrap_or_default();
+        // `window->ScrollbarY`: the content did not fit on the previous frame.
+        let wants_scrollbar = core::mem::take(&mut self.next_scrollbar);
+        let scrollbar_y =
+            wants_scrollbar && content.y + pad.y * 2.0 > inner_rect.1.y - inner_rect.0.y;
+        if scrollbar_y {
+            inner_rect.1.x -= self.style.scrollbar_size;
+        }
         let scroll_max = Vec2 {
             x: (content.x + pad.x * 2.0 - (inner_rect.1.x - inner_rect.0.x)).max(0.0),
             y: (content.y + pad.y * 2.0 - (inner_rect.1.y - inner_rect.0.y)).max(0.0),
@@ -775,6 +794,12 @@ impl Context {
                 );
             }
 
+            // The scrollbar goes between the title band and the window border, as the reference's
+            // decoration pass does.
+            if scrollbar_y {
+                self.draw_scrollbar(pos, size, inner_rect, content, scroll);
+            }
+
             // The window border, inside the rectangle. A pixel-aligned window takes the two-ring
             // frame; fractional coordinates would take the miter stroke, not wired up here.
             // The reference draws the border only when the window has a background.
@@ -825,8 +850,8 @@ impl Context {
                 y: pos.y + clip_top,
             },
             Vec2 {
-                x: pos.x + size.x - self.style.window_border_size,
-                y: pos.y + size.y - self.style.window_border_size,
+                x: (inner_rect.1.x - self.style.window_border_size * 0.5).floor(),
+                y: (inner_rect.1.y - self.style.window_border_size * 0.5).floor(),
             },
             false,
         );
@@ -844,6 +869,7 @@ impl Context {
             scroll,
             scroll_max,
             content_extent: content,
+            scrollbar_y,
             inner_rect,
             content_origin,
             content_size,
@@ -1194,6 +1220,85 @@ impl Context {
             self.start_mouse_moving_window(&hovered, pos, can_move);
         }
         self.focused_window = Some(hovered);
+    }
+
+    /// `ImGui::Scrollbar` for the vertical axis, drawing only: the grab follows the scroll but it
+    /// cannot be dragged yet.
+    fn draw_scrollbar(
+        &mut self,
+        pos: Vec2,
+        size: Vec2,
+        inner_rect: (Vec2, Vec2),
+        content: Vec2,
+        scroll: Vec2,
+    ) {
+        use crate::style::Col;
+
+        let border = self.style.window_border_size;
+        // `GetWindowScrollbarRect` for the vertical axis: the strip on the right, between the
+        // window's inner edges.
+        let frame_min = Vec2 {
+            x: pos.x + size.x - border - self.style.scrollbar_size,
+            y: inner_rect.0.y + border,
+        };
+        let frame_max = Vec2 {
+            x: pos.x + size.x - border,
+            y: inner_rect.1.y - border,
+        };
+        let frame_size = Vec2 {
+            x: frame_max.x - frame_min.x,
+            y: frame_max.y - frame_min.y,
+        };
+        if frame_size.x <= 0.0 || frame_size.y <= 0.0 {
+            return;
+        }
+
+        // The grab shrinks with the fraction of the content that is visible, with a minimum size
+        // so it stays clickable.
+        let padding = self
+            .style
+            .scrollbar_padding
+            .min(frame_size.x.min(frame_size.y) * 0.5)
+            .trunc();
+        let bar_min = Vec2 {
+            x: frame_min.x + padding,
+            y: frame_min.y + padding,
+        };
+        let bar_max = Vec2 {
+            x: frame_max.x - padding,
+            y: frame_max.y - padding,
+        };
+        let scrollbar_size_v = bar_max.y - bar_min.y;
+        if scrollbar_size_v < 1.0 {
+            return;
+        }
+        let visible = inner_rect.1.y - inner_rect.0.y;
+        let contents = content.y + self.style.window_padding.y * 2.0;
+        let win_size_v = contents.max(visible).max(1.0);
+        let grab_min = (bar_max.x - bar_min.x).min(self.style.grab_min_size);
+        // `(float)(int)ImClamp(...)`: the reference truncates the grab to whole pixels.
+        let grab_h_pixels = (scrollbar_size_v * (visible / win_size_v))
+            .clamp(grab_min, scrollbar_size_v)
+            .trunc();
+        let scroll_max = (contents - visible).max(1.0);
+        let scroll_ratio = (scroll.y / scroll_max).clamp(0.0, 1.0);
+        let grab_v_norm = scroll_ratio * (scrollbar_size_v - grab_h_pixels) / scrollbar_size_v;
+
+        self.draw_list
+            .prim_rect(frame_min, frame_max, self.style.color_u32(Col::ScrollbarBg));
+        let grab_top = bar_min.y + (bar_max.y - bar_min.y) * grab_v_norm;
+        self.draw_list.add_rect_filled_aa_rounded(
+            Vec2 {
+                x: bar_min.x,
+                y: grab_top,
+            },
+            Vec2 {
+                x: bar_max.x,
+                y: grab_top + grab_h_pixels,
+            },
+            self.style.scrollbar_rounding,
+            self.style.color_u32(Col::ScrollbarGrab),
+        );
     }
 
     /// `ClampWindowPos`: keep at least a corner of the window reachable inside the work area.
