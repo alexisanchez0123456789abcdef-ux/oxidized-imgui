@@ -1244,6 +1244,68 @@ static void DumpWindowsOrder()
     DumpWindowOrderFrame(frame++, "idle_b_on_top");
 }
 
+// windows_move: dragging a window by its title bar and by its body, and the clamp that keeps it
+// reachable when it is dragged off the display. Only the positions are dumped: the geometry of a
+// window is what windows_order already covers.
+static void FrameMovableWindow(float mx, float my, bool down, bool first)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = down;
+    ImGui::NewFrame();
+    if (first)
+    {
+        ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    }
+    ImGui::Begin("W", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoScrollbar);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpWindowsMove()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario windows_move\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
+    bool first = true;
+    for (int i = 0; i < 6; i++)
+    {
+        FrameMovableWindow(0.0f, 0.0f, false, first);
+        first = false;
+    }
+
+    auto section = [&](const char* tag, float mx, float my, bool down) {
+        FrameMovableWindow(mx, my, down, false);
+        ImGuiWindow* window = ImGui::FindWindowByName("W");
+        printf("state %s pos %08x %08x\n", tag, Bits(window->Pos.x), Bits(window->Pos.y));
+    };
+
+    section("settled", 0.0f, 0.0f, false);
+    // The title bar of W is y 60..79 at x 60..360.
+    section("press_title", 100.0f, 65.0f, true);
+    section("drag_title_1", 140.0f, 90.0f, true);
+    section("drag_title_2", 200.0f, 120.0f, true);
+    section("release_title", 200.0f, 120.0f, false);
+    // And from the body: with ConfigWindowsMoveFromTitleBarOnly off, the whole window moves.
+    section("press_body", 250.0f, 200.0f, true);
+    section("drag_body", 280.0f, 220.0f, true);
+    section("release_body", 280.0f, 220.0f, false);
+    // Far up-left: clamped so a corner stays inside the padded work area.
+    section("press_topleft", 300.0f, 240.0f, true);
+    section("drag_to_origin", 0.0f, 0.0f, true);
+    section("drag_off_screen", -400.0f, -400.0f, true);
+    section("release_off_screen", -400.0f, -400.0f, false);
+    // And far down-right.
+    section("press_again", 0.0f, 0.0f, true);
+    section("drag_far_right", 2000.0f, 2000.0f, true);
+    section("release_far_right", 2000.0f, 2000.0f, false);
+}
+
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 static void DumpCmdOffsets()
 {
@@ -1492,6 +1554,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_icons") == 0)
     {
         DumpWindowIcons();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "windows_move") == 0)
+    {
+        DumpWindowsMove();
         ImGui::DestroyContext();
         return 0;
     }

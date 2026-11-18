@@ -87,6 +87,10 @@ pub struct Style {
     /// `Style::SymbolArrowThicknessFactor`: stroke weight of an arrow relative to its radius.
     /// `0.0` makes the reference fill the arrow instead of stroking it.
     pub symbol_arrow_thickness_factor: f32,
+    /// `Style::DisplayWindowPadding` and `Style::DisplaySafeAreaPadding`: together they decide how
+    /// much of a window may leave the work area when it is moved.
+    pub display_window_padding: Vec2,
+    pub display_safe_area_padding: Vec2,
     /// `Style::WindowTitleAlign`: where the title sits inside its layout rectangle. Only the
     /// default `(0.0, 0.5)` — flush left, vertically centred — is modelled.
     pub window_title_align: Vec2,
@@ -125,6 +129,8 @@ impl Default for Style {
             symbol_arrow_size_factor: Vec2 { x: 0.72, y: 0.40 },
             symbol_arrow_thickness_factor: 0.30,
             window_title_align: Vec2 { x: 0.0, y: 0.5 },
+            display_window_padding: Vec2 { x: 19.0, y: 19.0 },
+            display_safe_area_padding: Vec2 { x: 3.0, y: 3.0 },
             colors: [
                 0xFFFF_FFFF, // Text
                 0xFF94_9494, // TextDisabled
