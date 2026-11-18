@@ -30,6 +30,7 @@ instead of against our own expectations:
 | Window icons | collapse arrow (soft-join stroke with AA ends) and close cross (two lines), drawn between the border and the title, which shifts right to make room | `window_icons` golden |
 | Window icons, interaction | hover and held highlights, the press that only counts on release inside, the collapse that kicks in next frame (title bar only, arrow turned right) and the close that flips `p_open` | `window_icons_states` golden |
 | Window icons, dragging | the arrow drag: nothing under the 6 px threshold, then the window follows the mouse keeping the grab offset, and the release does not collapse | `window_icons_drag` golden |
+| Mouse wheel lock | the window the wheel started on keeps scrolling when the mouse wanders onto another one, until it moves past the drag threshold (or the 0.7 s lock ages out) | `window_wheel_lock` golden |
 | Window auto-size, changing content | the size follows the content of the previous frame in both directions, so shrinking and growing both show up one frame later | `window_autosize_change` golden |
 | Window auto-size | the window takes its content size plus the padding (and the title bar), one frame behind the content, starting at padding-only on its first frame | `window_autosize` golden |
 | Mouse wheel | over a window it scrolls by five font sizes (capped at two thirds of the interior), symmetric up and down, and leaves the scroll alone when the wheel is silent | `window_wheel` golden |

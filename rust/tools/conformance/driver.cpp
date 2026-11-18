@@ -1570,7 +1570,67 @@ static void DumpWindowAutoSizeChange()
     FrameAutoSizeChange(200.0f);
 }
 
+// window_wheel_lock: the window the wheel is locked to keeps scrolling even when the mouse moves
+// over another window, until it moves more than the drag threshold or the lock timer runs out.
+//
+// A = (60,60)-(360,260), B = (358,60)-(658,260): they overlap by two pixels, so a four pixel move
+// takes the mouse from A alone to a point inside both, where B is on top and therefore hovered.
+static void FrameWheelLock(float mx, float my, float wheel_y)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = false;
+    if (wheel_y != 0.0f)
+        io.AddMouseWheelEvent(0.0f, wheel_y);
+    ImGui::NewFrame();
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("A", NULL, flags);
+    ImGuiWindow* wa = ImGui::GetCurrentWindow();
+    const float scroll_a = wa->Scroll.y;
+    ImGui::Dummy(ImVec2(100.0f, 300.0f));
+    ImGui::End();
+    ImGui::SetNextWindowPos(ImVec2(358.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("B", NULL, flags);
+    ImGuiWindow* wb = ImGui::GetCurrentWindow();
+    const float scroll_b = wb->Scroll.y;
+    ImGui::Dummy(ImVec2(100.0f, 300.0f));
+    ImGui::End();
+    printf("frame wheel %08x a %08x b %08x hovered %s locked %s\n", Bits(wheel_y), Bits(scroll_a),
+        Bits(scroll_b), GImGui->HoveredWindow ? GImGui->HoveredWindow->Name : "-",
+        GImGui->WheelingWindow ? GImGui->WheelingWindow->Name : "-");
+    ImGui::EndFrame();
+}
+
+static void DumpWindowWheelLock()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario window_wheel_lock\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
+    // Settle with the mouse over A alone (x 355 is left of B's edge at 358).
+    for (int i = 0; i < 4; i++)
+        FrameWheelLock(355.0f, 150.0f, 0.0f);
+    // A notch over A.
+    FrameWheelLock(355.0f, 150.0f, -1.0f);
+    // A four pixel move puts the mouse inside both, where B is on top and hovered.
+    FrameWheelLock(359.0f, 150.0f, 0.0f);
+    // The lock keeps the wheel on A even though B is hovered now.
+    FrameWheelLock(359.0f, 150.0f, -1.0f);
+    FrameWheelLock(359.0f, 150.0f, 0.0f);
+    // A big move takes the mouse to B alone: the lock is released and B scrolls.
+    FrameWheelLock(500.0f, 150.0f, 0.0f);
+    FrameWheelLock(500.0f, 150.0f, -1.0f);
+    FrameWheelLock(500.0f, 150.0f, 0.0f);
+}
+
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
+
 static void DumpCmdOffsets()
 {
     printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
@@ -1818,6 +1878,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_icons") == 0)
     {
         DumpWindowIcons();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "window_wheel_lock") == 0)
+    {
+        DumpWindowWheelLock();
         ImGui::DestroyContext();
         return 0;
     }
