@@ -1,0 +1,70 @@
+header imgui 1.93.1 WIP 19303
+scenario button_border
+white_uv 3a800000 3b800000
+cmd_count 2
+cmd 0 clip 42740000 42740000 43b38000 43818000 elems 42 vtxoff 0 idxoff 0
+cmd 1 clip 00000000 00000000 44a00000 44340000 elems 0 vtxoff 0 idxoff 42
+vtx_count 20
+vtx 0 pos 42a00000 42a00000 uv 3a800000 3b800000 col 66fa9642
+vtx 1 pos 42cc0000 42a00000 uv 3a800000 3b800000 col 66fa9642
+vtx 2 pos 42cc0000 42c60000 uv 3a800000 3b800000 col 66fa9642
+vtx 3 pos 42a00000 42c60000 uv 3a800000 3b800000 col 66fa9642
+vtx 4 pos 42a00000 42a00000 uv 3a800000 3b800000 col 80806e6e
+vtx 5 pos 42a20000 42a20000 uv 3a800000 3b800000 col 80806e6e
+vtx 6 pos 42cc0000 42a00000 uv 3a800000 3b800000 col 80806e6e
+vtx 7 pos 42ca0000 42a20000 uv 3a800000 3b800000 col 80806e6e
+vtx 8 pos 42cc0000 42c60000 uv 3a800000 3b800000 col 80806e6e
+vtx 9 pos 42ca0000 42c40000 uv 3a800000 3b800000 col 80806e6e
+vtx 10 pos 42a00000 42c60000 uv 3a800000 3b800000 col 80806e6e
+vtx 11 pos 42a20000 42c40000 uv 3a800000 3b800000 col 80806e6e
+vtx 12 pos 42aa0000 42ac0000 uv 3f6d0000 00000000 col ffffffff
+vtx 13 pos 42b60000 42ac0000 uv 3f700000 00000000 col ffffffff
+vtx 14 pos 42b60000 42bc0000 uv 3f700000 3d800000 col ffffffff
+vtx 15 pos 42aa0000 42bc0000 uv 3f6d0000 3d800000 col ffffffff
+vtx 16 pos 42ba0000 42aa0000 uv 3f708000 00000000 col ffffffff
+vtx 17 pos 42be0000 42aa0000 uv 3f718000 00000000 col ffffffff
+vtx 18 pos 42be0000 42bc0000 uv 3f718000 3d900000 col ffffffff
+vtx 19 pos 42ba0000 42bc0000 uv 3f708000 3d900000 col ffffffff
+idx_count 42
+idx 0
+idx 1
+idx 2
+idx 0
+idx 2
+idx 3
+idx 4
+idx 7
+idx 5
+idx 4
+idx 6
+idx 7
+idx 6
+idx 9
+idx 7
+idx 6
+idx 8
+idx 9
+idx 8
+idx 11
+idx 9
+idx 8
+idx 10
+idx 11
+idx 10
+idx 5
+idx 11
+idx 10
+idx 4
+idx 5
+idx 12
+idx 13
+idx 14
+idx 12
+idx 14
+idx 15
+idx 16
+idx 17
+idx 18
+idx 16
+idx 18
+idx 19

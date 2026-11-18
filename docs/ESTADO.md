@@ -2,9 +2,9 @@
 
 _Actualizado: 2026-11-18. Generado desde `docs/progress.json`: no editar a mano._
 
-## Reescritura a Rust: **44.0 %**
+## Reescritura a Rust: **44.5 %**
 
-Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 48.7 %.
+Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 49.2 %.
 
 Qué cuenta como hecho: solo lo que tiene una prueba que lo compara con el código C++ original.
 Un cambio de estado sin evidencia no sube el porcentaje.
@@ -13,7 +13,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 | --- | ---: | ---: |
 | Núcleo: contexto, IO, ventanas, identificadores, layout | 37 | 62 % |
 | Listas de dibujo y primitivas | 16 | 88 % |
-| Widgets | 25 | 36 % |
+| Widgets | 26 | 38 % |
 | Fuentes y texto | 13 | 15 % |
 | Docking y viewports | 10 | 0 % |
 | Backends y ejemplos | 8 | 0 % |
@@ -52,6 +52,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Botón: geometría, hover, estado activo y valor de retorno** — golden button
 - **Botón dibujado: relleno por estado, etiqueta y UVs** — golden button_draw
 - **Botón: reposo, hover y activo comparados** — golden button_states
+- **Botón: borde de marco (FrameBorderSize)** — golden button_border
 - **Label y checkbox: rectángulo y alternancia** — golden widgets_basic
 - **Slider: región de agarre, arrastre y redondeo** — golden slider_basic
 - **UVs de texto con el atlas fijado por fixture** — golden text_draw con UVs + fixture text_draw.glyphs.txt
