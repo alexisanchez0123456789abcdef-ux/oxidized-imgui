@@ -60,6 +60,7 @@ pub const SCENARIOS: &[&str] = &[
     "window_autosize_change",
     "window_wheel_lock",
     "window_hscrollbar",
+    "window_scrollbar_page",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -2332,6 +2333,87 @@ pub fn window_hscrollbar_dump() -> String {
     out
 }
 
+/// The `window_scrollbar_page` scenario: `ConfigScrollbarScrollByPage` makes a click on the bar's
+/// track scroll a page instead of jumping to the clicked point, and Shift forces the absolute seek
+/// back even with the option on.
+///
+/// The content is 1000 tall in a 200 tall window, so the grab is short (38 px out of 194) and a click
+/// below it lands far from the bottom: a page is 200, the absolute seek something else entirely.
+pub fn window_scrollbar_page_dump() -> String {
+    use oxidized_imgui::{Context, Vec2};
+
+    let mut ctx = Context::new();
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario window_scrollbar_page\n");
+
+    let frame = |ctx: &mut Context,
+                 out: &mut String,
+                 scroll_y: Option<f32>,
+                 by_page: bool,
+                 shift: bool,
+                 my: f32,
+                 down: bool| {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: 352.0, y: my });
+        ctx.io_mut().mouse_down[0] = down;
+        ctx.io_mut().config_scrollbar_scroll_by_page = by_page;
+        ctx.begin_frame();
+        // `begin_frame` rebuilds the keyboard state, so Shift has to be set after it.
+        ctx.io_mut().key_shift = shift;
+        if let Some(y) = scroll_y {
+            ctx.set_next_window_scroll(Vec2 { x: 0.0, y });
+        }
+        ctx.set_next_window_scrollbar(true);
+        ctx.begin_window(
+            "P",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        ctx.dummy(Vec2 {
+            x: 100.0,
+            y: 1000.0,
+        });
+        let window = ctx.window();
+        let text = format!(
+            "frame scroll {:08x} max {:08x}\n",
+            window.scroll.y.to_bits(),
+            window.scroll_max.y.to_bits(),
+        );
+        let body = dump("window_scrollbar_page", ctx.draw_list());
+        ctx.end_window();
+        out.push_str(&text);
+        for line in body.lines().skip(2) {
+            out.push_str(line);
+            out.push('\n');
+        }
+        ctx.end_frame();
+    };
+
+    for _ in 0..4 {
+        frame(&mut ctx, &mut out, None, false, false, 0.0, false);
+    }
+    // By page, click below the grab: one page down (200), not the absolute seek.
+    frame(&mut ctx, &mut out, None, true, false, 200.0, false);
+    frame(&mut ctx, &mut out, None, true, false, 200.0, true);
+    frame(&mut ctx, &mut out, None, true, false, 200.0, false);
+    frame(&mut ctx, &mut out, None, true, false, 200.0, false);
+    // Again from the same place: another page (400).
+    frame(&mut ctx, &mut out, None, true, false, 200.0, true);
+    frame(&mut ctx, &mut out, None, true, false, 200.0, false);
+    // Shift forces the absolute seek even with the option on.
+    frame(&mut ctx, &mut out, None, true, true, 200.0, false);
+    frame(&mut ctx, &mut out, None, true, true, 200.0, true);
+    frame(&mut ctx, &mut out, None, true, true, 200.0, false);
+    // Option off: the click seeks to where it landed.
+    frame(&mut ctx, &mut out, Some(0.0), false, false, 200.0, false);
+    frame(&mut ctx, &mut out, Some(0.0), false, false, 200.0, true);
+    frame(&mut ctx, &mut out, Some(0.0), false, false, 200.0, false);
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -2363,6 +2445,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "window_autosize_change" => Some(window_autosize_change_dump()),
         "window_wheel_lock" => Some(window_wheel_lock_dump()),
         "window_hscrollbar" => Some(window_hscrollbar_dump()),
+        "window_scrollbar_page" => Some(window_scrollbar_page_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),
