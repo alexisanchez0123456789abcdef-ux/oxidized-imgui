@@ -12,6 +12,8 @@ pub struct Style {
     pub item_spacing: Vec2,
     pub frame_padding: Vec2,
     pub item_inner_spacing: Vec2,
+    /// `Style::GrabMinSize`: the grab of a slider.
+    pub grab_min_size: f32,
 }
 
 impl Default for Style {
@@ -21,6 +23,7 @@ impl Default for Style {
             item_spacing: Vec2 { x: 8.0, y: 4.0 },
             frame_padding: Vec2 { x: 4.0, y: 3.0 },
             item_inner_spacing: Vec2 { x: 4.0, y: 4.0 },
+            grab_min_size: 12.0,
         }
     }
 }

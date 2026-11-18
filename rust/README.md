@@ -22,6 +22,7 @@ instead of against our own expectations:
 | Text geometry | glyph quads (positions, colours, indices) for a short string; **UVs are not compared** | `text_draw` golden |
 | Button | item rect from text metrics, hover, active, release-inside result | `button` golden |
 | Label, checkbox | text item rect; checkbox box from frame height plus inner spacing, toggling on release | `widgets_basic` golden |
+| Slider (float) | grab region (`GrabMinSize`, 2 px padding), click offset, drag ratio, 3-decimal rounding | `slider_basic` golden |
 | Clip stack | `PushClipRect`/`PopClipRect`, intersection, fullscreen fallback, command splitting | `clip_stack` golden |
 
 Provisional, **not** parity-checked: everything else. In particular the anti-aliased and rounded

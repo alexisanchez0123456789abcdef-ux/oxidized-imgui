@@ -44,6 +44,8 @@ pub struct Context {
     windows: Vec<Window>,
     remembered: Vec<(String, Vec2, Vec2)>,
     active_id: Option<ImGuiID>,
+    slider_just_activated: bool,
+    slider_grab_offset: f32,
     last_item_hovered: bool,
     last_item_active: bool,
 }
@@ -61,6 +63,8 @@ impl Default for Context {
             windows: Vec::new(),
             remembered: Vec::new(),
             active_id: None,
+            slider_just_activated: false,
+            slider_grab_offset: 0.0,
             last_item_hovered: false,
             last_item_active: false,
         }
@@ -432,6 +436,107 @@ impl Context {
             y: self.font.size + padding.y * 2.0,
         };
         self.interact(id, size)
+    }
+
+    /// `ImGui::SliderFloat` (horizontal, not logarithmic): the value follows the mouse inside the
+    /// usable range, with the reference's grab region and its 3-decimal rounding of the format.
+    pub fn slider_float(
+        &mut self,
+        label: &str,
+        value: &mut f32,
+        min_value: f32,
+        max_value: f32,
+        width: f32,
+    ) -> bool {
+        const GRAB_PADDING: f32 = 2.0;
+        const DECIMALS: f32 = 1000.0;
+
+        let id = self.get_id(label);
+        let frame_height = self.frame_height();
+        let text = self.font.calc_text_size(label, self.font.size);
+        let item_size = Vec2 {
+            x: width + self.style.item_inner_spacing.x + text.x,
+            y: frame_height,
+        };
+
+        let (min_pos, window_pos, window_size) = {
+            let window = self.window();
+            (window.cursor, window.pos, window.size)
+        };
+        let frame_max = Vec2 {
+            x: min_pos.x + width,
+            y: min_pos.y + frame_height,
+        };
+
+        let over_window = self
+            .io
+            .mouse_pos
+            .map(|m| {
+                m.x >= window_pos.x
+                    && m.x < window_pos.x + window_size.x
+                    && m.y >= window_pos.y
+                    && m.y < window_pos.y + window_size.y
+            })
+            .unwrap_or(false);
+        let hovered = over_window
+            && self
+                .io
+                .mouse_pos
+                .map(|m| {
+                    m.x >= min_pos.x && m.x < frame_max.x && m.y >= min_pos.y && m.y < frame_max.y
+                })
+                .unwrap_or(false);
+
+        if hovered && self.io.mouse_clicked[0] {
+            self.active_id = Some(id);
+            self.slider_just_activated = true;
+        }
+
+        let slider_sz = (frame_max.x - min_pos.x) - GRAB_PADDING * 2.0;
+        let grab_sz = self.style.grab_min_size.min(slider_sz);
+        let usable_sz = slider_sz - grab_sz;
+        let usable_pos_min = min_pos.x + GRAB_PADDING + grab_sz * 0.5;
+        let usable_pos_max = frame_max.x - GRAB_PADDING - grab_sz * 0.5;
+
+        let was_active = self.active_id == Some(id);
+        let mut changed = false;
+        if was_active {
+            if let Some(mouse) = self.io.mouse_pos {
+                if self.slider_just_activated {
+                    let ratio = if max_value > min_value {
+                        (*value - min_value) / (max_value - min_value)
+                    } else {
+                        0.0
+                    };
+                    let grab_pos = usable_pos_min + (usable_pos_max - usable_pos_min) * ratio;
+                    let around = mouse.x >= grab_pos - grab_sz * 0.5 - 1.0
+                        && mouse.x <= grab_pos + grab_sz * 0.5 + 1.0;
+                    self.slider_grab_offset = if around { mouse.x - grab_pos } else { 0.0 };
+                    self.slider_just_activated = false;
+                }
+                if usable_sz > 0.0 {
+                    let t = ((mouse.x - self.slider_grab_offset - usable_pos_min) / usable_sz)
+                        .clamp(0.0, 1.0);
+                    let raw = min_value + t * (max_value - min_value);
+                    // `RoundScalarWithFormatT` with the "%.3f" default format.
+                    let rounded = (raw * DECIMALS).round() / DECIMALS;
+                    if *value != rounded {
+                        *value = rounded;
+                        changed = true;
+                    }
+                }
+            }
+        }
+
+        if self.io.mouse_released[0] && was_active {
+            self.active_id = None;
+        }
+        let active = self.active_id == Some(id);
+
+        self.dummy(item_size);
+        self.last_item_hovered = hovered;
+        self.last_item_active = active;
+        changed
     }
 
     /// `ImGui::Text` for an unformatted string: an item as wide as the text, no interaction.
