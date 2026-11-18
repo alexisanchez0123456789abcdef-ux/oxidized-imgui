@@ -82,6 +82,10 @@ impl Context {
         }
     }
 
+    pub fn style_mut(&mut self) -> &mut Style {
+        &mut self.style
+    }
+
     pub fn style(&self) -> &Style {
         &self.style
     }
@@ -300,6 +304,21 @@ impl Context {
                     y: pos.y + size.y,
                 },
                 self.style.color_u32(crate::style::Col::WindowBg),
+            );
+        }
+
+        // The window border, inside the rectangle. A pixel-aligned window takes the two-ring frame;
+        // fractional coordinates would take the miter stroke, which is not wired up here.
+        // The reference draws the border only when the window has a background.
+        if background && self.style.window_border_size > 0.0 {
+            self.draw_list.add_aligned_rect_border(
+                pos,
+                Vec2 {
+                    x: pos.x + size.x,
+                    y: pos.y + size.y,
+                },
+                self.style.color_u32(crate::style::Col::Border),
+                self.style.window_border_size,
             );
         }
 

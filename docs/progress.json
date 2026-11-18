@@ -6,7 +6,7 @@
     {
       "id": "core",
       "title": "Núcleo: contexto, IO, ventanas, identificadores, layout",
-      "weight": 31,
+      "weight": 32,
       "infra": false,
       "items": [
         { "id": "hash", "label": "Hash de identificadores (CRC32c, reinicio con ###)", "weight": 2, "done": true, "evidence": "id::tests::hashes_match_oracle (12 vectores del oráculo)" },
@@ -18,6 +18,7 @@
         { "id": "frame", "label": "Ciclo de frame completo: validación de IO y reset de draw data", "weight": 4, "done": false, "evidence": "" },
         { "id": "io_keyboard", "label": "Teclado: cola de eventos, duplicados, duraciones y modificadores", "weight": 2, "done": true, "evidence": "golden io_keyboard_events" },
         { "id": "win_bg", "label": "Fondo de ventana y orden del recorte", "weight": 1, "done": true, "evidence": "golden window_bg" },
+        { "id": "win_border", "label": "Borde de ventana (marco alineado de dos anillos)", "weight": 1, "done": true, "evidence": "golden window_border" },
         { "id": "windows_stack", "label": "Pila de ventanas: colapso, scroll, foco, orden, auto-tamaño", "weight": 4, "done": false, "evidence": "" },
         { "id": "layout_full", "label": "Layout completo: wrap, columnas, alineación, grupos", "weight": 4, "done": false, "evidence": "" },
         { "id": "clip", "label": "Pila de recorte y cortes de comando", "weight": 2, "done": true, "evidence": "golden clip_stack" },

@@ -908,6 +908,72 @@ impl DrawList {
         self.add_closed_polyline_aa_miter_inside(&points, col, thickness);
     }
 
+    /// `ImDrawList::AddRect` for a pixel-aligned rectangle with the inside stroke: a two-ring frame
+    /// (outer and inner corners) of four quads.
+    pub fn add_aligned_rect_border(&mut self, min: Vec2, max: Vec2, col: ImU32, thickness: f32) {
+        let uv = self.white_uv;
+        let base = self.vtx_buffer.len() as u32;
+        let t = thickness;
+        let corners = [
+            (
+                min,
+                Vec2 {
+                    x: min.x + t,
+                    y: min.y + t,
+                },
+            ),
+            (
+                Vec2 { x: max.x, y: min.y },
+                Vec2 {
+                    x: max.x - t,
+                    y: min.y + t,
+                },
+            ),
+            (
+                max,
+                Vec2 {
+                    x: max.x - t,
+                    y: max.y - t,
+                },
+            ),
+            (
+                Vec2 { x: min.x, y: max.y },
+                Vec2 {
+                    x: min.x + t,
+                    y: max.y - t,
+                },
+            ),
+        ];
+        for (outer, inner) in corners {
+            self.vtx_buffer.push(DrawVert {
+                pos: outer,
+                uv,
+                col,
+            });
+            self.vtx_buffer.push(DrawVert {
+                pos: inner,
+                uv,
+                col,
+            });
+        }
+        let mut idx_count = 0u32;
+        for edge in 0..4u32 {
+            let a = base + edge * 2;
+            let b = a + 1;
+            let c = base + ((edge + 1) % 4) * 2 + 1;
+            let d = base + ((edge + 1) % 4) * 2;
+            // Same winding as the closed inside stroke: (outer, next inner, inner), then
+            // (outer, next outer, next inner).
+            for vertex in [a, c, b, a, d, c] {
+                self.idx_buffer.push(vertex as ImDrawIdx);
+            }
+            idx_count += 6;
+        }
+        if let Some(cmd) = self.cmd_buffer.last_mut() {
+            cmd.elem_count += idx_count;
+        }
+    }
+
     /// `ImDrawList::PrimRect`: a rectangle filled with the white pixel, no explicit UVs.
     pub fn prim_rect(&mut self, a: Vec2, c: Vec2, col: ImU32) {
         let uv = self.white_uv;
