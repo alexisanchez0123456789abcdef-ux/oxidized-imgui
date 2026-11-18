@@ -2,9 +2,9 @@
 
 _Actualizado: 2026-11-18. Generado desde `docs/progress.json`: no editar a mano._
 
-## Reescritura a Rust: **44.5 %**
+## Reescritura a Rust: **45.0 %**
 
-Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 49.2 %.
+Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 49.6 %.
 
 Qué cuenta como hecho: solo lo que tiene una prueba que lo compara con el código C++ original.
 Un cambio de estado sin evidencia no sube el porcentaje.
@@ -12,7 +12,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 | Área | Peso | Avance |
 | --- | ---: | ---: |
 | Núcleo: contexto, IO, ventanas, identificadores, layout | 37 | 62 % |
-| Listas de dibujo y primitivas | 16 | 88 % |
+| Listas de dibujo y primitivas | 17 | 88 % |
 | Widgets | 26 | 38 % |
 | Fuentes y texto | 13 | 15 % |
 | Docking y viewports | 10 | 0 % |
@@ -42,6 +42,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Relleno AA de rectángulo (miters)** — golden aa_rect
 - **AA: rectángulo redondeado (arcos de esquina)** — golden aa_round_rect
 - **AA: líneas de cualquier grosor** — golden aa_line
+- **AA: trazos con la textura de líneas del atlas (remates AA, bisel recortado, trazo cerrado)** — golden aa_strokes + fixture aa_strokes.lineuvs.txt
 - **AA: uniones en bisel (esquinas agudas)** — golden aa_bevel
 - **AA: segmentación automática de arcos** — golden arc_steps (radios 1..14)
 - **AA: puntos de bézier por subdivisión** — golden bezier_points

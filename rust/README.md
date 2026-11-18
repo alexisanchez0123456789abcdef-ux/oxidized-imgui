@@ -35,6 +35,7 @@ instead of against our own expectations:
 | Style values | default colours (`GetColorU32`), roundings and border sizes | `style_defaults` golden |
 | AA fill | rectangle fringe with miter joins; rounded rectangles from the pinned arc table | `aa_rect`, `aa_round_rect` goldens |
 | AA lines | segment quad from the normal, thickness split by the fringe | `aa_line` golden |
+| AA strokes with the atlas line textures | the whole `_AddPolyline`/`_AddLine`: stroke positions, AA end caps, soft joins with the clipped bevel, closed paths. The atlas line table travels as a fixture (`tests/fixtures/aa_strokes.lineuvs.txt`) | `aa_strokes` golden |
 | AA bevel | sharp corners switch from miter to the two-vertex bevel with its overshoot clamp | `aa_bevel` golden |
 | AA auto segmentation | segment count from the tessellation error, and the corner step that follows | `arc_steps` golden |
 | Bezier points | recursive flatness subdivision with the curve error of 1.12 px | `bezier_points` golden |
@@ -44,9 +45,9 @@ instead of against our own expectations:
 The conformance driver is compiled with `/DIMGUI_DISABLE_SSE`: the reference's default `ImRsqrtPrecise` uses the SSE reciprocal-square-root estimate, whose last bits depend on the CPU model, which would make every AA golden machine-specific. Both sides take the exact `1/sqrt` path instead.
 | Clip stack | `PushClipRect`/`PopClipRect`, intersection, fullscreen fallback, command splitting | `clip_stack` golden |
 
-Provisional, **not** parity-checked: everything else. In particular the anti-aliased and rounded
-paths, the diagonal `AddLine` (stroke joins), circles and any text are not implemented yet; the
-font atlas is a prerequisite, because even a solid fill samples the white-pixel UV of the atlas.
+Provisional, **not** parity-checked: everything else. In particular circles, the baked corner
+textures for rounded widget frames (a second drawing path next to the geometric one), text wrapping
+and clipping, and every widget beyond the ones listed above are not implemented yet.
 
 ## Commands
 

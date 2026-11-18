@@ -837,6 +837,85 @@ static void DumpWindowTitle()
     ImGui::EndFrame();
 }
 
+// Writes the atlas line-texture table the stroked scenarios sample. Like the glyph table, its
+// coordinates are only stable inside this process, so it travels with the golden.
+static void WriteLineUvFixture()
+{
+    if (g_fixture_path == NULL)
+        return;
+    ImDrawListSharedData* sd = ImGui::GetDrawListSharedData();
+    FILE* f = fopen(g_fixture_path, "wb");
+    if (f == NULL)
+        return;
+    const int count = IM_DRAWLIST_TEX_LINES_WIDTH_MAX + 1 + IM_DRAWLIST_TEX_LINES_DETAILED_WIDTH_COUNT;
+    for (int n = 0; n < count; n++)
+    {
+        const ImVec4& e = sd->TexUvLines[n];
+        fprintf(f, "line %d %08x %08x %08x %08x\n", n, Bits(e.x), Bits(e.y), Bits(e.z), Bits(e.w));
+    }
+    fclose(f);
+}
+
+// aa_strokes: the anti-aliased stroke path with the atlas line textures, which is the path a real
+// window's draw list takes by default. Lines of several thicknesses, an open polyline with soft
+// joins and AA ends, and a closed inside stroke.
+static void DumpAaStrokes()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario aa_strokes\n");
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    // The line table only reaches the shared data once a frame has selected the atlas font.
+    ImGui::NewFrame();
+    WriteLineUvFixture();
+    ImGui::EndFrame();
+
+    ImGui::NewFrame();
+    {
+        ImDrawList list(ImGui::GetDrawListSharedData());
+        list._ResetForNewFrame();
+        list._SetPixelDensity(1.0f);
+        // No Flags override: the list keeps `ImDrawListSharedData::InitialDrawFlags`, which is what
+        // a real window's draw list starts with (AA fill, AA lines, AA line ends, textured corners).
+        printf("list_flags %08x\n", (unsigned int)list.Flags);
+
+        list.AddLine(ImVec2(10.0f, 10.0f), ImVec2(50.0f, 30.0f), COL, 1.0f);
+        list.AddLine(ImVec2(10.0f, 40.0f), ImVec2(50.0f, 60.0f), COL, 2.0f);
+        list.AddLine(ImVec2(10.0f, 70.0f), ImVec2(50.0f, 90.0f), COL, 4.0f);
+
+        const ImVec2 points[3] = {
+            ImVec2(70.5f, 10.25f),
+            ImVec2(120.5f, 45.75f),
+            ImVec2(180.25f, 20.5f),
+        };
+        list.AddPolyline(points, 3, COL, 3.0f, 0);
+
+        // The shape a window's collapse arrow takes: inside stroke, anti-aliased ends, soft join.
+        const ImVec2 arrow[3] = {
+            ImVec2(70.5f, 120.25f),
+            ImVec2(75.5f, 125.75f),
+            ImVec2(80.5f, 120.25f),
+        };
+        list.AddPolyline(arrow, 3, COL, 2.0f, ImDrawFlags_StrokeInside | ImDrawFlags_AALineEnds);
+
+        // A corner sharp enough that the miter limit turns the join into a clipped bevel.
+        const ImVec2 sharp[3] = {
+            ImVec2(10.5f, 200.25f),
+            ImVec2(200.5f, 200.75f),
+            ImVec2(10.5f, 205.25f),
+        };
+        list.AddPolyline(sharp, 3, COL, 2.0f, ImDrawFlags_StrokeInside | ImDrawFlags_AALineEnds);
+
+        list.AddRect(ImVec2(100.5f, 100.25f), ImVec2(180.5f, 150.75f), COL, 0.0f, 0, 2.0f);
+        DumpDrawListBody(list);
+    }
+    ImGui::EndFrame();
+}
+
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 static void DumpCmdOffsets()
 {
@@ -1078,6 +1157,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "button_states") == 0)
     {
         DumpButtonStates();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "aa_strokes") == 0)
+    {
+        DumpAaStrokes();
         ImGui::DestroyContext();
         return 0;
     }
