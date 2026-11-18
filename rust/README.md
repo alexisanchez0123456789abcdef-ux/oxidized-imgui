@@ -17,6 +17,7 @@ instead of against our own expectations:
 | `PrimRect`, `AddRectFilled` (pixel-aligned), `AddLineH` | identical draw-list dump, byte for byte | same, scenarios `prim_rect`, `rect_filled`, `line_h` |
 | Window geometry and cursor layout | style defaults, content region, `Dummy`/`SameLine` advance, remembered pos/size | `window_layout` golden + `context::tests` |
 | Mouse input | rounded position, delta, click/release from the down duration, double-click counter | `io_mouse_events` golden |
+| Keyboard input | queued events with duplicate filtering, down durations, `IsKeyPressed`, modifiers from `ImGuiMod_*` | `io_keyboard_events` golden |
 
 Provisional, **not** parity-checked: everything else. In particular the anti-aliased and rounded
 paths, the diagonal `AddLine` (stroke joins), circles and any text are not implemented yet; the

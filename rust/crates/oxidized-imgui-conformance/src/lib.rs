@@ -26,6 +26,7 @@ pub const SCENARIOS: &[&str] = &[
     "line_h",
     "window_layout",
     "io_mouse_events",
+    "io_keyboard_events",
 ];
 
 const COL: u32 = 0xFFFF_0000; // IM_COL32(0, 0, 255, 255)
@@ -268,11 +269,65 @@ pub fn io_mouse_dump() -> String {
     out
 }
 
+/// The `io_keyboard_events` scenario: queued key events, a duplicate, two different keys in one
+/// frame, the derived down durations and the modifier flags.
+pub fn io_keyboard_dump() -> String {
+    use oxidized_imgui::{Context, Key};
+
+    let frames: [&[(Key, bool)]; 9] = [
+        &[],
+        &[(Key::A, true)],
+        &[],
+        &[(Key::A, false), (Key::A, false)],
+        &[(Key::LeftCtrl, true), (Key::A, true)],
+        &[(Key::LeftCtrl, false), (Key::A, false)],
+        &[],
+        &[(Key::ModCtrl, true)],
+        &[(Key::ModCtrl, false)],
+    ];
+
+    let mut ctx = Context::new();
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario io_keyboard_events\n");
+
+    for (i, events) in frames.iter().enumerate() {
+        ctx.io_mut().delta_time = 0.1;
+        for (key, down) in events.iter() {
+            ctx.io_mut().add_key_event(*key, *down);
+        }
+        ctx.begin_frame();
+
+        let io = ctx.io();
+        let a = io.key_data(Key::A);
+        let ctrl = io.key_data(Key::LeftCtrl);
+        out.push_str(&format!(
+            "f{i} t {:08x} a_down {} a_dur {:08x} a_press {} ctrl_down {} ctrl_dur {:08x} ctrl_press {} mods {}{}{}{}\n",
+            bits(ctx.time() as f32),
+            a.down as u8,
+            bits(a.down_duration),
+            io.is_key_pressed(Key::A) as u8,
+            ctrl.down as u8,
+            bits(ctrl.down_duration),
+            io.is_key_pressed(Key::LeftCtrl) as u8,
+            io.key_ctrl as u8,
+            io.key_shift as u8,
+            io.key_alt as u8,
+            io.key_super as u8,
+        ));
+        ctx.end_frame();
+    }
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
         "window_layout" => Some(window_layout_dump()),
         "io_mouse_events" => Some(io_mouse_dump()),
+        "io_keyboard_events" => Some(io_keyboard_dump()),
         _ => scene(name).map(|list| dump(name, &list)),
     }
 }

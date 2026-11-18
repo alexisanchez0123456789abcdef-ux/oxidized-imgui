@@ -1,0 +1,11 @@
+header imgui 1.93.1 WIP 19303
+scenario io_keyboard_events
+f0 t 3dcccccd a_down 0 a_dur bf800000 a_press 0 ctrl_down 0 ctrl_dur bf800000 ctrl_press 0 mods 0000
+f1 t 3e4ccccd a_down 1 a_dur 00000000 a_press 1 ctrl_down 0 ctrl_dur bf800000 ctrl_press 0 mods 0000
+f2 t 3e99999a a_down 1 a_dur 3dcccccd a_press 0 ctrl_down 0 ctrl_dur bf800000 ctrl_press 0 mods 0000
+f3 t 3ecccccd a_down 0 a_dur bf800000 a_press 0 ctrl_down 0 ctrl_dur bf800000 ctrl_press 0 mods 0000
+f4 t 3f000000 a_down 1 a_dur 00000000 a_press 1 ctrl_down 1 ctrl_dur 00000000 ctrl_press 1 mods 0000
+f5 t 3f19999a a_down 0 a_dur bf800000 a_press 0 ctrl_down 0 ctrl_dur bf800000 ctrl_press 0 mods 0000
+f6 t 3f333333 a_down 0 a_dur bf800000 a_press 0 ctrl_down 0 ctrl_dur bf800000 ctrl_press 0 mods 0000
+f7 t 3f4ccccd a_down 0 a_dur bf800000 a_press 0 ctrl_down 0 ctrl_dur bf800000 ctrl_press 0 mods 1000
+f8 t 3f666667 a_down 0 a_dur bf800000 a_press 0 ctrl_down 0 ctrl_dur bf800000 ctrl_press 0 mods 0000
