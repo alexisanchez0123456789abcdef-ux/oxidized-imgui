@@ -158,18 +158,32 @@ impl DrawList {
         }
     }
 
-    /// Drops trailing commands that never received geometry, which is what the reference's
-    /// `PrimUnreserve` does when a window closes.
-    pub fn drop_empty_trailing_commands(&mut self) {
-        while self.cmd_buffer.len() > 1
+    /// What closing a window does to the command list, pinned by `window_bg` and the full scene:
+    /// the empty command left by the clip push at the start is dropped, and the clip pop opens a
+    /// new empty command when the current one has geometry, and that one stays.
+    pub fn finish_clip_scope(&mut self) {
+        let had_empty = self.cmd_buffer.len() > 1
             && self
                 .cmd_buffer
                 .last()
                 .map(|c| c.elem_count == 0)
-                .unwrap_or(false)
-        {
+                .unwrap_or(false);
+        if had_empty {
             self.cmd_buffer.pop();
+        } else if self
+            .cmd_buffer
+            .last()
+            .map(|c| c.elem_count > 0)
+            .unwrap_or(false)
+        {
+            let cmd = DrawCmd {
+                clip_rect: self.fullscreen_clip,
+                idx_offset: self.idx_buffer.len() as u32,
+                ..DrawCmd::default()
+            };
+            self.cmd_buffer.push(cmd);
         }
+        self.current_clip = self.fullscreen_clip;
     }
 
     /// `ImDrawList::_OnChangedClipRect`.

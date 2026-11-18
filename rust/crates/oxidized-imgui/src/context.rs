@@ -384,10 +384,16 @@ impl Context {
         }
 
         // The window's draw list is clipped to its rectangle, inset by the window border.
+        // The clip starts below the title band when there is one.
+        let clip_top = self.style.window_border_size.max(if title.is_some() {
+            self.frame_height()
+        } else {
+            0.0
+        });
         self.draw_list.push_clip_rect(
             Vec2 {
                 x: pos.x + self.style.window_border_size,
-                y: pos.y + self.style.window_border_size,
+                y: pos.y + clip_top,
             },
             Vec2 {
                 x: pos.x + size.x - self.style.window_border_size,
@@ -416,7 +422,7 @@ impl Context {
 
     /// `ImGui::End`: the window remembers its position and size for the next frame.
     pub fn end_window(&mut self) {
-        self.draw_list.drop_empty_trailing_commands();
+        self.draw_list.finish_clip_scope();
         if let Some(window) = self.windows.pop() {
             let entry = (window.name.clone(), window.pos, window.size);
             match self
