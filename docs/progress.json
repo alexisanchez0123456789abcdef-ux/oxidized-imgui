@@ -90,7 +90,7 @@
         { "id": "w_input", "label": "Entrada de texto", "weight": 4, "done": false, "evidence": "" },
         { "id": "w_combo", "label": "Combo", "weight": 2, "done": false, "evidence": "" },
         { "id": "w_collapsing_header", "label": "Cabecera colapsable: marco, flecha, hover/activo y alternar (etiqueta al soltar, flecha al pulsar)", "weight": 2, "done": true, "evidence": "golden collapsing_header (12 frames, lista completa de 79125 bytes)" },
-        { "id": "w_tree", "label": "Árbol y nodos", "weight": 1, "done": false, "evidence": "" },
+        { "id": "w_tree", "label": "Nodos de árbol: fila estrecha, resaltado a todo el ancho, sangría y árbol anidado", "weight": 1, "done": true, "evidence": "golden tree_node (13 frames, lista completa de 56344 bytes)" },
         { "id": "w_scroll", "label": "Scroll y regiones hijas", "weight": 2, "done": false, "evidence": "" },
         { "id": "w_popup", "label": "Tooltips, menús y popups", "weight": 3, "done": false, "evidence": "" },
         { "id": "w_tables", "label": "Tablas", "weight": 2, "done": false, "evidence": "" }

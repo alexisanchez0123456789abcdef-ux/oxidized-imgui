@@ -86,6 +86,8 @@ pub struct Style {
     pub item_inner_spacing: Vec2,
     /// `Style::GrabMinSize`: the grab of a slider.
     pub grab_min_size: f32,
+    /// `Style::IndentSpacing`: how far a tree node's children move right.
+    pub indent_spacing: f32,
     /// `Style::WindowMinSize`: the smallest size a requested window size is clamped to.
     pub window_min_size: Vec2,
     /// `Style::ScrollbarSize`: the width of a scrollbar, taken out of the window's interior.
@@ -141,6 +143,7 @@ impl Default for Style {
             frame_padding: Vec2 { x: 4.0, y: 3.0 },
             item_inner_spacing: Vec2 { x: 4.0, y: 4.0 },
             grab_min_size: 12.0,
+            indent_spacing: 21.0,
             window_min_size: Vec2 { x: 32.0, y: 32.0 },
             scrollbar_size: 14.0,
             scrollbar_padding: 2.0,
