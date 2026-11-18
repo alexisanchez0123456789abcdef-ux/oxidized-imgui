@@ -454,16 +454,8 @@ impl DrawList {
     /// `ImDrawList::AddRectFilled` with rounding, antialiased: the corner arcs, then the same
     /// convex-polygon fill.
     ///
-    /// `arc_step` is the sampling step within a quarter circle. The reference derives it from an
-    /// automatic segment count; that formula is not ported yet, so it is an explicit input.
-    pub fn add_rect_filled_aa_rounded(
-        &mut self,
-        min: Vec2,
-        max: Vec2,
-        rounding: f32,
-        col: ImU32,
-        arc_step: i32,
-    ) {
+    /// The corner sampling step comes from the reference's automatic segment count.
+    pub fn add_rect_filled_aa_rounded(&mut self, min: Vec2, max: Vec2, rounding: f32, col: ImU32) {
         let mut rounding = rounding;
         rounding = rounding.min((max.x - min.x).abs() * 0.5 - 1.0);
         rounding = rounding.min((max.y - min.y).abs() * 0.5 - 1.0);
@@ -471,6 +463,7 @@ impl DrawList {
             self.add_rect_filled_aa(min, max, col);
             return;
         }
+        let arc_step = arc_step_for_radius(rounding);
 
         let mut points: Vec<Vec2> = Vec::new();
         push_arc(
@@ -521,7 +514,7 @@ impl DrawList {
     }
 
     /// `ImDrawList::PathRect` for a fully rounded rectangle: the corner arc points, ready to fill.
-    pub fn path_rect_rounded(min: Vec2, max: Vec2, rounding: f32, arc_step: i32) -> Vec<Vec2> {
+    pub fn path_rect_rounded(min: Vec2, max: Vec2, rounding: f32) -> Vec<Vec2> {
         let mut rounding = rounding;
         rounding = rounding.min((max.x - min.x).abs() * 0.5 - 1.0);
         rounding = rounding.min((max.y - min.y).abs() * 0.5 - 1.0);
@@ -533,6 +526,7 @@ impl DrawList {
             points.push(Vec2 { x: min.x, y: max.y });
             return points;
         }
+        let arc_step = arc_step_for_radius(rounding);
         push_arc(
             &mut points,
             Vec2 {
@@ -759,6 +753,37 @@ fn arc_table() -> [Vec2; 48] {
     table
 }
 
+/// `IM_DRAWLIST_CIRCLE_AUTO_SEGMENT_CALC`: the number of segments the reference picks for a circle
+/// of this radius, rounded up to an even number and clamped to [4, 512]. The default tessellation
+/// error is 0.30 (`ImGuiStyle::CircleTessellationMaxError`).
+pub fn circle_segment_count(radius: f32, max_error: f32) -> i32 {
+    const MIN: i32 = 4;
+    const MAX: i32 = 512;
+    if radius <= 0.0 {
+        return ARC_SAMPLE_MAX;
+    }
+    let error = max_error.min(radius);
+    let angle = (1.0f32 - error / radius).acos();
+    let raw = (core::f32::consts::PI / angle).ceil() as i32;
+    let even = ((raw + 1) / 2) * 2;
+    even.clamp(MIN, MAX)
+}
+
+/// `CalcCornerArcStepAndCount`: the sampling step within a quarter circle for a given segment count.
+pub fn arc_step_for_segments(segment_count: i32) -> i32 {
+    const QUARTER: i32 = ARC_SAMPLE_MAX / 4;
+    let mut step = (ARC_SAMPLE_MAX / segment_count.max(1)).clamp(1, QUARTER);
+    let count = QUARTER / step;
+    if step * count != QUARTER {
+        step = QUARTER / count.max(1);
+    }
+    step
+}
+
+/// The sampling step the reference uses for a corner of this radius.
+pub fn arc_step_for_radius(radius: f32) -> i32 {
+    arc_step_for_segments(circle_segment_count(radius, 0.30))
+}
 /// `ImDrawList::_PathArcToFastEx`: sample the fast arc table between two 12ths of a circle.
 fn push_arc(
     out: &mut Vec<Vec2>,

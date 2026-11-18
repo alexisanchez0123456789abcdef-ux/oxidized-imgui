@@ -1,0 +1,16 @@
+header imgui 1.93.1 WIP 19303
+scenario arc_steps
+r 1 rect_pts 8 step 12
+r 2 rect_pts 8 step 12
+r 3 rect_pts 12 step 6
+r 4 rect_pts 16 step 4
+r 5 rect_pts 16 step 4
+r 6 rect_pts 16 step 4
+r 7 rect_pts 16 step 4
+r 8 rect_pts 16 step 4
+r 9 rect_pts 20 step 3
+r 10 rect_pts 20 step 3
+r 11 rect_pts 20 step 3
+r 12 rect_pts 20 step 3
+r 13 rect_pts 20 step 3
+r 14 rect_pts 20 step 3

@@ -38,6 +38,7 @@ pub const SCENARIOS: &[&str] = &[
     "aa_round_rect",
     "aa_line",
     "aa_bevel",
+    "arc_steps",
 ];
 
 const COL: u32 = 0xFFFF_0000; // IM_COL32(0, 0, 255, 255)
@@ -785,15 +786,14 @@ pub fn style_defaults_dump() -> String {
 pub fn aa_round_rect_dump() -> String {
     use oxidized_imgui::{DrawList, Vec2};
 
-    const ARC_STEP: i32 = 4;
     let min = Vec2 { x: 10.5, y: 20.25 };
     let max = Vec2 { x: 60.5, y: 50.75 };
 
-    let points = DrawList::path_rect_rounded(min, max, 5.0, ARC_STEP);
+    let points = DrawList::path_rect_rounded(min, max, 5.0);
     let mut list = DrawList::new();
     list.white_uv = WHITE_UV;
     list.fringe_scale = 1.0;
-    list.add_rect_filled_aa_rounded(min, max, 5.0, COL, ARC_STEP);
+    list.add_rect_filled_aa_rounded(min, max, 5.0, COL);
 
     let mut out = String::new();
     out.push_str(&format!(
@@ -807,6 +807,35 @@ pub fn aa_round_rect_dump() -> String {
     for line in full.lines().skip(2) {
         out.push_str(line);
         out.push('\n');
+    }
+    out
+}
+
+/// The `arc_steps` scenario: the reference's automatic corner sampling for a range of radii, as the
+/// number of points it produces for a rounded rectangle and the step that follows from it.
+pub fn arc_steps_dump() -> String {
+    use oxidized_imgui::{DrawList, Vec2};
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario arc_steps\n");
+    for radius in 1..=14u32 {
+        let points = DrawList::path_rect_rounded(
+            Vec2 { x: 10.5, y: 20.25 },
+            Vec2 {
+                x: 200.5,
+                y: 150.75,
+            },
+            radius as f32,
+        );
+        let per_corner = points.len() / 4;
+        let step = 12 / (per_corner as i32 - 1);
+        out.push_str(&format!(
+            "r {radius} rect_pts {} step {step}\n",
+            points.len()
+        ));
     }
     out
 }
@@ -825,6 +854,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "slider_basic" => Some(slider_basic_dump()),
         "style_defaults" => Some(style_defaults_dump()),
         "aa_round_rect" => Some(aa_round_rect_dump()),
+        "arc_steps" => Some(arc_steps_dump()),
         _ => scene(name).map(|list| dump(name, &list)),
     }
 }
