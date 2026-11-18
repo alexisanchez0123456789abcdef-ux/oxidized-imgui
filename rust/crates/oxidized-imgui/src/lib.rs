@@ -34,7 +34,7 @@ pub const IMGUI_VERSION: &str = "1.93.1 WIP";
 /// Matches `IMGUI_VERSION_NUM`.
 pub const IMGUI_VERSION_NUM: u32 = 19303;
 
-pub use context::{Context, Window};
+pub use context::{Context, Window, WindowFlags};
 pub use draw_list::{
     DrawCmd, DrawList, DrawVert, ImDrawIdx, TexRef, Vec2, draw_flags, path_bezier_cubic_to,
 };

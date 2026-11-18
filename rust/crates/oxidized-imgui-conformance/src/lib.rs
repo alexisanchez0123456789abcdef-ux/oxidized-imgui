@@ -6,6 +6,7 @@
 //! Floats are printed as the hexadecimal bit pattern, never as decimal text: it makes the diff
 //! exact and immune to formatting differences between `printf` and `format!`.
 
+use oxidized_imgui::WindowFlags;
 use oxidized_imgui::{DrawList, IMGUI_VERSION, IMGUI_VERSION_NUM, Vec2};
 
 /// `ImDrawListSharedData::TexUvWhitePixel` of the reference's default atlas at pixel density 1.
@@ -1895,7 +1896,7 @@ pub fn window_scrollbar_dump() -> String {
         if let Some(y) = scroll_y {
             ctx.set_next_window_scroll(Vec2 { x: 0.0, y });
         }
-        ctx.set_next_window_scrollbar(true);
+        ctx.set_next_window_flags(WindowFlags::NO_MOVE);
         ctx.begin_window(
             "S",
             Some(Vec2 { x: 60.0, y: 60.0 }),
@@ -1965,7 +1966,7 @@ pub fn window_scrollbar_drag_dump() -> String {
         ctx.io_mut().mouse_pos = Some(Vec2 { x: mx, y: my });
         ctx.io_mut().mouse_down[0] = down;
         ctx.begin_frame();
-        ctx.set_next_window_scrollbar(true);
+        ctx.set_next_window_flags(WindowFlags::NO_MOVE);
         ctx.begin_window(
             "S",
             Some(Vec2 { x: 60.0, y: 60.0 }),
@@ -2029,7 +2030,7 @@ pub fn window_wheel_dump() -> String {
         ctx.io_mut().mouse_down[0] = false;
         ctx.io_mut().mouse_wheel = wheel_y;
         ctx.begin_frame();
-        ctx.set_next_window_scrollbar(true);
+        ctx.set_next_window_flags(WindowFlags::NO_MOVE);
         ctx.begin_window(
             "S",
             Some(Vec2 { x: 60.0, y: 60.0 }),
@@ -2086,7 +2087,9 @@ pub fn window_autosize_dump() -> String {
         ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
         ctx.io_mut().mouse_down[0] = false;
         ctx.begin_frame();
-        ctx.set_next_window_auto_resize(true);
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::ALWAYS_AUTO_RESIZE,
+        );
         ctx.begin_window("A", Some(Vec2 { x: 60.0, y: 60.0 }), None);
         ctx.dummy(Vec2 { x: 100.0, y: 300.0 });
         let window = ctx.window();
@@ -2140,7 +2143,9 @@ pub fn window_autosize_change_dump() -> String {
         ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
         ctx.io_mut().mouse_down[0] = false;
         ctx.begin_frame();
-        ctx.set_next_window_auto_resize(true);
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::ALWAYS_AUTO_RESIZE,
+        );
         ctx.begin_window("A", Some(Vec2 { x: 60.0, y: 60.0 }), None);
         let window = ctx.window();
         let (inner_min, inner_max) = window.inner_rect;
@@ -2202,7 +2207,7 @@ pub fn window_wheel_lock_dump() -> String {
         ctx.io_mut().mouse_down[0] = false;
         ctx.io_mut().mouse_wheel = wheel_y;
         ctx.begin_frame();
-        ctx.set_next_window_scrollbar(true);
+        ctx.set_next_window_flags(WindowFlags::NO_MOVE);
         ctx.begin_window(
             "A",
             Some(Vec2 { x: 60.0, y: 60.0 }),
@@ -2211,7 +2216,7 @@ pub fn window_wheel_lock_dump() -> String {
         let scroll_a = ctx.window().scroll.y;
         ctx.dummy(Vec2 { x: 100.0, y: 300.0 });
         ctx.end_window();
-        ctx.set_next_window_scrollbar(true);
+        ctx.set_next_window_flags(WindowFlags::NO_MOVE);
         ctx.begin_window(
             "B",
             Some(Vec2 { x: 358.0, y: 60.0 }),
@@ -2274,8 +2279,7 @@ pub fn window_hscrollbar_dump() -> String {
         if let Some(x) = scroll_x {
             ctx.set_next_window_scroll(Vec2 { x, y: 0.0 });
         }
-        ctx.set_next_window_scrollbar(true);
-        ctx.set_next_window_horizontal_scrollbar(true);
+        ctx.set_next_window_flags(WindowFlags::NO_MOVE | WindowFlags::HORIZONTAL_SCROLLBAR);
         ctx.begin_window(
             "H",
             Some(Vec2 { x: 60.0, y: 60.0 }),
@@ -2366,7 +2370,7 @@ pub fn window_scrollbar_page_dump() -> String {
         if let Some(y) = scroll_y {
             ctx.set_next_window_scroll(Vec2 { x: 0.0, y });
         }
-        ctx.set_next_window_scrollbar(true);
+        ctx.set_next_window_flags(WindowFlags::NO_MOVE);
         ctx.begin_window(
             "P",
             Some(Vec2 { x: 60.0, y: 60.0 }),
