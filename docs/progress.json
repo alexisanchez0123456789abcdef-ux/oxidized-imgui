@@ -6,7 +6,7 @@
     {
       "id": "core",
       "title": "Núcleo: contexto, IO, ventanas, identificadores, layout",
-      "weight": 35,
+      "weight": 37,
       "infra": false,
       "items": [
         { "id": "hash", "label": "Hash de identificadores (CRC32c, reinicio con ###)", "weight": 2, "done": true, "evidence": "id::tests::hashes_match_oracle (12 vectores del oráculo)" },
@@ -22,6 +22,7 @@
         { "id": "win_title", "label": "Barra de título: banda, texto y orden de dibujo", "weight": 1, "done": true, "evidence": "golden window_title" },
         { "id": "cmd_offsets", "label": "Desplazamiento de índices por comando", "weight": 1, "done": true, "evidence": "golden cmd_offsets" },
         { "id": "win_clip_close", "label": "Cierre de ventana: recorte bajo la banda y limpieza de comandos", "weight": 1, "done": true, "evidence": "goldens window_bg y window_title + sonda de comandos" },
+        { "id": "win_scene", "label": "Escena completa: ventana con título y botón, comparada entera", "weight": 2, "done": true, "evidence": "golden scene_window_button" },
         { "id": "windows_stack", "label": "Pila de ventanas: colapso, scroll, foco, orden, auto-tamaño", "weight": 4, "done": false, "evidence": "" },
         { "id": "layout_full", "label": "Layout completo: wrap, columnas, alineación, grupos", "weight": 4, "done": false, "evidence": "" },
         { "id": "clip", "label": "Pila de recorte y cortes de comando", "weight": 2, "done": true, "evidence": "golden clip_stack" },
