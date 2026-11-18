@@ -46,6 +46,7 @@ pub const SCENARIOS: &[&str] = &[
     "window_bg",
     "window_border",
     "window_title",
+    "cmd_offsets",
 ];
 
 const COL: u32 = 0xFFFF_0000; // IM_COL32(0, 0, 255, 255)
@@ -950,6 +951,27 @@ pub fn window_title_dump() -> String {
     dump("window_title", ctx.draw_list())
 }
 
+/// The `cmd_offsets` scenario: two commands in one list, so each carries the cumulative vertex and
+/// index offsets of the buffers at the moment it opened.
+pub fn cmd_offsets_dump() -> String {
+    use oxidized_imgui::{DrawList, Vec2};
+
+    let mut list = DrawList::new();
+    list.white_uv = WHITE_UV;
+    list.fringe_scale = 1.0;
+    list.add_rect_filled(
+        Vec2 { x: 10.0, y: 10.0 },
+        Vec2 { x: 50.0, y: 30.0 },
+        0xFF00_00FF,
+    );
+    list.push_clip_rect(Vec2 { x: 20.0, y: 20.0 }, Vec2 { x: 80.0, y: 60.0 }, false);
+    list.add_rect_filled(
+        Vec2 { x: 30.0, y: 25.0 },
+        Vec2 { x: 70.0, y: 45.0 },
+        0xFF00_FF00,
+    );
+    dump("cmd_offsets", &list)
+}
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -967,6 +989,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "window_bg" => Some(window_bg_dump()),
         "window_border" => Some(window_border_dump()),
         "window_title" => Some(window_title_dump()),
+        "cmd_offsets" => Some(cmd_offsets_dump()),
         "button_draw" => Some(button_draw_dump()),
         "arc_steps" => Some(arc_steps_dump()),
         "bezier_points" => Some(bezier_points_dump()),

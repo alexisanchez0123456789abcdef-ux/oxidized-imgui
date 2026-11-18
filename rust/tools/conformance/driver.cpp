@@ -837,6 +837,25 @@ static void DumpWindowTitle()
     ImGui::EndFrame();
 }
 
+// cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
+static void DumpCmdOffsets()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario cmd_offsets\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    ImGui::NewFrame();
+    ImDrawList list(ImGui::GetDrawListSharedData());
+    list._ResetForNewFrame();
+    list._SetPixelDensity(1.0f);
+    list.Flags = 0;
+    list.AddRectFilled(ImVec2(10.0f, 10.0f), ImVec2(50.0f, 30.0f), IM_COL32(255, 0, 0, 255));
+    list.PushClipRect(ImVec2(20.0f, 20.0f), ImVec2(80.0f, 60.0f), false);
+    list.AddRectFilled(ImVec2(30.0f, 25.0f), ImVec2(70.0f, 45.0f), IM_COL32(0, 255, 0, 255));
+    DumpDrawListBody(list);
+    ImGui::EndFrame();
+}
+
 // Explicit UVs: no atlas involved.
 static void ScenePrimRectUV(ImDrawList& list)
 {
@@ -892,6 +911,13 @@ int main(int argc, char** argv)
     }
 
     io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
+    if (strcmp(name, "cmd_offsets") == 0)
+    {
+        DumpCmdOffsets();
+        ImGui::DestroyContext();
+        return 0;
+    }
 
     if (strcmp(name, "window_title") == 0)
     {
