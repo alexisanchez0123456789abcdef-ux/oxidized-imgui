@@ -1,0 +1,17 @@
+header imgui 1.93.1 WIP 19303
+scenario windows_move
+state settled pos 42700000 42700000
+state press_title pos 42700000 42700000
+state drag_title_1 pos 42c80000 42aa0000
+state drag_title_2 pos 43200000 42e60000
+state release_title pos 43200000 42e60000
+state press_body pos 43200000 42e60000
+state drag_body pos 433e0000 43070000
+state release_body pos 433e0000 43070000
+state press_topleft pos 433e0000 43070000
+state drag_to_origin pos c2dc0000 c2d20000
+state drag_off_screen pos c38c8000 c3350000
+state release_off_screen pos c38c8000 c3350000
+state press_again pos c38c8000 c3350000
+state drag_far_right pos 449da000 442f4000
+state release_far_right pos 449da000 442f4000

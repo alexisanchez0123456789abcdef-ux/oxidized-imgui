@@ -51,6 +51,7 @@ pub const SCENARIOS: &[&str] = &[
     "window_icons_states",
     "window_icons_drag",
     "windows_order",
+    "windows_move",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -1645,6 +1646,144 @@ pub fn windows_order_dump() -> String {
     out
 }
 
+/// The `windows_move` scenario: dragging one window by its title bar and by its body, and the clamp
+/// that keeps it reachable when it is dragged off the display.
+///
+/// Only positions are compared: a window's geometry is what `windows_order` already pins.
+pub fn windows_move_dump() -> String {
+    use oxidized_imgui::{Context, Vec2};
+
+    let mut ctx = Context::new();
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario windows_move\n");
+
+    let frame = |ctx: &mut Context,
+                 out: &mut String,
+                 tag: &str,
+                 mx: f32,
+                 my: f32,
+                 down: bool,
+                 first: bool| {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: mx, y: my });
+        ctx.io_mut().mouse_down[0] = down;
+        ctx.begin_frame();
+        let pos = if first {
+            Some(Vec2 { x: 60.0, y: 60.0 })
+        } else {
+            None
+        };
+        let size = if first {
+            Some(Vec2 { x: 300.0, y: 200.0 })
+        } else {
+            None
+        };
+        ctx.begin_window_titled_movable("W", "W", pos, size);
+        let window_pos = ctx.window().pos;
+        ctx.end_window();
+        if !tag.is_empty() {
+            out.push_str(&format!(
+                "state {tag} pos {:08x} {:08x}\n",
+                window_pos.x.to_bits(),
+                window_pos.y.to_bits()
+            ));
+        }
+        ctx.end_frame();
+    };
+
+    for i in 0..6 {
+        frame(&mut ctx, &mut out, "", 0.0, 0.0, false, i == 0);
+    }
+
+    // The title bar of W is y 60..79 at x 60..360.
+    frame(&mut ctx, &mut out, "settled", 0.0, 0.0, false, false);
+    frame(&mut ctx, &mut out, "press_title", 100.0, 65.0, true, false);
+    frame(&mut ctx, &mut out, "drag_title_1", 140.0, 90.0, true, false);
+    frame(
+        &mut ctx,
+        &mut out,
+        "drag_title_2",
+        200.0,
+        120.0,
+        true,
+        false,
+    );
+    frame(
+        &mut ctx,
+        &mut out,
+        "release_title",
+        200.0,
+        120.0,
+        false,
+        false,
+    );
+    // And from the body: with MoveFromTitleBarOnly off, the whole window moves.
+    frame(&mut ctx, &mut out, "press_body", 250.0, 200.0, true, false);
+    frame(&mut ctx, &mut out, "drag_body", 280.0, 220.0, true, false);
+    frame(
+        &mut ctx,
+        &mut out,
+        "release_body",
+        280.0,
+        220.0,
+        false,
+        false,
+    );
+    // Far up-left: clamped so a corner stays inside the padded work area.
+    frame(
+        &mut ctx,
+        &mut out,
+        "press_topleft",
+        300.0,
+        240.0,
+        true,
+        false,
+    );
+    frame(&mut ctx, &mut out, "drag_to_origin", 0.0, 0.0, true, false);
+    frame(
+        &mut ctx,
+        &mut out,
+        "drag_off_screen",
+        -400.0,
+        -400.0,
+        true,
+        false,
+    );
+    frame(
+        &mut ctx,
+        &mut out,
+        "release_off_screen",
+        -400.0,
+        -400.0,
+        false,
+        false,
+    );
+    // And far down-right.
+    frame(&mut ctx, &mut out, "press_again", 0.0, 0.0, true, false);
+    frame(
+        &mut ctx,
+        &mut out,
+        "drag_far_right",
+        2000.0,
+        2000.0,
+        true,
+        false,
+    );
+    frame(
+        &mut ctx,
+        &mut out,
+        "release_far_right",
+        2000.0,
+        2000.0,
+        false,
+        false,
+    );
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -1667,6 +1806,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "window_icons_states" => Some(window_icons_states_dump()),
         "window_icons_drag" => Some(window_icons_drag_dump()),
         "windows_order" => Some(windows_order_dump()),
+        "windows_move" => Some(windows_move_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),

@@ -84,6 +84,8 @@ pub struct Context {
     hovered_window: Option<String>,
     /// `g.NavWindow` as far as the port needs it: the window whose title bar is highlighted.
     focused_window: Option<String>,
+    /// Windows carrying `ImGuiWindowFlags_NoMove`: the move drag takes the id but does not move.
+    immovable_windows: Vec<String>,
     /// `g.HoveredId`: the widget under the mouse, which blocks the click-to-raise.
     hovered_id: Option<ImGuiID>,
     active_id: Option<ImGuiID>,
@@ -118,6 +120,7 @@ impl Default for Context {
             last_list: crate::draw_list::DrawList::new(),
             hovered_window: None,
             focused_window: None,
+            immovable_windows: Vec::new(),
             hovered_id: None,
             active_id: None,
             active_click_offset: Vec2::default(),
@@ -236,6 +239,11 @@ impl Context {
     /// down, the window's position becomes the mouse minus where inside it the drag started.
     fn update_mouse_moving_window_new_frame(&mut self) {
         let Some(name) = self.moving_window.clone() else {
+            // `_NoMove` windows still take the move id, to stop the click hovering other windows;
+            // it is released with the button.
+            if self.active_id == Some(self.get_id("#MOVE")) && !self.io.mouse_down[0] {
+                self.active_id = None;
+            }
             return;
         };
         if !self.io.mouse_down[0] || self.io.mouse_pos.is_none() {
@@ -495,6 +503,29 @@ impl Context {
         )
     }
 
+    /// Starts a titled window that can be moved: the reference's default, without
+    /// `ImGuiWindowFlags_NoMove`. A click on it starts a move drag.
+    pub fn begin_window_titled_movable(
+        &mut self,
+        name: &str,
+        title: &str,
+        pos: Option<Vec2>,
+        size: Option<Vec2>,
+    ) -> bool {
+        self.begin_window_impl(
+            name,
+            pos,
+            size,
+            WindowOptions {
+                title: Some(title),
+                background: true,
+                open: None,
+                collapsible: false,
+                no_move: false,
+            },
+        )
+    }
+
     /// Starts a titled window that also carries the window icons: a collapse arrow on the title
     /// bar's left and, when `open` is `Some`, a close cross on its right.
     ///
@@ -569,6 +600,7 @@ impl Context {
             .rev()
             .find(|(known, ..)| known == name)
             .map(|(_, p, s, c, w)| (*p, *s, *c, *w));
+        let pos_was_set = pos.is_some();
         let (pos, size_full, mut collapsed, mut want_collapse_toggle) = match remembered {
             Some((rp, rs, rc, rw)) => (pos.unwrap_or(rp), size.unwrap_or(rs), rc, rw),
             None => (
@@ -579,6 +611,14 @@ impl Context {
             ),
         };
 
+        // Track the `NoMove` flag so the click-to-move knows whether it may drag this one.
+        if opts.no_move {
+            if !self.immovable_windows.iter().any(|known| known == name) {
+                self.immovable_windows.push(name.to_string());
+            }
+        } else {
+            self.immovable_windows.retain(|known| known != name);
+        }
         // Each window draws into its own list for the frame.
         self.draw_list = self.new_window_draw_list();
         // A window that has never been seen goes on top of the display order and takes the focus;
@@ -609,6 +649,14 @@ impl Context {
             }
         } else {
             size_full
+        };
+
+        // `ClampWindowPos`: unless the position was asked for explicitly this frame, the window is
+        // pushed back so at least part of it stays inside the work area.
+        let pos = if pos_was_set {
+            pos
+        } else {
+            self.clamp_window_pos(pos, size)
         };
         // With a title bar the content starts below it, which is why the settled reference lays a
         // window out 19 pixels lower than its first frame does.
@@ -1062,7 +1110,44 @@ impl Context {
             let name = self.display_order.remove(index);
             self.display_order.push(name);
         }
+        // `StartMouseMovingWindow`: the same click also starts a move drag. The window only
+        // follows the mouse when it is not `NoMove`, but the active id is taken either way.
+        if let Some((_, pos, ..)) = self.remembered.iter().find(|(known, ..)| *known == hovered) {
+            let pos = *pos;
+            let can_move = !self.immovable_windows.contains(&hovered);
+            self.start_mouse_moving_window(&hovered, pos, can_move);
+        }
         self.focused_window = Some(hovered);
+    }
+
+    /// `ClampWindowPos`: keep at least a corner of the window reachable inside the work area.
+    /// The work area is the whole display here, inset by `max(DisplayWindowPadding,
+    /// DisplaySafeAreaPadding)` on each side.
+    fn clamp_window_pos(&self, pos: Vec2, size: Vec2) -> Vec2 {
+        let pad = Vec2 {
+            x: self
+                .style
+                .display_window_padding
+                .x
+                .max(self.style.display_safe_area_padding.x),
+            y: self
+                .style
+                .display_window_padding
+                .y
+                .max(self.style.display_safe_area_padding.y),
+        };
+        let min = Vec2 {
+            x: pad.x - size.x,
+            y: pad.y - size.y,
+        };
+        let max = Vec2 {
+            x: self.io.display_size.x - pad.x,
+            y: self.io.display_size.y - pad.y,
+        };
+        Vec2 {
+            x: pos.x.clamp(min.x, max.x),
+            y: pos.y.clamp(min.y, max.y),
+        }
     }
 
     /// `GetColorU32(title_bar_is_highlight ? ImGuiCol_TitleBgActive : ImGuiCol_TitleBg)`: the
