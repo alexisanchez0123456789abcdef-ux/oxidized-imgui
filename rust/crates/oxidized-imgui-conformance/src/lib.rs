@@ -39,6 +39,7 @@ pub const SCENARIOS: &[&str] = &[
     "aa_line",
     "aa_bevel",
     "arc_steps",
+    "bezier_points",
 ];
 
 const COL: u32 = 0xFFFF_0000; // IM_COL32(0, 0, 255, 255)
@@ -840,6 +841,33 @@ pub fn arc_steps_dump() -> String {
     out
 }
 
+/// The `bezier_points` scenario: the auto-tessellated points of a cubic bezier. Pure arithmetic, so
+/// this is the one curve that can be compared bit for bit.
+pub fn bezier_points_dump() -> String {
+    use oxidized_imgui::Vec2;
+
+    let mut path = vec![Vec2 { x: 10.0, y: 10.0 }];
+    oxidized_imgui::path_bezier_cubic_to(
+        &mut path,
+        Vec2 { x: 50.0, y: 90.0 },
+        Vec2 { x: 130.0, y: -20.0 },
+        Vec2 { x: 180.0, y: 60.0 },
+        1.12,
+        1.0,
+    );
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario bezier_points\n");
+    out.push_str(&format!("n {}\n", path.len()));
+    for (i, p) in path.iter().enumerate() {
+        out.push_str(&format!("p {i} {:08x} {:08x}\n", bits(p.x), bits(p.y)));
+    }
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -855,6 +883,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "style_defaults" => Some(style_defaults_dump()),
         "aa_round_rect" => Some(aa_round_rect_dump()),
         "arc_steps" => Some(arc_steps_dump()),
+        "bezier_points" => Some(bezier_points_dump()),
         _ => scene(name).map(|list| dump(name, &list)),
     }
 }

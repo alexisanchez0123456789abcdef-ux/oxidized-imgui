@@ -635,6 +635,27 @@ static void DumpArcSteps()
     ImGui::EndFrame();
 }
 
+// bezier_points: the auto-tessellated points of a cubic bezier.
+static void DumpBezierPoints()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario bezier_points\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    ImGui::NewFrame();
+    ImDrawListSharedData* sd = ImGui::GetDrawListSharedData();
+    ImDrawList list(sd);
+    list._ResetForNewFrame();
+    list._SetPixelDensity(1.0f);
+    list._Path.push_back(ImVec2(10.0f, 10.0f));
+    list.PathBezierCubicCurveTo(ImVec2(50.0f, 90.0f), ImVec2(130.0f, -20.0f), ImVec2(180.0f, 60.0f), 0);
+    printf("n %d\n", list._Path.Size);
+    for (int i = 0; i < list._Path.Size; i++)
+        printf("p %d %08x %08x\n", i, Bits(list._Path[i].x), Bits(list._Path[i].y));
+    ImGui::EndFrame();
+}
+
 // Explicit UVs: no atlas involved.
 static void ScenePrimRectUV(ImDrawList& list)
 {
@@ -771,6 +792,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "arc_steps") == 0)
     {
         DumpArcSteps();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "bezier_points") == 0)
+    {
+        DumpBezierPoints();
         ImGui::DestroyContext();
         return 0;
     }
