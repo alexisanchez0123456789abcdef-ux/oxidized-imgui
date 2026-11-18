@@ -344,6 +344,58 @@ static void DumpTextDraw()
     ImGui::EndFrame();
 }
 
+// button: one button, six frames of mouse input.
+static void DumpButton()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario button\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImGui::NewFrame();
+    ImGui::EndFrame();
+
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
+    struct Frame
+    {
+        float x, y;
+        bool down;
+    };
+    const Frame frames[6] = {
+        { 0.0f, 0.0f, false },  { 96.0f, 89.0f, false }, { 96.0f, 89.0f, true },
+        { 96.0f, 89.0f, true }, { 96.0f, 89.0f, false }, { 96.0f, 89.0f, false },
+    };
+
+    for (int i = 0; i < 6; i++)
+    {
+        io.DeltaTime = 0.1f;
+        io.MousePos = ImVec2(frames[i].x, frames[i].y);
+        io.MouseDown[0] = frames[i].down;
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+        ImGui::Begin("W", NULL, flags);
+        ImGui::SetCursorScreenPos(ImVec2(80.0f, 80.0f));
+        const bool ret = ImGui::Button("Hi");
+        const ImVec2 mn = ImGui::GetItemRectMin();
+        const ImVec2 mx = ImGui::GetItemRectMax();
+        const bool hovered = ImGui::IsItemHovered();
+        const bool active = ImGui::IsItemActive();
+        const ImVec2 cursor = ImGui::GetCursorScreenPos();
+        printf("f%d pos %08x %08x down %d rect %08x %08x %08x %08x hov %d act %d ret %d cursor %08x %08x\n",
+            i, Bits(frames[i].x), Bits(frames[i].y), frames[i].down ? 1 : 0,
+            Bits(mn.x), Bits(mn.y), Bits(mx.x), Bits(mx.y),
+            hovered ? 1 : 0, active ? 1 : 0, ret ? 1 : 0, Bits(cursor.x), Bits(cursor.y));
+        ImGui::End();
+        ImGui::EndFrame();
+    }
+}
+
 // Explicit UVs: no atlas involved.
 static void ScenePrimRectUV(ImDrawList& list)
 {
@@ -400,6 +452,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "text_draw") == 0)
     {
         DumpTextDraw();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "button") == 0)
+    {
+        DumpButton();
         ImGui::DestroyContext();
         return 0;
     }

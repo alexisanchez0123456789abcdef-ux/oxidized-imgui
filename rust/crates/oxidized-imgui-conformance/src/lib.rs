@@ -30,6 +30,7 @@ pub const SCENARIOS: &[&str] = &[
     "font_metrics",
     "clip_stack",
     "text_draw",
+    "button",
 ];
 
 const COL: u32 = 0xFFFF_0000; // IM_COL32(0, 0, 255, 255)
@@ -469,6 +470,70 @@ pub fn text_draw_dump() -> String {
     out
 }
 
+/// The `button` scenario: one button, six frames of mouse input, printing the item rect, the
+/// hover/active state, the return value and the cursor afterwards.
+pub fn button_dump() -> String {
+    use oxidized_imgui::{Context, Vec2};
+
+    let frames: [(f32, f32, bool); 6] = [
+        (0.0, 0.0, false),
+        (96.0, 89.0, false),
+        (96.0, 89.0, true),
+        (96.0, 89.0, true),
+        (96.0, 89.0, false),
+        (96.0, 89.0, false),
+    ];
+
+    let mut ctx = Context::new();
+    // The reference runs one frame before the loop so its font is available.
+    ctx.begin_frame();
+    ctx.end_frame();
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario button\n");
+
+    for (i, (x, y, down)) in frames.iter().enumerate() {
+        {
+            let io = ctx.io_mut();
+            io.delta_time = 0.1;
+            io.mouse_pos = Some(Vec2 { x: *x, y: *y });
+            io.mouse_down[0] = *down;
+        }
+        ctx.begin_frame();
+        ctx.begin_window(
+            "W",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        ctx.set_cursor_screen_pos(Vec2 { x: 80.0, y: 80.0 });
+        let ret = ctx.button("Hi");
+        let min = ctx.item_rect_min();
+        let max = ctx.item_rect_max();
+        let cursor = ctx.cursor_screen_pos();
+        out.push_str(&format!(
+            "f{i} pos {:08x} {:08x} down {} rect {:08x} {:08x} {:08x} {:08x} hov {} act {} ret {} cursor {:08x} {:08x}\n",
+            bits(*x),
+            bits(*y),
+            *down as u8,
+            bits(min.x),
+            bits(min.y),
+            bits(max.x),
+            bits(max.y),
+            ctx.last_item_hovered() as u8,
+            ctx.last_item_active() as u8,
+            ret as u8,
+            bits(cursor.x),
+            bits(cursor.y),
+        ));
+        ctx.end_window();
+        ctx.end_frame();
+    }
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -478,6 +543,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "font_metrics" => Some(font_metrics_dump()),
         "clip_stack" => Some(clip_stack_dump()),
         "text_draw" => Some(text_draw_dump()),
+        "button" => Some(button_dump()),
         _ => scene(name).map(|list| dump(name, &list)),
     }
 }
