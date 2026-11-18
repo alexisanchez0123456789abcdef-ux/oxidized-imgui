@@ -84,6 +84,11 @@ pub struct Io {
 
     pub mouse_double_click_time: f32,
     pub mouse_double_click_max_dist: f32,
+    /// `ImGuiIO::MouseDragThreshold`: how far the mouse must travel before it counts as dragging.
+    pub mouse_drag_threshold: f32,
+    /// `ImGuiIO::MouseDragMaxDistanceSqr`: the furthest the mouse went since it was pressed,
+    /// squared. It is what turns a held button into a drag.
+    pub mouse_drag_max_distance_sqr: [f32; BUTTONS],
 
     /// Per-key state, indexed by `Key::index`.
     pub keys: [KeyData; Key::COUNT],
@@ -118,6 +123,8 @@ impl Default for Io {
             mouse_clicked_count: [0; BUTTONS],
             mouse_double_click_time: 0.30,
             mouse_double_click_max_dist: 6.0,
+            mouse_drag_threshold: 6.0,
+            mouse_drag_max_distance_sqr: [0.0; BUTTONS],
             keys: [KeyData::default(); Key::COUNT],
             key_queue: Vec::new(),
             key_ctrl: false,
@@ -164,5 +171,42 @@ impl Io {
     /// `IsKeyPressed(key, repeat = false)`: true only on the frame the key went down.
     pub fn is_key_pressed(&self, key: Key) -> bool {
         self.keys[key.index()].down_duration == 0.0
+    }
+
+    /// `IsMouseDragging(button, lock_threshold)`: the button is down **and** the mouse has moved
+    /// past the threshold since it was pressed. A negative threshold means the IO default.
+    pub fn is_mouse_dragging(&self, button: usize, lock_threshold: f32) -> bool {
+        if !self.mouse_down[button] {
+            return false;
+        }
+        let threshold = if lock_threshold < 0.0 {
+            self.mouse_drag_threshold
+        } else {
+            lock_threshold
+        };
+        self.mouse_drag_max_distance_sqr[button] >= threshold * threshold
+    }
+
+    /// `GetMouseDragDelta(button, lock_threshold)`: stays zero until the drag threshold is passed,
+    /// then it is the distance from the position where the button went down.
+    pub fn mouse_drag_delta(&self, button: usize, lock_threshold: f32) -> Vec2 {
+        let threshold = if lock_threshold < 0.0 {
+            self.mouse_drag_threshold
+        } else {
+            lock_threshold
+        };
+        if !(self.mouse_down[button] || self.mouse_released[button]) {
+            return Vec2::default();
+        }
+        if self.mouse_drag_max_distance_sqr[button] < threshold * threshold {
+            return Vec2::default();
+        }
+        let Some(pos) = self.mouse_pos else {
+            return Vec2::default();
+        };
+        Vec2 {
+            x: pos.x - self.mouse_clicked_pos[button].x,
+            y: pos.y - self.mouse_clicked_pos[button].y,
+        }
     }
 }

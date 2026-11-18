@@ -1075,6 +1075,87 @@ static void DumpWindowIconsStates()
     section("expanded", 0.0f, 0.0f, false);
 }
 
+// window_icons_drag: the mouse grabs the collapse arrow and drags past the threshold, which moves
+// the window (the reference's CollapseButton calls StartMouseMovingWindow). The window may move, so
+// its position is only requested on the first frame.
+static bool FrameWindowIconsDrag(float mx, float my, bool down, bool* open, ImDrawList** out_list,
+    bool first_frame, bool* out_collapsed)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = down;
+    ImGui::NewFrame();
+    if (first_frame)
+    {
+        ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    }
+    // No NoMove: the collapse arrow drag has to be allowed to move the window.
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar;
+    const bool began = ImGui::Begin("W", open, flags);
+    if (out_list != NULL)
+        *out_list = ImGui::GetWindowDrawList();
+    if (out_collapsed != NULL)
+        *out_collapsed = ImGui::GetCurrentWindow()->Collapsed;
+    ImGui::End();
+    ImGui::EndFrame();
+    return began;
+}
+
+static void DumpWindowIconsDrag()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario window_icons_drag\n");
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[6] = { 'W', 'H', 'i', 'e', 'l', 'o' };
+    for (char ch : bake_order)
+        baked->FindGlyph((ImWchar)ch);
+
+    bool open = true;
+    bool first = true;
+    for (int i = 0; i < 13; i++)
+    {
+        FrameWindowIconsDrag(0.0f, 0.0f, false, &open, NULL, first, NULL);
+        first = false;
+    }
+    FrameWindowIconsDrag(0.0f, 0.0f, false, &open, NULL, false, NULL);
+    WriteWindowIconsFixture(font, bake_order, 6);
+
+    // The arrow square starts at (65, 63) and is 13x13, so the press lands at (70, 69).
+    auto section = [&](const char* name, float mx, float my, bool down) {
+        ImDrawList* dl = NULL;
+        bool collapsed = false;
+        const bool began =
+            FrameWindowIconsDrag(mx, my, down, &open, &dl, false, &collapsed);
+        ImGuiWindow* window = ImGui::FindWindowByName("W");
+        const ImVec2 pos = window ? window->Pos : ImVec2(0, 0);
+        printf("state %s pos %08x %08x open %d collapsed %d began %d down %d\n", name,
+            Bits(pos.x), Bits(pos.y), open ? 1 : 0, collapsed ? 1 : 0, began ? 1 : 0, down ? 1 : 0);
+        if (dl != NULL)
+            DumpDrawListBody(*dl);
+    };
+
+    section("idle", 0.0f, 0.0f, false);
+    section("hover_arrow", 70.0f, 69.0f, false);
+    section("press", 70.0f, 69.0f, true);
+    // 4 right and 1 down: squared distance 17, under the default threshold of 6 (36).
+    section("below_threshold", 74.0f, 70.0f, true);
+    // 20 right and 21 down: squared distance 841, past the threshold. The move starts here but the
+    // position only changes on the next frame.
+    section("drag_start", 90.0f, 90.0f, true);
+    section("dragged", 110.0f, 100.0f, true);
+    section("released", 110.0f, 100.0f, false);
+    section("after_release", 0.0f, 0.0f, false);
+}
+
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 static void DumpCmdOffsets()
 {
@@ -1323,6 +1404,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_icons") == 0)
     {
         DumpWindowIcons();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "window_icons_drag") == 0)
+    {
+        DumpWindowIconsDrag();
         ImGui::DestroyContext();
         return 0;
     }
