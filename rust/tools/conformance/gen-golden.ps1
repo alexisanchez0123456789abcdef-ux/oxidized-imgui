@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 $cargoBin = Join-Path $env:USERPROFILE '.cargo\bin'
 if (Test-Path $cargoBin) { $env:PATH = "$cargoBin;$env:PATH" }
 
-$scenarios = @('prim_rect_uv', 'prim_rect', 'rect_filled', 'line_h', 'window_layout', 'io_mouse_events', 'io_keyboard_events', 'font_metrics', 'clip_stack', 'text_draw', 'button', 'widgets_basic', 'slider_basic', 'style_defaults', 'aa_rect', 'aa_round_rect', 'aa_line', 'aa_bevel', 'arc_steps', 'bezier_points', 'aa_polyline', 'aa_border', 'button_draw', 'window_bg', 'window_border')
+$scenarios = @('prim_rect_uv', 'prim_rect', 'rect_filled', 'line_h', 'window_layout', 'io_mouse_events', 'io_keyboard_events', 'font_metrics', 'clip_stack', 'text_draw', 'button', 'widgets_basic', 'slider_basic', 'style_defaults', 'aa_rect', 'aa_round_rect', 'aa_line', 'aa_bevel', 'arc_steps', 'bezier_points', 'aa_polyline', 'aa_border', 'button_draw', 'window_bg', 'window_border', 'window_title')
 
 $conformance = $PSScriptRoot
 $root   = (Resolve-Path "$conformance\..\..\..").Path
@@ -49,7 +49,7 @@ foreach ($name in $scenarios) {
     $dump = Join-Path $outDir "dump-$name.txt"
     # text_draw also writes the glyph table it used: the atlas is only stable inside one process,
     # so the Rust side consumes that fixture instead of a table generated elsewhere.
-    if ($name -eq 'text_draw' -or $name -eq 'button_draw') {
+    if ($name -eq 'text_draw' -or $name -eq 'button_draw' -or $name -eq 'window_title') {
         $fixture = Join-Path $fixtures "$name.glyphs.txt"
         & cmd /c "`"$driver`" $name `"$fixture`" > `"$dump`""
     } else {

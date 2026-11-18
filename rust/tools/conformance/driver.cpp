@@ -804,6 +804,39 @@ static void DumpWindowBorder()
     ImGui::EndFrame();
 }
 
+// window_title: a titled window, so the title band and its text are part of the list.
+static void DumpWindowTitle()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario window_title\n");
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[6] = { 'W', 'H', 'i', 'e', 'l', 'o' };
+    for (char ch : bake_order)
+        baked->FindGlyph((ImWchar)ch);
+    WriteGlyphFixture(font, bake_order, 6);
+
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
+    ImGui::Begin("W", NULL, flags);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImGui::End();
+    DumpDrawListBody(*dl);
+    ImGui::EndFrame();
+}
+
 // Explicit UVs: no atlas involved.
 static void ScenePrimRectUV(ImDrawList& list)
 {
@@ -859,6 +892,13 @@ int main(int argc, char** argv)
     }
 
     io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
+    if (strcmp(name, "window_title") == 0)
+    {
+        DumpWindowTitle();
+        ImGui::DestroyContext();
+        return 0;
+    }
 
     if (strcmp(name, "window_border") == 0)
     {
