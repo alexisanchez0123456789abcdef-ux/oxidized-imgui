@@ -26,6 +26,7 @@ instead of against our own expectations:
 | Window border | aligned two-ring frame, drawn only when the window has a background | `window_border` golden |
 | Title bar | band below the window top, title text inset by border plus padding, drawn after the border | `window_title` golden |
 | Command offsets | each command carries the index offset of the buffer when it opened | `cmd_offsets` golden |
+| Window close | clip starts below the title band; the empty command from the clip push is dropped and the pop adds one only after geometry | `window_bg`, `window_title` goldens |
 | Label, checkbox | text item rect; checkbox box from frame height plus inner spacing, toggling on release | `widgets_basic` golden |
 | Slider (float) | grab region (`GrabMinSize`, 2 px padding), click offset, drag ratio, 3-decimal rounding | `slider_basic` golden |
 | Style values | default colours (`GetColorU32`), roundings and border sizes | `style_defaults` golden |
