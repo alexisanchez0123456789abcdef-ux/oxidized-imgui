@@ -31,6 +31,7 @@ pub const SCENARIOS: &[&str] = &[
     "clip_stack",
     "text_draw",
     "button",
+    "widgets_basic",
 ];
 
 const COL: u32 = 0xFFFF_0000; // IM_COL32(0, 0, 255, 255)
@@ -534,6 +535,97 @@ pub fn button_dump() -> String {
     out
 }
 
+/// The `widgets_basic` scenario: a label's item rect and a checkbox over six frames.
+pub fn widgets_basic_dump() -> String {
+    use oxidized_imgui::{Context, Vec2};
+
+    let mut ctx = Context::new();
+    ctx.begin_frame();
+    ctx.end_frame();
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario widgets_basic\n");
+
+    // Label.
+    {
+        let io = ctx.io_mut();
+        io.delta_time = 0.1;
+        io.mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+        io.mouse_down[0] = false;
+    }
+    ctx.begin_frame();
+    ctx.begin_window(
+        "W",
+        Some(Vec2 { x: 60.0, y: 60.0 }),
+        Some(Vec2 { x: 300.0, y: 200.0 }),
+    );
+    ctx.set_cursor_screen_pos(Vec2 { x: 80.0, y: 80.0 });
+    ctx.label("Hi");
+    let min = ctx.item_rect_min();
+    let max = ctx.item_rect_max();
+    let cursor = ctx.cursor_screen_pos();
+    out.push_str(&format!(
+        "label rect {:08x} {:08x} {:08x} {:08x} cursor {:08x} {:08x}\n",
+        bits(min.x),
+        bits(min.y),
+        bits(max.x),
+        bits(max.y),
+        bits(cursor.x),
+        bits(cursor.y)
+    ));
+    ctx.end_window();
+    ctx.end_frame();
+
+    // Checkbox.
+    let frames: [(f32, f32, bool); 6] = [
+        (0.0, 0.0, false),
+        (98.0, 89.0, false),
+        (98.0, 89.0, true),
+        (98.0, 89.0, false),
+        (0.0, 0.0, false),
+        (98.0, 89.0, true),
+    ];
+    let mut value = false;
+    for (i, (x, y, down)) in frames.iter().enumerate() {
+        {
+            let io = ctx.io_mut();
+            io.delta_time = 0.1;
+            io.mouse_pos = Some(Vec2 { x: *x, y: *y });
+            io.mouse_down[0] = *down;
+        }
+        ctx.begin_frame();
+        ctx.begin_window(
+            "W",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        ctx.set_cursor_screen_pos(Vec2 { x: 80.0, y: 80.0 });
+        let ret = ctx.checkbox("Hi", &mut value);
+        let min = ctx.item_rect_min();
+        let max = ctx.item_rect_max();
+        let cursor = ctx.cursor_screen_pos();
+        out.push_str(&format!(
+            "cb{i} rect {:08x} {:08x} {:08x} {:08x} hov {} act {} v {} ret {} cursor {:08x} {:08x}\n",
+            bits(min.x),
+            bits(min.y),
+            bits(max.x),
+            bits(max.y),
+            ctx.last_item_hovered() as u8,
+            ctx.last_item_active() as u8,
+            value as u8,
+            ret as u8,
+            bits(cursor.x),
+            bits(cursor.y),
+        ));
+        ctx.end_window();
+        ctx.end_frame();
+    }
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -544,6 +636,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "clip_stack" => Some(clip_stack_dump()),
         "text_draw" => Some(text_draw_dump()),
         "button" => Some(button_dump()),
+        "widgets_basic" => Some(widgets_basic_dump()),
         _ => scene(name).map(|list| dump(name, &list)),
     }
 }

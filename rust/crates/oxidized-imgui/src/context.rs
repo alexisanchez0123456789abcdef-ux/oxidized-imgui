@@ -369,17 +369,13 @@ impl Context {
         self.last_item_active
     }
 
-    /// `ImGui::Button`: a framed label. Returns true on the frame the mouse is released inside,
-    /// which is the reference's behaviour for the default press/release policy.
-    pub fn button(&mut self, label: &str) -> bool {
-        let id = self.get_id(label);
-        let padding = self.style.frame_padding;
-        let text = self.font.calc_text_size(label, self.font.size);
-        let size = Vec2 {
-            x: text.x + padding.x * 2.0,
-            y: self.font.size + padding.y * 2.0,
-        };
+    /// `GetFrameHeight`: the height of a framed widget.
+    fn frame_height(&self) -> f32 {
+        self.font.size + self.style.frame_padding.y * 2.0
+    }
 
+    /// The hover/active/press logic shared by framed widgets (`ButtonBehavior`).
+    fn interact(&mut self, id: ImGuiID, size: Vec2) -> bool {
         let (min, window_pos, window_size) = {
             let window = self.window();
             (window.cursor, window.pos, window.size)
@@ -423,6 +419,40 @@ impl Context {
         self.dummy(size);
         self.last_item_hovered = hovered;
         self.last_item_active = active;
+        pressed
+    }
+
+    /// `ImGui::Button`: a framed label. Returns true on the frame the mouse is released inside.
+    pub fn button(&mut self, label: &str) -> bool {
+        let id = self.get_id(label);
+        let padding = self.style.frame_padding;
+        let text = self.font.calc_text_size(label, self.font.size);
+        let size = Vec2 {
+            x: text.x + padding.x * 2.0,
+            y: self.font.size + padding.y * 2.0,
+        };
+        self.interact(id, size)
+    }
+
+    /// `ImGui::Text` for an unformatted string: an item as wide as the text, no interaction.
+    pub fn label(&mut self, text: &str) {
+        let size = self.font.calc_text_size(text, self.font.size);
+        self.dummy(size);
+    }
+
+    /// `ImGui::Checkbox`: a square box plus a label. Returns true on the frame it is toggled.
+    pub fn checkbox(&mut self, label: &str, value: &mut bool) -> bool {
+        let id = self.get_id(label);
+        let frame = self.frame_height();
+        let text = self.font.calc_text_size(label, self.font.size);
+        let size = Vec2 {
+            x: frame + self.style.item_inner_spacing.x + text.x,
+            y: frame,
+        };
+        let pressed = self.interact(id, size);
+        if pressed {
+            *value = !*value;
+        }
         pressed
     }
 }
