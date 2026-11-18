@@ -599,6 +599,16 @@ impl Context {
             self.style.color_u32(crate::style::Col::Button)
         };
         self.draw_list.prim_rect(min, max, frame_color);
+        // A frame border, when the style asks for one, is the same aligned two-ring frame a window
+        // border uses.
+        if self.style.frame_border_size > 0.0 {
+            self.draw_list.add_aligned_rect_border(
+                min,
+                max,
+                self.style.color_u32(crate::style::Col::Border),
+                self.style.frame_border_size,
+            );
+        }
         let font = self.font.clone();
         let text_color = self.style.color_u32(crate::style::Col::Text);
         self.draw_list.add_text(

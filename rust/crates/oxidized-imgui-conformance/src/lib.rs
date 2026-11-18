@@ -49,6 +49,7 @@ pub const SCENARIOS: &[&str] = &[
     "cmd_offsets",
     "scene_window_button",
     "button_states",
+    "button_border",
 ];
 
 const COL: u32 = 0xFFFF_0000; // IM_COL32(0, 0, 255, 255)
@@ -1052,6 +1053,35 @@ pub fn button_states_dump() -> String {
     run(&mut ctx, "active", 85.0, 85.0, true, &mut out);
     out
 }
+/// The `button_border` scenario: the button with `FrameBorderSize` set, so its frame has an outline.
+pub fn button_border_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/button_border.glyphs.txt"
+    );
+    let glyphs = std::fs::read_to_string(path).expect("glyph fixture");
+    let font = Font::from_pinned(&glyphs).expect("glyph fixture");
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    ctx.style_mut().frame_border_size = 1.0;
+    ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+    ctx.begin_frame();
+    ctx.begin_window_ex(
+        "W",
+        Some(Vec2 { x: 60.0, y: 60.0 }),
+        Some(Vec2 { x: 300.0, y: 200.0 }),
+        false,
+    );
+    ctx.set_cursor_screen_pos(Vec2 { x: 80.0, y: 80.0 });
+    let _ = ctx.button("Hi");
+    ctx.end_window();
+    let out = dump("button_border", ctx.draw_list());
+    ctx.end_frame();
+    out
+}
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -1072,6 +1102,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),
+        "button_border" => Some(button_border_dump()),
         "button_draw" => Some(button_draw_dump()),
         "arc_steps" => Some(arc_steps_dump()),
         "bezier_points" => Some(bezier_points_dump()),
