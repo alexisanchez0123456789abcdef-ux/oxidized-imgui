@@ -36,6 +36,7 @@ pub const SCENARIOS: &[&str] = &[
     "style_defaults",
     "aa_rect",
     "aa_round_rect",
+    "aa_line",
 ];
 
 const COL: u32 = 0xFFFF_0000; // IM_COL32(0, 0, 255, 255)
@@ -62,6 +63,22 @@ pub fn scene(name: &str) -> Option<DrawList> {
         // Public API: horizontal line, default inside stroke, one pixel thick.
         "line_h" => list.add_line_h(10.0, 30.0, 20.0, COL, 1.0),
         // Anti-aliased fill of a rectangle that is not pixel aligned: the miter fringe path.
+        "aa_line" => {
+            list.white_uv = WHITE_UV;
+            list.fringe_scale = 1.0;
+            list.add_line_aa(
+                Vec2 { x: 10.0, y: 10.0 },
+                Vec2 { x: 50.0, y: 30.0 },
+                COL,
+                1.0,
+            );
+            list.add_line_aa(
+                Vec2 { x: 10.0, y: 10.0 },
+                Vec2 { x: 50.0, y: 30.0 },
+                COL,
+                2.0,
+            );
+        }
         "aa_rect" => {
             list.white_uv = WHITE_UV;
             list.fringe_scale = 1.0;

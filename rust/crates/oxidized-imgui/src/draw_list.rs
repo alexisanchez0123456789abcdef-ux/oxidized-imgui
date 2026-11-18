@@ -522,6 +522,70 @@ impl DrawList {
         points
     }
 
+    /// `ImDrawList::_AddLine` for the case the reference's texture selection resolves to the white
+    /// pixel, which is what the default atlas produces here: a quad from the segment and its
+    /// normal, with no end caps.
+    pub fn add_line_aa(&mut self, p1: Vec2, p2: Vec2, col: ImU32, thickness: f32) {
+        const A_MASK: u32 = 0xFF00_0000;
+        if (col & A_MASK) == 0 {
+            return;
+        }
+
+        let mut dir_x = p2.x - p1.x;
+        let mut dir_y = p2.y - p1.y;
+        let d2 = dir_x * dir_x + dir_y * dir_y;
+        let inv_len = if d2 > 0.0 { rsqrt_precise(d2) } else { 0.0 };
+        dir_x *= inv_len;
+        dir_y *= inv_len;
+        let norm_x = -dir_y;
+        let norm_y = dir_x;
+
+        // `_SelectLineTexture` reports no fringe texture for this pipeline.
+        let fringe = 0.0f32;
+        let thickness0 = (thickness + fringe) * 0.5;
+        let thickness1 = (thickness + fringe) - thickness0;
+
+        let base = self.vtx_buffer.len() as u32;
+        for (pos, uv) in [
+            (
+                Vec2 {
+                    x: p1.x - norm_x * thickness0,
+                    y: p1.y - norm_y * thickness0,
+                },
+                self.white_uv,
+            ),
+            (
+                Vec2 {
+                    x: p1.x + norm_x * thickness1,
+                    y: p1.y + norm_y * thickness1,
+                },
+                self.white_uv,
+            ),
+            (
+                Vec2 {
+                    x: p2.x - norm_x * thickness0,
+                    y: p2.y - norm_y * thickness0,
+                },
+                self.white_uv,
+            ),
+            (
+                Vec2 {
+                    x: p2.x + norm_x * thickness1,
+                    y: p2.y + norm_y * thickness1,
+                },
+                self.white_uv,
+            ),
+        ] {
+            self.vtx_buffer.push(DrawVert { pos, uv, col });
+        }
+        for i in [0u32, 2, 3, 0, 3, 1] {
+            self.idx_buffer.push((base + i) as ImDrawIdx);
+        }
+        if let Some(cmd) = self.cmd_buffer.last_mut() {
+            cmd.elem_count += 6;
+        }
+    }
+
     /// `ImDrawList::PrimRect`: a rectangle filled with the white pixel, no explicit UVs.
     pub fn prim_rect(&mut self, a: Vec2, c: Vec2, col: ImU32) {
         let uv = self.white_uv;
