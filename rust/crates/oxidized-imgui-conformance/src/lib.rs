@@ -32,6 +32,7 @@ pub const SCENARIOS: &[&str] = &[
     "text_draw",
     "button",
     "widgets_basic",
+    "slider_basic",
 ];
 
 const COL: u32 = 0xFFFF_0000; // IM_COL32(0, 0, 255, 255)
@@ -626,6 +627,66 @@ pub fn widgets_basic_dump() -> String {
     out
 }
 
+/// The `slider_basic` scenario: a float slider pressed, dragged and released.
+pub fn slider_basic_dump() -> String {
+    use oxidized_imgui::{Context, Vec2};
+
+    let frames: [(f32, f32, bool); 5] = [
+        (0.0, 0.0, false),
+        (130.0, 129.0, false),
+        (130.0, 129.0, true),
+        (150.0, 129.0, true),
+        (150.0, 129.0, false),
+    ];
+
+    let mut ctx = Context::new();
+    ctx.begin_frame();
+    ctx.end_frame();
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario slider_basic\n");
+
+    let mut value = 5.0f32;
+    for (i, (x, y, down)) in frames.iter().enumerate() {
+        {
+            let io = ctx.io_mut();
+            io.delta_time = 0.1;
+            io.mouse_pos = Some(Vec2 { x: *x, y: *y });
+            io.mouse_down[0] = *down;
+        }
+        ctx.begin_frame();
+        ctx.begin_window(
+            "W",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        ctx.set_cursor_screen_pos(Vec2 { x: 80.0, y: 120.0 });
+        let ret = ctx.slider_float("S", &mut value, 0.0, 10.0, 100.0);
+        let min = ctx.item_rect_min();
+        let max = ctx.item_rect_max();
+        let cursor = ctx.cursor_screen_pos();
+        out.push_str(&format!(
+            "sl{i} rect {:08x} {:08x} {:08x} {:08x} hov {} act {} v {:08x} ret {} cursor {:08x} {:08x}\n",
+            bits(min.x),
+            bits(min.y),
+            bits(max.x),
+            bits(max.y),
+            ctx.last_item_hovered() as u8,
+            ctx.last_item_active() as u8,
+            bits(value),
+            ret as u8,
+            bits(cursor.x),
+            bits(cursor.y),
+        ));
+        ctx.end_window();
+        ctx.end_frame();
+    }
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -637,6 +698,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "text_draw" => Some(text_draw_dump()),
         "button" => Some(button_dump()),
         "widgets_basic" => Some(widgets_basic_dump()),
+        "slider_basic" => Some(slider_basic_dump()),
         _ => scene(name).map(|list| dump(name, &list)),
     }
 }

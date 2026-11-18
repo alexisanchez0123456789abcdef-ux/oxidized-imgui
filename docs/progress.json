@@ -46,7 +46,7 @@
       "items": [
         { "id": "w_button", "label": "Botón: geometría, hover, estado activo y valor de retorno", "weight": 2, "done": true, "evidence": "golden button" },
         { "id": "w_label_checkbox", "label": "Label y checkbox: rectángulo y alternancia", "weight": 1, "done": true, "evidence": "golden widgets_basic" },
-        { "id": "w_slider", "label": "Sliders y drags", "weight": 3, "done": false, "evidence": "" },
+        { "id": "w_slider", "label": "Slider: región de agarre, arrastre y redondeo", "weight": 3, "done": true, "evidence": "golden slider_basic" },
         { "id": "w_input", "label": "Entrada de texto", "weight": 4, "done": false, "evidence": "" },
         { "id": "w_combo", "label": "Combo", "weight": 2, "done": false, "evidence": "" },
         { "id": "w_tree", "label": "Árbol y cabeceras colapsables", "weight": 3, "done": false, "evidence": "" },

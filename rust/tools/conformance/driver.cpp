@@ -468,6 +468,60 @@ static void DumpWidgets()
     }
 }
 
+// slider_basic: a float slider pressed, dragged and released.
+static void DumpSlider()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario slider_basic\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImGui::NewFrame();
+    ImGui::EndFrame();
+
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
+    struct Frame
+    {
+        float x, y;
+        bool down;
+    };
+    const Frame frames[5] = {
+        { 0.0f, 0.0f, false },
+        { 130.0f, 129.0f, false },
+        { 130.0f, 129.0f, true },
+        { 150.0f, 129.0f, true },
+        { 150.0f, 129.0f, false },
+    };
+    float value = 5.0f;
+    for (int i = 0; i < 5; i++)
+    {
+        io.DeltaTime = 0.1f;
+        io.MousePos = ImVec2(frames[i].x, frames[i].y);
+        io.MouseDown[0] = frames[i].down;
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+        ImGui::Begin("W", NULL, flags);
+        ImGui::SetCursorScreenPos(ImVec2(80.0f, 120.0f));
+        ImGui::SetNextItemWidth(100.0f);
+        const bool ret = ImGui::SliderFloat("S", &value, 0.0f, 10.0f);
+        const ImVec2 mn = ImGui::GetItemRectMin();
+        const ImVec2 mx = ImGui::GetItemRectMax();
+        const ImVec2 cursor = ImGui::GetCursorScreenPos();
+        printf("sl%d rect %08x %08x %08x %08x hov %d act %d v %08x ret %d cursor %08x %08x\n", i,
+            Bits(mn.x), Bits(mn.y), Bits(mx.x), Bits(mx.y),
+            ImGui::IsItemHovered() ? 1 : 0, ImGui::IsItemActive() ? 1 : 0, Bits(value),
+            ret ? 1 : 0, Bits(cursor.x), Bits(cursor.y));
+        ImGui::End();
+        ImGui::EndFrame();
+    }
+}
+
 // Explicit UVs: no atlas involved.
 static void ScenePrimRectUV(ImDrawList& list)
 {
@@ -538,6 +592,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "widgets_basic") == 0)
     {
         DumpWidgets();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "slider_basic") == 0)
+    {
+        DumpSlider();
         ImGui::DestroyContext();
         return 0;
     }
