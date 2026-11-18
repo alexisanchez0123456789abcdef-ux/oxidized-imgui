@@ -1,0 +1,2 @@
+# Golden dumps are the reference's exact bytes: never convert line endings.
+* -text

@@ -1,0 +1,16 @@
+header imgui 1.93.1 WIP 19303
+scenario prim_rect_uv
+cmd_count 1
+cmd 0 clip 00000000 00000000 00000000 00000000 elems 6 vtxoff 0 idxoff 0
+vtx_count 4
+vtx 0 pos 41200000 41a00000 uv 3e800000 3f000000 col ffff0000
+vtx 1 pos 41f00000 41a00000 uv 3f400000 3f000000 col ffff0000
+vtx 2 pos 41f00000 42480000 uv 3f400000 3f800000 col ffff0000
+vtx 3 pos 41200000 42480000 uv 3e800000 3f800000 col ffff0000
+idx_count 6
+idx 0
+idx 1
+idx 2
+idx 0
+idx 2
+idx 3

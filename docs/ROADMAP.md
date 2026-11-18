@@ -1,64 +1,65 @@
 # Oxidized ImGui — roadmap
 
-Status: pre-alpha. The Rust crate exists and starts from what can be proven against the C++
-reference. This document fixes the order of work and the questions that block each milestone.
+Estado: pre-alpha. El plan y el protocolo de supervisión están en [`PLAN.md`](PLAN.md); este
+documento lleva el estado de cada fase. Las decisiones cerradas están en
+[`adr/0001-compatibility-target.md`](adr/0001-compatibility-target.md).
 
-## Milestones
+## F0 — Gobernanza (hecho)
 
-### M0 — reference, toolchain and oracle (done)
+- [x] CI en cada push y PR: `cargo fmt --check`, `clippy -D warnings`, tests
+      (`.github/workflows/oxidized-rust.yml`).
+- [x] ADR 0001 con el objetivo de compatibilidad y las decisiones D1–D10.
+- [x] Upstream pinneado en `77fe4588` y política de merge al inicio de fase.
 
-- [x] Fork with the full branch set; upstream commit pinned in [`FORK.md`](../FORK.md).
-- [x] Rust toolchain and workspace in `rust/`; `cargo fmt`, `clippy -D warnings` and `cargo test`
-      green.
-- [x] Oracle: `rust/tools/oracle` builds `imgui.cpp` with MSVC and prints the version, struct
-      sizes and offsets, and hash values. The Rust tests assert those numbers.
+Puerta: primer PR con informe de evidencia y CI en verde.
 
-### M1 — core model in Rust (in progress)
+## F1 — Arnés de conformidad (hecho, con cobertura mínima)
 
-- [x] `ImHashStr` / `ImHashData`: CRC32c, seeding and `###` reset, bit-identical.
-- [x] `ImDrawVert`, `ImDrawCmd`, `TexRef`: same size and field offsets as the C++ compiler.
-- [x] Identifier stack: `get_id`, `push_id`, `pop_id`.
-- [ ] Draw-list geometry parity: the same vertices and indices as the reference for a rect, a line,
-      a circle and text.
-- [ ] Frame lifecycle, clip stack and window bookkeeping in `Context`.
-- [ ] A scriptable driver on both sides plus a diff tool: the conformance harness proper.
+- [x] Formato de dump determinista: texto con floats como patrón de bits, LF, sin atlas ni
+      decimales que dependan del formateador.
+- [x] Driver C++ (`rust/tools/conformance/driver.cpp`) que corre el escenario contra el árbol de
+      referencia y imprime el dump.
+- [x] Golden generado por ese driver (`tests/golden/prim_rect_uv.txt`) y test de igualdad byte a
+      byte en `cargo test`.
+- [x] Prueba negativa: una mutación de un bit se detecta (primera diferencia en el byte 166).
+- [x] Escenario cubierto: `PrimRectUV` (sin atlas, sin AA, sin redondeo).
+- [ ] Ampliar escenarios: `AddRectFilled` con redondeo/AA/subpíxel, `AddLine`, `AddCircle`, texto.
 
-Exit test: the same widget script produces identical draw lists from both implementations.
+Puerta cumplida para lo cubierto: dump idéntico y arnés capaz de fallar. El resto de primitivas es
+F2, y hasta que cada una tenga su escenario se declara **provisional**.
 
-### M2 — widgets and layout parity
+## F2 — Núcleo
 
-Buttons, labels, text inputs, sliders and drags, combos, trees, scroll regions, tooltips, popups,
-child windows, tables. Exit test: every widget family has recorded C++/Rust draw-list comparisons.
+- [x] `ImHashStr` / `ImHashData`: CRC32c, seed y `###`, bit a bit.
+- [x] `ImDrawVert`, `ImDrawCmd`, `TexRef`: tamaño y offsets del compilador C++.
+- [x] Pila de identificadores (`get_id`, `push_id`, `pop_id`).
+- [x] `PrimRectUV` con paridad de draw list.
+- [ ] Contexto completo: IO, ventanas, clip stack, bookkeeping de frame.
+- [ ] Primitivas restantes y sus escenarios.
 
-### M3 — fonts, docking, backends
+## F3 — Widgets
 
-Font atlas, then docking from `upstream/docking`, then backend glue (GLFW+OpenGL3, wgpu); upstream
-examples ported one row at a time.
+Una familia por PR (botón, label, checkbox, slider, drag, input, combo, árbol, scroll, tooltip,
+popup), cada una con sus escenarios y paridad.
 
-### M4 — other languages (not scheduled)
+## F4 — Fuentes y texto
 
-A C ABI and bindings for other languages, only if a real need appears. Not a v1 goal and not a
-promise: priority is the Rust crate and behavioural parity.
+Atlas, rasterizado con `stb_truetype`, wrapping, offsets en bytes UTF-8 como la referencia.
 
-## Open decisions
+## F5 — Docking y backends
 
-| Question | Why it blocks | Notes |
-| --- | --- | --- |
-| Font rasteriser | text geometry and the atlas depend on it | upstream vendors `stb_truetype`; a different rasteriser changes glyph metrics and breaks draw-list parity |
-| Text model | offsets, wrapping and input depend on it | upstream indexes UTF-8 bytes; keep bytes at the core and offer `&str` helpers |
-| Public API shape | it is the crate's contract | keep ImGui's call shape (`begin`/`end`, `ui.button`) so porting is mechanical; options via builders |
-| Docking scope | large surface area | after M2, from the `docking` branch |
-| Backend interface | how draw data reaches a GPU | start with a draw-list-only test backend; add real backends in M3 |
-| Threading | upstream `Context` is single-threaded | keep single-threaded and document it |
+Docking desde `upstream/docking`; después GLFW+OpenGL3 y winit+wgpu.
 
-## Non-goals for v1
+## F6 — Otros lenguajes (no planificado)
 
-ImPlot / ImNodes / ImGuizmo, a visual designer, remote or networked UI, a replacement for `egui`,
-C++ ABI or binary compatibility, drop-in replacement of an existing ImGui build.
+ABI C y bindings, solo si aparece una necesidad real. No prometido.
 
-## Verification
+## Decisiones abiertas
 
-Behaviour is defined by the C++ reference, never by our expectations. A conformance case is a
-script — create context, set IO, run frames, inject inputs — that runs against both
-implementations; the harness compares draw lists and widget rects. Screenshots are a courtesy,
-never the pass/fail criterion.
+Ya no bloquean F0–F2; ver ADR 0001. Cualquier decisión nueva se añade como ADR antes de
+implementarla.
+
+## No-goals de v1
+
+ImPlot / ImNodes / ImGuizmo, diseñador visual, UI remota, reemplazo de `egui`, ABI o
+compatibilidad binaria de C++, reemplazo directo de un build de ImGui existente.

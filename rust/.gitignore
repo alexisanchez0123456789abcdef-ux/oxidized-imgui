@@ -6,3 +6,6 @@
 /tools/oracle/*.exe
 /tools/oracle/*.pdb
 /tools/oracle/*.ilk
+
+# Conformance driver build output and scratch dumps
+/tools/conformance/out/

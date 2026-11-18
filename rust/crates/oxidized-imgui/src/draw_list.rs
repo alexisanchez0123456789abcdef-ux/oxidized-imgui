@@ -94,45 +94,61 @@ pub struct DrawList {
 }
 
 impl DrawList {
+    /// Resets the list for a new frame: buffers empty and one command ready, like the reference's
+    /// `_ResetForNewFrame` ("We always have a command ready in the buffer").
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            cmd_buffer: vec![DrawCmd::default()],
+            ..Self::default()
+        }
     }
 
+    /// Resets the buffers, keeping the list reusable.
+    pub fn reset_for_new_frame(&mut self) {
+        *self = Self::new();
+    }
+
+    /// Clears every buffer and leaves the list ready for a new frame, as `ImDrawList::Clear`.
     pub fn clear(&mut self) {
-        self.vtx_buffer.clear();
-        self.idx_buffer.clear();
-        self.cmd_buffer.clear();
+        self.reset_for_new_frame();
     }
 
     pub fn is_empty(&self) -> bool {
         self.vtx_buffer.is_empty() && self.idx_buffer.is_empty()
     }
 
+    /// `ImDrawList::PrimRectUV`: vertex order a, b=(c.x,a.y), c, d=(a.x,c.y); indices
+    /// 0-1-2, 0-2-3; six indices added to the current command.
+    pub fn prim_rect_uv(&mut self, a: Vec2, c: Vec2, uv_a: Vec2, uv_c: Vec2, col: ImU32) {
+        let b = Vec2 { x: c.x, y: a.y };
+        let d = Vec2 { x: a.x, y: c.y };
+        let uv_b = Vec2 {
+            x: uv_c.x,
+            y: uv_a.y,
+        };
+        let uv_d = Vec2 {
+            x: uv_a.x,
+            y: uv_c.y,
+        };
+
+        let base = self.vtx_buffer.len() as u32;
+        for (pos, uv) in [(a, uv_a), (b, uv_b), (c, uv_c), (d, uv_d)] {
+            self.vtx_buffer.push(DrawVert { pos, uv, col });
+        }
+        for i in [0u32, 1, 2, 0, 2, 3] {
+            self.idx_buffer.push((base + i) as ImDrawIdx);
+        }
+        if let Some(cmd) = self.cmd_buffer.last_mut() {
+            cmd.elem_count += 6;
+        }
+    }
+
     /// Appends a filled axis-aligned rectangle.
     ///
-    /// Provisional geometry: four vertices, six indices, one command.
+    /// Provisional: upstream `AddRectFilled` also has rounding, anti-aliasing and sub-pixel paths.
+    /// This is the plain `PrimRectUV` quad, the case the conformance harness covers today.
     pub fn add_rect_filled(&mut self, min: Vec2, max: Vec2, col: ImU32) {
-        let base = self.vtx_buffer.len() as u32;
-        let uv = Vec2::default();
-        for (x, y) in [
-            (min.x, min.y),
-            (max.x, min.y),
-            (max.x, max.y),
-            (min.x, max.y),
-        ] {
-            self.vtx_buffer.push(DrawVert {
-                pos: Vec2 { x, y },
-                uv,
-                col,
-            });
-        }
-        for i in [0u16, 1, 2, 0, 2, 3] {
-            self.idx_buffer.push(base as ImDrawIdx + i);
-        }
-        self.cmd_buffer.push(DrawCmd {
-            elem_count: 6,
-            ..DrawCmd::default()
-        });
+        self.prim_rect_uv(min, max, Vec2::default(), Vec2::default(), col);
     }
 
     pub fn vertices(&self) -> &[DrawVert] {
@@ -188,6 +204,15 @@ mod tests {
 
         list.clear();
         assert!(list.is_empty());
-        assert!(list.cmd_buffer.is_empty());
+        assert_eq!(list.cmd_buffer.len(), 1);
+        assert_eq!(list.cmd_buffer[0].elem_count, 0);
+    }
+
+    #[test]
+    fn new_frame_leaves_one_command_ready() {
+        let list = DrawList::new();
+        assert!(list.is_empty());
+        assert_eq!(list.cmd_buffer.len(), 1);
+        assert_eq!(list.cmd_buffer[0].elem_count, 0);
     }
 }
