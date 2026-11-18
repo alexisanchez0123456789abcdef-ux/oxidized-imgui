@@ -12,6 +12,23 @@ use crate::id::{ImGuiID, hash_str_utf8};
 use crate::io::{BUTTONS, Io, Key};
 use crate::style::Style;
 
+/// `g_ImGuiDirCosSin[ImGuiDir_Down]`: the arrow a window shows while it is open.
+const ARROW_DOWN_COS: f32 = 0.0;
+const ARROW_DOWN_SIN: f32 = 1.0;
+
+/// What `begin_window` has to know about the window it is opening.
+#[derive(Clone, Copy)]
+struct WindowOptions<'a> {
+    /// `None` for a window without a title bar.
+    title: Option<&'a str>,
+    /// `ImGuiWindowFlags_NoBackground` when false.
+    background: bool,
+    /// `p_open != NULL`: the title bar gets a close button.
+    closable: bool,
+    /// `!(flags & ImGuiWindowFlags_NoCollapse)`: the title bar gets a collapse arrow.
+    collapsible: bool,
+}
+
 /// An open window. Only the geometry the harness checks is modelled.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Window {
@@ -38,6 +55,8 @@ pub struct Context {
     last_frame_draw_calls: usize,
     style: Style,
     font: Font,
+    /// `ImDrawListSharedData::TexUvLines`, shared with the frame's draw list.
+    line_uv_lines: Vec<[f32; 4]>,
     io: Io,
     /// `g.Time`: the reference keeps it as a `double` and `GetTime()` returns it as such.
     time: f64,
@@ -60,6 +79,7 @@ impl Default for Context {
             last_frame_draw_calls: 0,
             style: Style::default(),
             font: Font::reference_default(),
+            line_uv_lines: Vec::new(),
             io: Io::default(),
             time: 0.0,
             windows: Vec::new(),
@@ -94,10 +114,24 @@ impl Context {
     /// also does) leaves the identifier stack untouched.
     pub fn begin_frame(&mut self) {
         self.frame_count += 1;
-        self.draw_list = crate::draw_list::DrawList::new();
+        // A window's draw list is not a bare list: the reference gives it `InitialDrawFlags`,
+        // which turn on anti-aliased fills, lines and (textured) corners.
+        let mut draw_list = crate::draw_list::DrawList::new();
+        draw_list.flags = crate::draw_list::WINDOW_DRAW_FLAGS;
+        // `_FringeScale` at pixel density 1: the window list is not created bare, it is re-scaled
+        // every frame from the current density.
+        draw_list.fringe_scale = 1.0;
+        draw_list.tex_uv_lines.clone_from(&self.line_uv_lines);
+        self.draw_list = draw_list;
         self.time += self.io.delta_time as f64;
         self.update_keyboard_inputs();
         self.update_mouse_inputs();
+    }
+
+    /// Pins `ImDrawListSharedData::TexUvLines`: the atlas line-texture table a stroked primitive
+    /// samples when the draw list has anti-aliased lines enabled.
+    pub fn set_line_uv_lines(&mut self, table: Vec<[f32; 4]>) {
+        self.line_uv_lines = table;
     }
 
     /// Ends a frame.
@@ -264,7 +298,17 @@ impl Context {
     /// `None` keeps the position or size the window had in a previous frame, as the reference does.
     /// Starts a window and paints its background, like `ImGui::Begin` with default flags.
     pub fn begin_window(&mut self, name: &str, pos: Option<Vec2>, size: Option<Vec2>) {
-        self.begin_window_impl(name, None, pos, size, true);
+        self.begin_window_impl(
+            name,
+            pos,
+            size,
+            WindowOptions {
+                title: None,
+                background: true,
+                closable: false,
+                collapsible: false,
+            },
+        );
     }
 
     /// Starts a window with a title bar: background, title band, border and the title text.
@@ -275,7 +319,48 @@ impl Context {
         pos: Option<Vec2>,
         size: Option<Vec2>,
     ) {
-        self.begin_window_impl(name, Some(title), pos, size, true);
+        self.begin_window_impl(
+            name,
+            pos,
+            size,
+            WindowOptions {
+                title: Some(title),
+                background: true,
+                closable: false,
+                collapsible: false,
+            },
+        );
+    }
+
+    /// Starts a titled window that also carries the window icons: a collapse arrow on the title
+    /// bar's left and, when `closable`, a close cross on its right.
+    ///
+    /// This mirrors `ImGui::Begin("W", &open, flags)` with neither `NoCollapse` nor a null
+    /// `p_open`. The icons shift the title text, so the bar is laid out the way the reference's
+    /// `RenderWindowTitleBarContents` does. Only `Style::WindowMenuButtonPosition == Left`, the
+    /// default, is modelled.
+    ///
+    /// Not modelled yet: clicking the icons. The arrow does not collapse the window and the cross
+    /// does not close it; only their geometry and hover highlight are here.
+    pub fn begin_window_titled_with_icons(
+        &mut self,
+        name: &str,
+        title: &str,
+        pos: Option<Vec2>,
+        size: Option<Vec2>,
+        closable: bool,
+    ) {
+        self.begin_window_impl(
+            name,
+            pos,
+            size,
+            WindowOptions {
+                title: Some(title),
+                background: true,
+                closable,
+                collapsible: true,
+            },
+        );
     }
 
     /// Starts a window, choosing whether the background is painted
@@ -287,17 +372,28 @@ impl Context {
         size: Option<Vec2>,
         background: bool,
     ) {
-        self.begin_window_impl(name, None, pos, size, background);
+        self.begin_window_impl(
+            name,
+            pos,
+            size,
+            WindowOptions {
+                title: None,
+                background,
+                closable: false,
+                collapsible: false,
+            },
+        );
     }
 
     fn begin_window_impl(
         &mut self,
         name: &str,
-        title: Option<&str>,
         pos: Option<Vec2>,
         size: Option<Vec2>,
-        background: bool,
+        opts: WindowOptions,
     ) {
+        let title = opts.title;
+        let background = opts.background;
         let remembered = self
             .remembered
             .iter()
@@ -375,19 +471,11 @@ impl Context {
 
         // The title text goes last, after the border, indented by the border width on top of the
         // frame padding: the reference draws it inside the window's inner rectangle.
+        // The title bar's contents: the icons first, then the text. This is the reference's
+        // `RenderWindowTitleBarContents`, and the order matters because it changes the vertex
+        // order of the list.
         if let Some(title) = title {
-            let font = self.font.clone();
-            let text_color = self.style.color_u32(crate::style::Col::Text);
-            self.draw_list.add_text(
-                &font,
-                font.size,
-                Vec2 {
-                    x: pos.x + self.style.window_border_size + self.style.frame_padding.x,
-                    y: pos.y + self.style.frame_padding.y,
-                },
-                text_color,
-                title,
-            );
+            self.render_title_bar_contents(title, pos, size, opts.closable, opts.collapsible);
         }
 
         // The window's draw list is clipped to its rectangle, inset by the window border.
@@ -425,6 +513,179 @@ impl Context {
             last_max: Vec2::default(),
             has_item: false,
         });
+    }
+
+    /// `ImGui::RenderWindowTitleBarContents`: the collapse arrow, the close cross and the title,
+    /// laid out so the buttons never overlap the text.
+    fn render_title_bar_contents(
+        &mut self,
+        title: &str,
+        pos: Vec2,
+        size: Vec2,
+        closable: bool,
+        collapsible: bool,
+    ) {
+        use crate::style::Col;
+
+        let border = self.style.window_border_size;
+        let frame_padding = self.style.frame_padding;
+        let inner = self.style.item_inner_spacing.x;
+        let button_sz = self.font.size;
+        let title_height = self.frame_height();
+
+        // The caller insets the bar by the window border on both sides but not vertically.
+        let bar_min_x = pos.x + border;
+        let bar_max_x = pos.x + size.x - border;
+        let button_y = pos.y + frame_padding.y;
+
+        let mut pad_l = frame_padding.x;
+        let mut pad_r = frame_padding.x;
+
+        let close_pos = if closable {
+            let p = Vec2 {
+                x: bar_max_x - pad_r - button_sz,
+                y: button_y,
+            };
+            pad_r += button_sz + inner;
+            Some(p)
+        } else {
+            None
+        };
+        // `Style::WindowMenuButtonPosition` defaults to Left, which is the side modelled here.
+        let collapse_pos = if collapsible {
+            let p = Vec2 {
+                x: bar_min_x + pad_l,
+                y: button_y,
+            };
+            pad_l += button_sz + inner;
+            Some(p)
+        } else {
+            None
+        };
+
+        // Keep centred titles centred whether or not the buttons are there.
+        if pad_l > frame_padding.x {
+            pad_l += inner;
+        }
+        if pad_r > frame_padding.x {
+            pad_r += inner;
+        }
+
+        let text_color = self.style.color_u32(Col::Text);
+
+        if let Some(min) = collapse_pos {
+            let hovered = self.icon_hovered(min, button_sz);
+            if hovered {
+                // Not verified by a golden: the scenario never hovers an icon.
+                self.draw_list.add_rect_filled(
+                    min,
+                    Vec2 {
+                        x: min.x + button_sz,
+                        y: min.y + button_sz,
+                    },
+                    self.style.color_u32(Col::ButtonHovered),
+                );
+            }
+            // Down while the window is open, right once it is collapsed; collapsing is not
+            // modelled, so this is always the open state.
+            self.draw_list.add_arrow(
+                min,
+                text_color,
+                ARROW_DOWN_COS,
+                ARROW_DOWN_SIN,
+                1.0,
+                self.font.size,
+                self.style.symbol_arrow_size_factor,
+                self.style.symbol_arrow_thickness_factor,
+            );
+        }
+
+        if let Some(min) = close_pos {
+            let hovered = self.icon_hovered(min, button_sz);
+            if hovered {
+                // Not verified by a golden: the scenario never hovers an icon.
+                self.draw_list.add_rect_filled(
+                    min,
+                    Vec2 {
+                        x: min.x + button_sz,
+                        y: min.y + button_sz,
+                    },
+                    self.style.color_u32(Col::ButtonHovered),
+                );
+            }
+            let center = Vec2 {
+                x: min.x + button_sz * 0.5,
+                y: min.y + button_sz * 0.5,
+            };
+            let half = button_sz * 0.5;
+            let extent = half * crate::draw_list::REF_0_7071 - 1.0;
+            let thickness = 1.0; // `1.0f * Style._MainScale`, which is 1 at density 1.
+            self.draw_list.add_line(
+                Vec2 {
+                    x: center.x + extent,
+                    y: center.y + extent,
+                },
+                Vec2 {
+                    x: center.x - extent,
+                    y: center.y - extent,
+                },
+                text_color,
+                thickness,
+                0,
+            );
+            self.draw_list.add_line(
+                Vec2 {
+                    x: center.x + extent,
+                    y: center.y - extent,
+                },
+                Vec2 {
+                    x: center.x - extent,
+                    y: center.y + extent,
+                },
+                text_color,
+                thickness,
+                0,
+            );
+        }
+
+        // The title, inside the space the buttons leave.
+        let text_size = self.font.calc_text_size(title, self.font.size);
+        // The reference clips the title to this rectangle before drawing it. A title long enough
+        // to be cut is not covered by a golden yet, so only the left edge is used.
+        let _clip_max_x = (bar_max_x - pad_r + inner).min(bar_max_x);
+        let font = self.font.clone();
+        self.draw_list.add_text(
+            &font,
+            font.size,
+            Vec2 {
+                x: bar_min_x + pad_l,
+                y: pos.y + (title_height - text_size.y) * self.style.window_title_align.y,
+            },
+            text_color,
+            title,
+        );
+    }
+
+    /// Whether the mouse is over an icon: inside the window and inside its square.
+    ///
+    /// The reference also tracks press and release for the icons, which does not exist yet: a
+    /// click does nothing here.
+    fn icon_hovered(&self, min: Vec2, button_sz: f32) -> bool {
+        let Some(window) = self.windows.last() else {
+            return false;
+        };
+        let Some(mouse) = self.io.mouse_pos else {
+            return false;
+        };
+        let inside_window = mouse.x >= window.pos.x
+            && mouse.x < window.pos.x + window.size.x
+            && mouse.y >= window.pos.y
+            && mouse.y < window.pos.y + window.size.y;
+        inside_window
+            && mouse.x >= min.x
+            && mouse.x < min.x + button_sz
+            && mouse.y >= min.y
+            && mouse.y < min.y + button_sz
     }
 
     /// `ImGui::End`: the window remembers its position and size for the next frame.

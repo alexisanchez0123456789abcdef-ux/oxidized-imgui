@@ -78,6 +78,15 @@ pub struct Style {
     pub child_border_size: f32,
     pub popup_border_size: f32,
 
+    /// `Style::SymbolArrowSizeFactor`: width and height of an arrow, as a fraction of its radius.
+    pub symbol_arrow_size_factor: Vec2,
+    /// `Style::SymbolArrowThicknessFactor`: stroke weight of an arrow relative to its radius.
+    /// `0.0` makes the reference fill the arrow instead of stroking it.
+    pub symbol_arrow_thickness_factor: f32,
+    /// `Style::WindowTitleAlign`: where the title sits inside its layout rectangle. Only the
+    /// default `(0.0, 0.5)` — flush left, vertically centred — is modelled.
+    pub window_title_align: Vec2,
+
     /// Packed `IM_COL32` values, indexed by [`Col::index`].
     pub colors: [u32; Col::COUNT],
 }
@@ -109,6 +118,9 @@ impl Default for Style {
             frame_border_size: 0.0,
             child_border_size: 1.0,
             popup_border_size: 1.0,
+            symbol_arrow_size_factor: Vec2 { x: 0.72, y: 0.40 },
+            symbol_arrow_thickness_factor: 0.30,
+            window_title_align: Vec2 { x: 0.0, y: 0.5 },
             colors: [
                 0xFFFF_FFFF, // Text
                 0xFF94_9494, // TextDisabled

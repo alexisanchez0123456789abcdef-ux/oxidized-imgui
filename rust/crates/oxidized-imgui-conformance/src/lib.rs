@@ -47,6 +47,7 @@ pub const SCENARIOS: &[&str] = &[
     "window_bg",
     "window_border",
     "window_title",
+    "window_icons",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -1153,10 +1154,11 @@ pub fn aa_strokes_dump() -> String {
 }
 
 /// Reads the atlas line-texture table the reference wrote: one `line <n> <u0> <u1> <v> <1/width>`
-/// per baked thickness, as raw float bits.
+/// per baked thickness, as raw float bits. Rows of the other tables a fixture may carry (the font
+/// header and the glyphs) are ignored, so one file can hold both.
 fn parse_line_uvs(text: &str) -> Vec<[f32; 4]> {
     let mut table: Vec<[f32; 4]> = vec![[0.0; 4]; 46];
-    for line in text.lines().filter(|l| !l.trim().is_empty()) {
+    for line in text.lines().filter(|l| l.starts_with("line ")) {
         let mut fields = line.split_whitespace();
         assert_eq!(fields.next(), Some("line"), "unexpected line fixture row");
         let index: usize = fields.next().expect("index").parse().expect("line index");
@@ -1168,6 +1170,52 @@ fn parse_line_uvs(text: &str) -> Vec<[f32; 4]> {
         table[index] = entry;
     }
     table
+}
+
+/// The `window_icons` scenario: a titled window that carries both window icons — a close cross
+/// because it is closable, a collapse arrow because it is collapsible — dumped whole.
+///
+/// The title is text and the icons are strokes, so the fixture carries both pinned tables: the
+/// glyphs and the atlas line rows.
+pub fn window_icons_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/window_icons.fixture.txt"
+    );
+    let text = std::fs::read_to_string(path).expect("window icons fixture");
+    let font = Font::from_pinned(&text).expect("font fixture");
+    let line_uvs = parse_line_uvs(&text);
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    ctx.set_line_uv_lines(line_uvs);
+
+    // The reference settles first: a window does not know its title bar height during its first
+    // frame. The port computes it directly, but runs the same frames so both sides are compared
+    // after the same history.
+    let mut out = String::new();
+    for frame in 0..14 {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+        ctx.io_mut().mouse_down[0] = false;
+        ctx.begin_frame();
+        ctx.begin_window_titled_with_icons(
+            "W",
+            "W",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+            true,
+        );
+        ctx.end_window();
+        if frame == 13 {
+            // Dumped after the window closes, like the other window scenarios.
+            out = dump("window_icons", ctx.draw_list());
+        }
+        ctx.end_frame();
+    }
+    out
 }
 
 /// The dump for a scenario, whichever family it belongs to.
@@ -1188,6 +1236,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "window_bg" => Some(window_bg_dump()),
         "window_border" => Some(window_border_dump()),
         "window_title" => Some(window_title_dump()),
+        "window_icons" => Some(window_icons_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),
