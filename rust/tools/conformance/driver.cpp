@@ -910,6 +910,64 @@ static void DumpSceneWindowButtonScenario()
         DumpDrawListBody(*dl);
 }
 
+// button_states: the same button resting, hovered and held down. Each state is one dumped section,
+// and the frames run in order so the press registers as it would in a real session.
+static void FrameButtonState(float mx, float my, bool down, ImDrawList** out_list)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = down;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground;
+    ImGui::Begin("W", NULL, flags);
+    ImGui::SetCursorScreenPos(ImVec2(80.0f, 80.0f));
+    ImGui::Button("Hi");
+    if (out_list != NULL)
+        *out_list = ImGui::GetWindowDrawList();
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpButtonStates()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario button_states\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[6] = { 'W', 'H', 'i', 'e', 'l', 'o' };
+    for (char ch : bake_order)
+        baked->FindGlyph((ImWchar)ch);
+    WriteGlyphFixture(font, bake_order, 6);
+
+    // Each state must be printed right after its frame: the reference reuses the window's draw
+    // list, so holding a pointer would show the last frame three times.
+    ImDrawList* list = NULL;
+    FrameButtonState(0.0f, 0.0f, false, &list);
+    printf("state resting\n");
+    DumpDrawListBody(*list);
+
+    FrameButtonState(85.0f, 85.0f, false, &list);
+    printf("state hovered\n");
+    DumpDrawListBody(*list);
+
+    FrameButtonState(85.0f, 85.0f, true, NULL);
+    FrameButtonState(85.0f, 85.0f, true, &list);
+    printf("state active\n");
+    DumpDrawListBody(*list);
+}
+
 // Explicit UVs: no atlas involved.
 static void ScenePrimRectUV(ImDrawList& list)
 {
@@ -969,6 +1027,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "scene_window_button") == 0)
     {
         DumpSceneWindowButtonScenario();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "button_states") == 0)
+    {
+        DumpButtonStates();
         ImGui::DestroyContext();
         return 0;
     }

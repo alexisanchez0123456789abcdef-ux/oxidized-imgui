@@ -22,6 +22,7 @@ instead of against our own expectations:
 | Text | glyph quads including UVs, from the pinned glyph table written by the reference run | `text_draw` golden + `tests/fixtures/text_draw.glyphs.txt` |
 | Button | item rect from text metrics, hover, active, release-inside result | `button` golden |
 | Button drawing | state colour fill plus the label with its atlas UVs | `button_draw` golden |
+| Button states | resting, hovered and held colours across four frames | `button_states` golden |
 | Window background | background rect before the window clip, with empty trailing commands dropped at close | `window_bg` golden |
 | Window border | aligned two-ring frame, drawn only when the window has a background | `window_border` golden |
 | Title bar | band below the window top, title text inset by border plus padding, drawn after the border | `window_title` golden |
