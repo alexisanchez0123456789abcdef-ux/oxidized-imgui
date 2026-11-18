@@ -1397,6 +1397,54 @@ static void DumpWindowScrollbar()
     FrameScrollbarWindow(40);
 }
 
+// window_scrollbar_drag: grabbing the scrollbar and clicking the track. The grab sits at the top
+// while the scroll is 0, so the press below it is an absolute seek.
+static void FrameScrollbarDrag(float mx, float my, bool down)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = down;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
+    ImGui::Begin("S", NULL, flags);
+    ImGuiWindow* w = ImGui::GetCurrentWindow();
+    ImGui::Dummy(ImVec2(100.0f, 300.0f));
+    printf("frame scroll %08x max %08x\n", Bits(w->Scroll.y), Bits(w->ScrollMax.y));
+    DumpDrawListBody(*w->DrawList);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpWindowScrollbarDrag()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario window_scrollbar_drag\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
+    for (int i = 0; i < 4; i++)
+        FrameScrollbarDrag(0.0f, 0.0f, false);
+    // The bar spans x 345..359; the grab is at the top of it (y 63..185).
+    FrameScrollbarDrag(352.0f, 100.0f, false);  // hovered
+    FrameScrollbarDrag(352.0f, 100.0f, true);   // held on the grab
+    FrameScrollbarDrag(352.0f, 120.0f, true);   // dragged down
+    FrameScrollbarDrag(352.0f, 140.0f, true);
+    FrameScrollbarDrag(352.0f, 140.0f, false);  // released
+    FrameScrollbarDrag(0.0f, 0.0f, false);
+    // A click far below the grab: absolute seek to that point.
+    FrameScrollbarDrag(352.0f, 230.0f, true);
+    FrameScrollbarDrag(352.0f, 230.0f, false);
+    FrameScrollbarDrag(0.0f, 0.0f, false);
+    // And a click above it, which seeks back towards the top.
+    FrameScrollbarDrag(352.0f, 70.0f, true);
+    FrameScrollbarDrag(352.0f, 70.0f, false);
+    FrameScrollbarDrag(0.0f, 0.0f, false);
+}
+
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 static void DumpCmdOffsets()
 {
@@ -1645,6 +1693,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_icons") == 0)
     {
         DumpWindowIcons();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "window_scrollbar_drag") == 0)
+    {
+        DumpWindowScrollbarDrag();
         ImGui::DestroyContext();
         return 0;
     }

@@ -54,6 +54,7 @@ pub const SCENARIOS: &[&str] = &[
     "windows_move",
     "window_scroll",
     "window_scrollbar",
+    "window_scrollbar_drag",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -1939,6 +1940,69 @@ pub fn window_scrollbar_dump() -> String {
     out
 }
 
+/// The `window_scrollbar_drag` scenario: grabbing the scrollbar and clicking its track.
+///
+/// The grab sits at the top while the scroll is 0, so the press at y 230 lands below it and seeks
+/// straight to the maximum, and the one at y 70 seeks back to the top.
+pub fn window_scrollbar_drag_dump() -> String {
+    use oxidized_imgui::{Context, Vec2};
+
+    let mut ctx = Context::new();
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario window_scrollbar_drag\n");
+
+    let frame = |ctx: &mut Context, out: &mut String, mx: f32, my: f32, down: bool| {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: mx, y: my });
+        ctx.io_mut().mouse_down[0] = down;
+        ctx.begin_frame();
+        ctx.set_next_window_scrollbar(true);
+        ctx.begin_window(
+            "S",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        ctx.dummy(Vec2 { x: 100.0, y: 300.0 });
+        let window = ctx.window();
+        let text = format!(
+            "frame scroll {:08x} max {:08x}\n",
+            window.scroll.y.to_bits(),
+            window.scroll_max.y.to_bits(),
+        );
+        let body = dump("window_scrollbar_drag", ctx.draw_list());
+        ctx.end_window();
+        out.push_str(&text);
+        for line in body.lines().skip(2) {
+            out.push_str(line);
+            out.push('\n');
+        }
+        ctx.end_frame();
+    };
+
+    for _ in 0..4 {
+        frame(&mut ctx, &mut out, 0.0, 0.0, false);
+    }
+    // The bar spans x 345..359; the grab is at the top of it (y 63..185).
+    frame(&mut ctx, &mut out, 352.0, 100.0, false);
+    frame(&mut ctx, &mut out, 352.0, 100.0, true);
+    frame(&mut ctx, &mut out, 352.0, 120.0, true);
+    frame(&mut ctx, &mut out, 352.0, 140.0, true);
+    frame(&mut ctx, &mut out, 352.0, 140.0, false);
+    frame(&mut ctx, &mut out, 0.0, 0.0, false);
+    // A click far below the grab: absolute seek to that point.
+    frame(&mut ctx, &mut out, 352.0, 230.0, true);
+    frame(&mut ctx, &mut out, 352.0, 230.0, false);
+    frame(&mut ctx, &mut out, 0.0, 0.0, false);
+    // And a click above it, which seeks back towards the top.
+    frame(&mut ctx, &mut out, 352.0, 70.0, true);
+    frame(&mut ctx, &mut out, 352.0, 70.0, false);
+    frame(&mut ctx, &mut out, 0.0, 0.0, false);
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -1964,6 +2028,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "windows_move" => Some(windows_move_dump()),
         "window_scroll" => Some(window_scroll_dump()),
         "window_scrollbar" => Some(window_scrollbar_dump()),
+        "window_scrollbar_drag" => Some(window_scrollbar_drag_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),

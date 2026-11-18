@@ -29,12 +29,14 @@ pub enum Col {
     TitleBgCollapsed,
     ScrollbarBg,
     ScrollbarGrab,
+    ScrollbarGrabHovered,
+    ScrollbarGrabActive,
     HeaderHovered,
     HeaderActive,
 }
 
 impl Col {
-    pub const COUNT: usize = 22;
+    pub const COUNT: usize = 24;
 
     pub(crate) fn index(self) -> usize {
         match self {
@@ -60,6 +62,8 @@ impl Col {
             Col::TitleBgCollapsed => 19,
             Col::ScrollbarBg => 20,
             Col::ScrollbarGrab => 21,
+            Col::ScrollbarGrabHovered => 22,
+            Col::ScrollbarGrabActive => 23,
         }
     }
 }
@@ -164,6 +168,8 @@ impl Default for Style {
                 0x8200_0000, // TitleBgCollapsed (IM_COL32(0, 0, 0, 130), pinned)
                 0x8705_0505, // ScrollbarBg (pinned from the reference)
                 0xFF4F_4F4F, // ScrollbarGrab (pinned from the reference)
+                0xFF69_6969, // ScrollbarGrabHovered (pinned from the reference)
+                0xFF82_8282, // ScrollbarGrabActive (pinned from the reference)
             ],
         }
     }

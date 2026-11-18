@@ -83,11 +83,15 @@ pub struct Context {
     time: f64,
     windows: Vec<Window>,
     /// (name, pos, size_full, collapsed, want_collapse_toggle) per window, between frames.
-    remembered: Vec<(String, Vec2, Vec2, bool, bool)>,
+    remembered: Vec<(String, Vec2, Vec2, bool, bool, Vec2)>,
     /// `window->ContentSize` per window, from the previous frame: the scroll maximum needs it.
     content_sizes: Vec<(String, Vec2)>,
     /// `SetNextWindowScroll` for the window about to start.
     next_scroll: Option<Vec2>,
+    /// g.ScrollbarClickDeltaToGrabCenter: where inside the grab the seek started.
+    scrollbar_click_delta: f32,
+    /// g.ActiveIdIsJustActivated, as far as the scrollbar needs it.
+    active_id_just_activated: bool,
     /// Whether the window about to start may show a scrollbar. The other constructors model
     /// `ImGuiWindowFlags_NoScrollbar`, which every existing scenario uses.
     next_scrollbar: bool,
@@ -136,6 +140,8 @@ impl Default for Context {
             content_sizes: Vec::new(),
             next_scroll: None,
             next_scrollbar: false,
+            scrollbar_click_delta: 0.0,
+            active_id_just_activated: false,
             display_order: Vec::new(),
             last_frame_windows: Vec::new(),
             frame_lists: Vec::new(),
@@ -208,7 +214,7 @@ impl Context {
             if !self.last_frame_windows.contains(name) {
                 continue;
             }
-            let Some((_, pos, size_full, collapsed, _)) =
+            let Some((_, pos, size_full, collapsed, _, _)) =
                 self.remembered.iter().find(|(known, ..)| known == name)
             else {
                 continue;
@@ -638,17 +644,21 @@ impl Context {
             .iter()
             .rev()
             .find(|(known, ..)| known == name)
-            .map(|(_, p, s, c, w)| (*p, *s, *c, *w));
+            .map(|(_, p, s, c, w, sc)| (*p, *s, *c, *w, Some(*sc)));
         let pos_was_set = pos.is_some();
-        let (pos, size_full, mut collapsed, mut want_collapse_toggle) = match remembered {
-            Some((rp, rs, rc, rw)) => (pos.unwrap_or(rp), size.unwrap_or(rs), rc, rw),
-            None => (
-                pos.unwrap_or_default(),
-                size.unwrap_or_default(),
-                false,
-                false,
-            ),
-        };
+        let (pos, size_full, mut collapsed, mut want_collapse_toggle, remembered_scroll) =
+            match remembered {
+                Some((rp, rs, rc, rw, rscroll)) => {
+                    (pos.unwrap_or(rp), size.unwrap_or(rs), rc, rw, rscroll)
+                }
+                None => (
+                    pos.unwrap_or_default(),
+                    size.unwrap_or_default(),
+                    false,
+                    false,
+                    None,
+                ),
+            };
 
         // Track the `NoMove` flag so the click-to-move knows whether it may drag this one.
         if opts.no_move {
@@ -728,14 +738,18 @@ impl Context {
             y: (content.y + pad.y * 2.0 - (inner_rect.1.y - inner_rect.0.y)).max(0.0),
         };
         // `CalcNextScrollFromScrollTargetAndClamp`: the requested scroll, clamped to the maximum.
-        let requested = self.next_scroll.take().unwrap_or_default();
-        let scroll = Vec2 {
+        // window->Scroll survives between frames; SetNextWindowScroll overrides it.
+        let requested = self
+            .next_scroll
+            .take()
+            .unwrap_or(remembered_scroll.unwrap_or_default());
+        let mut scroll = Vec2 {
             x: requested.x.clamp(0.0, scroll_max.x),
             y: requested.y.clamp(0.0, scroll_max.y),
         };
         // With a title bar the content starts below it, which is why the settled reference lays a
         // window out 19 pixels lower than its first frame does. The scroll moves it up.
-        let content_origin = Vec2 {
+        let mut content_origin = Vec2 {
             x: inner_rect.0.x + pad.x - scroll.x,
             y: inner_rect.0.y + pad.y - scroll.y,
         };
@@ -797,7 +811,18 @@ impl Context {
             // The scrollbar goes between the title band and the window border, as the reference's
             // decoration pass does.
             if scrollbar_y {
-                self.draw_scrollbar(pos, size, inner_rect, content, scroll);
+                if let Some(seeked) =
+                    self.draw_scrollbar(name, pos, size, inner_rect, content, scroll)
+                {
+                    scroll = Vec2 {
+                        x: scroll.x,
+                        y: seeked,
+                    };
+                    content_origin = Vec2 {
+                        x: inner_rect.0.x + pad.x - scroll.x,
+                        y: inner_rect.0.y + pad.y - scroll.y,
+                    };
+                }
             }
 
             // The window border, inside the rectangle. A pixel-aligned window takes the two-ring
@@ -1156,6 +1181,7 @@ impl Context {
                 window.size_full,
                 window.collapsed,
                 window.want_collapse_toggle,
+                window.scroll,
             );
             match self
                 .remembered
@@ -1222,16 +1248,21 @@ impl Context {
         self.focused_window = Some(hovered);
     }
 
-    /// `ImGui::Scrollbar` for the vertical axis, drawing only: the grab follows the scroll but it
-    /// cannot be dragged yet.
+    /// `ImGui::Scrollbar` for the vertical axis: draws the bar and, while the grab is held, seeks
+    /// the scroll. Returns the new scroll when holding changed it.
+    ///
+    /// Only the absolute-seek mode is modelled: `ConfigScrollbarScrollByPage` is off by default, so
+    /// a click anywhere goes to the clicked location and holding the grab keeps the offset it was
+    /// grabbed with.
     fn draw_scrollbar(
         &mut self,
+        name: &str,
         pos: Vec2,
         size: Vec2,
         inner_rect: (Vec2, Vec2),
         content: Vec2,
         scroll: Vec2,
-    ) {
+    ) -> Option<f32> {
         use crate::style::Col;
 
         let border = self.style.window_border_size;
@@ -1250,7 +1281,7 @@ impl Context {
             y: frame_max.y - frame_min.y,
         };
         if frame_size.x <= 0.0 || frame_size.y <= 0.0 {
-            return;
+            return None;
         }
 
         // The grab shrinks with the fraction of the content that is visible, with a minimum size
@@ -1270,7 +1301,7 @@ impl Context {
         };
         let scrollbar_size_v = bar_max.y - bar_min.y;
         if scrollbar_size_v < 1.0 {
-            return;
+            return None;
         }
         let visible = inner_rect.1.y - inner_rect.0.y;
         let contents = content.y + self.style.window_padding.y * 2.0;
@@ -1280,10 +1311,82 @@ impl Context {
         let grab_h_pixels = (scrollbar_size_v * (visible / win_size_v))
             .clamp(grab_min, scrollbar_size_v)
             .trunc();
-        let scroll_max = (contents - visible).max(1.0);
-        let scroll_ratio = (scroll.y / scroll_max).clamp(0.0, 1.0);
-        let grab_v_norm = scroll_ratio * (scrollbar_size_v - grab_h_pixels) / scrollbar_size_v;
+        let grab_h_norm = grab_h_pixels / scrollbar_size_v;
 
+        // `ButtonBehavior` over the bar's frame: the bar is one item of the window.
+        let id = self.get_id("##scrollbar_y");
+        let mouse = self.io.mouse_pos.unwrap_or_default();
+        let inside = mouse.x >= frame_min.x
+            && mouse.x < frame_max.x
+            && mouse.y >= frame_min.y
+            && mouse.y < frame_max.y;
+        let own_window = self.hovered_window.as_deref() == Some(name);
+        let hovered =
+            own_window && inside && (self.active_id.is_none() || self.active_id == Some(id));
+        if hovered {
+            // An item owns the mouse: this also stops a click on it from moving the window.
+            self.hovered_id = Some(id);
+        }
+        let mut pressed = false;
+        if hovered && self.io.mouse_clicked[0] {
+            self.active_id = Some(id);
+            self.active_id_just_activated = true;
+            pressed = true;
+        }
+        let mut held = self.active_id == Some(id) && self.io.mouse_down[0];
+        if self.active_id == Some(id) && !self.io.mouse_down[0] {
+            // Release: the reference clears the active id and reports a press instead.
+            self.active_id = None;
+            held = false;
+            pressed = hovered;
+        }
+        let _ = pressed;
+
+        // `scroll_max` as an integer, like the reference's `ImS64`.
+        let scroll_max = ((contents - visible).max(1.0)).trunc();
+        let mut scroll_ratio = (scroll.y / scroll_max).clamp(0.0, 1.0);
+        let mut grab_v_norm = scroll_ratio * (scrollbar_size_v - grab_h_pixels) / scrollbar_size_v;
+        let mut new_scroll = None;
+
+        if held && grab_h_norm < 1.0 {
+            let clicked_v_norm = ((mouse.y - bar_min.y) / scrollbar_size_v).clamp(0.0, 1.0);
+            let held_dir = if clicked_v_norm < grab_v_norm {
+                -1.0
+            } else if clicked_v_norm > grab_v_norm + grab_h_norm {
+                1.0
+            } else {
+                0.0
+            };
+            if self.active_id_just_activated {
+                // `ScrollbarSeekMode` is always absolute here, so only the distance to the grab's
+                // centre is kept: it is zero unless the press landed inside the grab.
+                self.scrollbar_click_delta = if held_dir == 0.0 {
+                    clicked_v_norm - grab_v_norm - grab_h_norm * 0.5
+                } else {
+                    0.0
+                };
+            }
+            let scroll_v_norm = ((clicked_v_norm - self.scrollbar_click_delta - grab_h_norm * 0.5)
+                / (1.0 - grab_h_norm))
+                .clamp(0.0, 1.0);
+            let seeked = (scroll_v_norm * scroll_max).trunc();
+            if seeked != scroll.y {
+                new_scroll = Some(seeked);
+            }
+            let ratio = (seeked / scroll_max).clamp(0.0, 1.0);
+            scroll_ratio = ratio;
+            grab_v_norm = ratio * (scrollbar_size_v - grab_h_pixels) / scrollbar_size_v;
+        }
+        let _ = scroll_ratio;
+        self.active_id_just_activated = false;
+
+        let grab_col = if held {
+            self.style.color_u32(Col::ScrollbarGrabActive)
+        } else if hovered {
+            self.style.color_u32(Col::ScrollbarGrabHovered)
+        } else {
+            self.style.color_u32(Col::ScrollbarGrab)
+        };
         self.draw_list
             .prim_rect(frame_min, frame_max, self.style.color_u32(Col::ScrollbarBg));
         let grab_top = bar_min.y + (bar_max.y - bar_min.y) * grab_v_norm;
@@ -1297,8 +1400,9 @@ impl Context {
                 y: grab_top + grab_h_pixels,
             },
             self.style.scrollbar_rounding,
-            self.style.color_u32(Col::ScrollbarGrab),
+            grab_col,
         );
+        new_scroll
     }
 
     /// `ClampWindowPos`: keep at least a corner of the window reachable inside the work area.
