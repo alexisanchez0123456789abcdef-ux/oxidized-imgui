@@ -1,0 +1,25 @@
+header imgui 1.93.1 WIP 19303
+scenario aa_polyline
+white_uv 3a800000 3b800000
+cmd_count 1
+cmd 0 clip 00000000 00000000 00000000 00000000 elems 12 vtxoff 0 idxoff 0
+vtx_count 6
+vtx 0 pos 4135e4e5 41106e4a uv 3a800000 3b800000 col ffff0000
+vtx 1 pos 411a1b1b 413791b6 uv 3a800000 3b800000 col ffff0000
+vtx 2 pos 4272bef0 42302bca uv 3a800000 3b800000 col ffff0000
+vtx 3 pos 42714110 423dd436 uv 3a800000 3b800000 col ffff0000
+vtx 4 pos 42ef550c 4198f24c uv 3a800000 3b800000 col ffff0000
+vtx 5 pos 42f1aaf4 41af0db4 uv 3a800000 3b800000 col ffff0000
+idx_count 12
+idx 0
+idx 2
+idx 3
+idx 0
+idx 3
+idx 1
+idx 2
+idx 4
+idx 5
+idx 2
+idx 5
+idx 3

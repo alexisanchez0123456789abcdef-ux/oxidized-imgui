@@ -638,6 +638,132 @@ impl DrawList {
         }
     }
 
+    /// `ImDrawList::_AddPolyline` for an **open** polyline with miter joins and no anti-aliased end
+    /// caps: the two simplest caps plus a mitered body. Other combinations (closed paths, bevel
+    /// joins, AA ends, square caps, stroke-position modes) are not ported.
+    pub fn add_polyline_aa_miter(&mut self, points: &[Vec2], col: ImU32, thickness: f32) {
+        const A_MASK: u32 = 0xFF00_0000;
+        const MITER_ANGLE_LIMIT: f32 = -0.999_961_9;
+
+        let n = points.len();
+        if n < 2 || (col & A_MASK) == 0 {
+            return;
+        }
+
+        // Segment normals; the last point reuses the previous normal for an open path.
+        let mut normals = vec![Vec2 { x: 0.0, y: 0.0 }; n];
+        for i in 0..n - 1 {
+            let dx = points[i + 1].x - points[i].x;
+            let dy = points[i + 1].y - points[i].y;
+            let d2 = dx * dx + dy * dy;
+            let inv = if d2 > 0.0 { rsqrt_precise(d2) } else { 0.0 };
+            normals[i] = Vec2 {
+                x: -dy * inv,
+                y: dx * inv,
+            };
+        }
+        normals[n - 1] = normals[n - 2];
+
+        // `_SelectLineTexture` resolves to the white pixel with no fringe for this pipeline.
+        let fringe = 0.0f32;
+        let thickness0 = (thickness + fringe) * 0.5;
+        let thickness1 = (thickness + fringe) - thickness0;
+        let uv = self.white_uv;
+
+        let mut base = self.vtx_buffer.len() as u32;
+        let mut idx_count = 0u32;
+
+        // Start cap: two vertices, no connection yet.
+        let n1 = normals[0];
+        let p1 = points[0];
+        for (pos, color) in [
+            (
+                Vec2 {
+                    x: p1.x - n1.x * thickness0,
+                    y: p1.y - n1.y * thickness0,
+                },
+                col,
+            ),
+            (
+                Vec2 {
+                    x: p1.x + n1.x * thickness1,
+                    y: p1.y + n1.y * thickness1,
+                },
+                col,
+            ),
+        ] {
+            self.vtx_buffer.push(DrawVert {
+                pos,
+                uv,
+                col: color,
+            });
+        }
+
+        // Body: one miter pair per interior point.
+        for i in 1..n - 1 {
+            let n0 = normals[i - 1];
+            let n1 = normals[i];
+            let cos_theta = n0.x * n1.x + n0.y * n1.y;
+            let cos_clamped = cos_theta.max(MITER_ANGLE_LIMIT);
+            let miter_scale = (1.0 / (1.0 + cos_clamped)).min(1000.0);
+            let mx = (n0.x + n1.x) * miter_scale;
+            let my = (n0.y + n1.y) * miter_scale;
+            let p = points[i];
+            let next_base = self.vtx_buffer.len() as u32;
+            self.vtx_buffer.push(DrawVert {
+                pos: Vec2 {
+                    x: p.x - mx * thickness0,
+                    y: p.y - my * thickness0,
+                },
+                uv,
+                col,
+            });
+            self.vtx_buffer.push(DrawVert {
+                pos: Vec2 {
+                    x: p.x + mx * thickness1,
+                    y: p.y + my * thickness1,
+                },
+                uv,
+                col,
+            });
+            for tri in [[base, base + 2, base + 3], [base, base + 3, base + 1]] {
+                for vertex in tri {
+                    self.idx_buffer.push(vertex as ImDrawIdx);
+                }
+                idx_count += 3;
+            }
+            base = next_base;
+        }
+
+        // End cap: two vertices and the final connection.
+        let n1 = normals[n - 1];
+        let p1 = points[n - 1];
+        let next_base = self.vtx_buffer.len() as u32;
+        for pos in [
+            Vec2 {
+                x: p1.x - n1.x * thickness0,
+                y: p1.y - n1.y * thickness0,
+            },
+            Vec2 {
+                x: p1.x + n1.x * thickness1,
+                y: p1.y + n1.y * thickness1,
+            },
+        ] {
+            self.vtx_buffer.push(DrawVert { pos, uv, col });
+        }
+        for tri in [[base, base + 2, base + 3], [base, base + 3, base + 1]] {
+            for vertex in tri {
+                self.idx_buffer.push(vertex as ImDrawIdx);
+            }
+            idx_count += 3;
+        }
+        let _ = next_base;
+
+        if let Some(cmd) = self.cmd_buffer.last_mut() {
+            cmd.elem_count += idx_count;
+        }
+    }
+
     /// `ImDrawList::PrimRect`: a rectangle filled with the white pixel, no explicit UVs.
     pub fn prim_rect(&mut self, a: Vec2, c: Vec2, col: ImU32) {
         let uv = self.white_uv;
