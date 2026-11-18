@@ -11,10 +11,12 @@
       "items": [
         { "id": "hash", "label": "Hash de identificadores (CRC32c, reinicio con ###)", "weight": 2, "done": true, "evidence": "id::tests::hashes_match_oracle (12 vectores del oráculo)" },
         { "id": "id_stack", "label": "Pila de identificadores (get/push/pop)", "weight": 2, "done": true, "evidence": "context::tests::ids_nest_like_the_reference" },
-        { "id": "frame", "label": "Ciclo de frame y contexto completo", "weight": 6, "done": false, "evidence": "" },
-        { "id": "io", "label": "Entrada y salida: ratón, teclado, tiempo", "weight": 5, "done": false, "evidence": "" },
-        { "id": "windows", "label": "Pila de ventanas y gestión de ventanas", "weight": 6, "done": false, "evidence": "" },
-        { "id": "layout", "label": "Layout: cursor, espaciado, rectángulos de ítem", "weight": 5, "done": false, "evidence": "" },
+        { "id": "window_geometry", "label": "Ventana con posición y tamaño explícitos, memoria entre frames", "weight": 2, "done": true, "evidence": "golden window_layout" },
+        { "id": "cursor_layout", "label": "Cursor y avance de ítems (Dummy, SameLine, rects de ítem)", "weight": 2, "done": true, "evidence": "golden window_layout + context::tests" },
+        { "id": "frame", "label": "Ciclo de frame completo: validación de IO y reset de draw data", "weight": 4, "done": false, "evidence": "" },
+        { "id": "io", "label": "Entrada y salida: ratón, teclado, tiempo", "weight": 6, "done": false, "evidence": "" },
+        { "id": "windows_stack", "label": "Pila de ventanas: colapso, scroll, foco, orden, auto-tamaño", "weight": 4, "done": false, "evidence": "" },
+        { "id": "layout_full", "label": "Layout completo: wrap, columnas, alineación, grupos", "weight": 4, "done": false, "evidence": "" },
         { "id": "clip", "label": "Pila de recorte", "weight": 2, "done": false, "evidence": "" },
         { "id": "settings", "label": "Persistencia de ajustes (.ini)", "weight": 2, "done": false, "evidence": "" }
       ]

@@ -15,6 +15,7 @@ instead of against our own expectations:
 | Identifier stack | `get_id`, `push_id`, `pop_id` seed like the reference | `context::tests::ids_nest_like_the_reference` |
 | `PrimRectUV` | identical draw-list dump, byte for byte | `oxidized-imgui-conformance/tests/golden.rs` |
 | `PrimRect`, `AddRectFilled` (pixel-aligned), `AddLineH` | identical draw-list dump, byte for byte | same, scenarios `prim_rect`, `rect_filled`, `line_h` |
+| Window geometry and cursor layout | style defaults, content region, `Dummy`/`SameLine` advance, remembered pos/size | `window_layout` golden + `context::tests` |
 
 Provisional, **not** parity-checked: everything else. In particular the anti-aliased and rounded
 paths, the diagonal `AddLine` (stroke joins), circles and any text are not implemented yet; the

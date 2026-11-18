@@ -2,7 +2,7 @@
 
 use std::process::ExitCode;
 
-use oxidized_imgui_conformance::{SCENARIOS, dump, scene};
+use oxidized_imgui_conformance::{SCENARIOS, dump_for};
 
 fn main() -> ExitCode {
     let requested: Vec<String> = std::env::args().skip(1).collect();
@@ -13,8 +13,8 @@ fn main() -> ExitCode {
     };
 
     for name in names {
-        match scene(name) {
-            Some(list) => print!("{}", dump(name, &list)),
+        match dump_for(name) {
+            Some(text) => print!("{text}"),
             None => {
                 eprintln!("unknown scenario: {name} (known: {})", SCENARIOS.join(", "));
                 return ExitCode::from(2);

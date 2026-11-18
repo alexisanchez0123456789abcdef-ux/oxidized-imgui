@@ -19,7 +19,13 @@ pub const WHITE_UV: Vec2 = Vec2 {
 };
 
 /// Every scenario this harness knows, by the name the driver prints.
-pub const SCENARIOS: &[&str] = &["prim_rect_uv", "prim_rect", "rect_filled", "line_h"];
+pub const SCENARIOS: &[&str] = &[
+    "prim_rect_uv",
+    "prim_rect",
+    "rect_filled",
+    "line_h",
+    "window_layout",
+];
 
 const COL: u32 = 0xFFFF_0000; // IM_COL32(0, 0, 255, 255)
 
@@ -95,6 +101,133 @@ pub fn dump(scenario: &str, list: &DrawList) -> String {
     out
 }
 
+/// The `window_layout` scenario: style values, a fixed-size window, two items and a same-line
+/// item, then the window's remembered position on the next frame.
+pub fn window_layout_dump() -> String {
+    use oxidized_imgui::Context;
+
+    let mut ctx = Context::new();
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario window_layout\n");
+
+    let style = ctx.style();
+    out.push_str(&format!(
+        "style wp {:08x} {:08x} is {:08x} {:08x} fp {:08x} {:08x}\n",
+        bits(style.window_padding.x),
+        bits(style.window_padding.y),
+        bits(style.item_spacing.x),
+        bits(style.item_spacing.y),
+        bits(style.frame_padding.x),
+        bits(style.frame_padding.y),
+    ));
+
+    let pos = Vec2 { x: 60.0, y: 60.0 };
+    let size = Vec2 { x: 300.0, y: 200.0 };
+    ctx.begin_frame();
+    ctx.begin_window("W", Some(pos), Some(size));
+
+    let w = ctx.window();
+    out.push_str(&format!(
+        "w0 pos {:08x} {:08x}\n",
+        bits(w.pos.x),
+        bits(w.pos.y)
+    ));
+    out.push_str(&format!(
+        "w0 size {:08x} {:08x}\n",
+        bits(w.size.x),
+        bits(w.size.y)
+    ));
+    let content = ctx.content_avail();
+    out.push_str(&format!(
+        "w0 content {:08x} {:08x}\n",
+        bits(content.x),
+        bits(content.y)
+    ));
+    let cursor = ctx.cursor_screen_pos();
+    out.push_str(&format!(
+        "w0 cursor {:08x} {:08x}\n",
+        bits(cursor.x),
+        bits(cursor.y)
+    ));
+
+    ctx.dummy(Vec2 { x: 100.0, y: 20.0 });
+    let min = ctx.item_rect_min();
+    let max = ctx.item_rect_max();
+    out.push_str(&format!(
+        "w0 item0 min {:08x} {:08x}\n",
+        bits(min.x),
+        bits(min.y)
+    ));
+    out.push_str(&format!(
+        "w0 item0 max {:08x} {:08x}\n",
+        bits(max.x),
+        bits(max.y)
+    ));
+    let cursor = ctx.cursor_screen_pos();
+    out.push_str(&format!(
+        "w0 cursor_after0 {:08x} {:08x}\n",
+        bits(cursor.x),
+        bits(cursor.y)
+    ));
+
+    ctx.same_line();
+    let cursor = ctx.cursor_screen_pos();
+    out.push_str(&format!(
+        "w0 sameline {:08x} {:08x}\n",
+        bits(cursor.x),
+        bits(cursor.y)
+    ));
+
+    ctx.dummy(Vec2 { x: 50.0, y: 10.0 });
+    let min = ctx.item_rect_min();
+    let max = ctx.item_rect_max();
+    out.push_str(&format!(
+        "w0 item1 min {:08x} {:08x}\n",
+        bits(min.x),
+        bits(min.y)
+    ));
+    out.push_str(&format!(
+        "w0 item1 max {:08x} {:08x}\n",
+        bits(max.x),
+        bits(max.y)
+    ));
+    let cursor = ctx.cursor_screen_pos();
+    out.push_str(&format!(
+        "w0 cursor_after1 {:08x} {:08x}\n",
+        bits(cursor.x),
+        bits(cursor.y)
+    ));
+    ctx.end_window();
+
+    // Second frame: no explicit size, the window keeps what it had.
+    ctx.begin_window("W", None, None);
+    let w = ctx.window();
+    out.push_str(&format!(
+        "w1 pos {:08x} {:08x}\n",
+        bits(w.pos.x),
+        bits(w.pos.y)
+    ));
+    out.push_str(&format!(
+        "w1 size {:08x} {:08x}\n",
+        bits(w.size.x),
+        bits(w.size.y)
+    ));
+    ctx.end_window();
+    ctx.end_frame();
+    out
+}
+
+/// The dump for a scenario, whichever family it belongs to.
+pub fn dump_for(name: &str) -> Option<String> {
+    if name == "window_layout" {
+        return Some(window_layout_dump());
+    }
+    scene(name).map(|list| dump(name, &list))
+}
+
 fn bits(value: f32) -> u32 {
     value.to_bits()
 }
@@ -106,12 +239,18 @@ mod tests {
     #[test]
     fn every_scenario_has_a_dump() {
         for name in SCENARIOS {
-            let list = scene(name).expect(name);
-            let text = dump(name, &list);
-            assert!(text.starts_with("header imgui "), "{name}");
+            assert!(dump_for(name).is_some(), "{name}");
+        }
+        for name in ["prim_rect_uv", "prim_rect", "rect_filled", "line_h"] {
+            let text = dump_for(name).expect(name);
             assert!(text.contains("vtx_count 4"), "{name}");
             assert!(text.contains("idx_count 6"), "{name}");
         }
+        assert!(
+            dump_for("window_layout")
+                .expect("core")
+                .contains("w0 item1 max")
+        );
     }
 
     #[test]
