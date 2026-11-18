@@ -553,6 +553,13 @@ static void DumpStyleDefaults()
         Bits(style.PopupBorderSize));
 }
 
+// Anti-aliased fill of a non-pixel-aligned rectangle: the miter fringe path.
+static void SceneAaRect(ImDrawList& list)
+{
+    list.Flags = ImDrawListFlags_AntiAliasedFill;
+    list.AddRectFilled(ImVec2(10.5f, 20.25f), ImVec2(60.5f, 50.75f), COL);
+}
+
 // Explicit UVs: no atlas involved.
 static void ScenePrimRectUV(ImDrawList& list)
 {
@@ -667,6 +674,7 @@ int main(int argc, char** argv)
     else if (strcmp(name, "prim_rect") == 0) scene = ScenePrimRect;
     else if (strcmp(name, "rect_filled") == 0) scene = SceneRectFilled;
     else if (strcmp(name, "line_h") == 0) scene = SceneLineH;
+    else if (strcmp(name, "aa_rect") == 0) scene = SceneAaRect;
     if (strcmp(name, "clip_stack") == 0)
     {
         ImGui::NewFrame();

@@ -26,14 +26,15 @@
     {
       "id": "draw",
       "title": "Listas de dibujo y primitivas",
-      "weight": 8,
+      "weight": 9,
       "infra": false,
       "items": [
         { "id": "layout_parity", "label": "Estructuras con el layout exacto de C++", "weight": 1, "done": true, "evidence": "draw_list::tests::layouts_match_reference" },
         { "id": "prim_rect_uv", "label": "PrimRectUV con paridad exacta", "weight": 1, "done": true, "evidence": "golden prim_rect_uv + prueba negativa" },
         { "id": "prim_rect", "label": "PrimRect con el UV del píxel blanco fijado", "weight": 1, "done": true, "evidence": "golden prim_rect" },
         { "id": "pixel_shapes", "label": "Formas alineadas a píxel: AddRectFilled sin redondeo y AddLineH", "weight": 1, "done": true, "evidence": "golden rect_filled y line_h" },
-        { "id": "aa_shapes", "label": "Formas con antialiasing: rect redondeado, línea diagonal, círculo, bézier", "weight": 1, "done": false, "evidence": "" },
+        { "id": "aa_rect", "label": "Relleno AA de rectángulo (miters)", "weight": 1, "done": true, "evidence": "golden aa_rect" },
+        { "id": "aa_rest", "label": "AA: rect redondeado, línea, círculo, bézier", "weight": 1, "done": false, "evidence": "" },
         { "id": "style_colors", "label": "Estilo: colores, redondeos y bordes por defecto", "weight": 1, "done": true, "evidence": "golden style_defaults" },
         { "id": "text_draw", "label": "Texto dibujado en la lista (geometría, sin UVs)", "weight": 1, "done": true, "evidence": "golden text_draw (geometría; UVs omitidos por no ser reproducibles)" },
         { "id": "cmd_split", "label": "Cortes de comando y recorte por comando", "weight": 1, "done": false, "evidence": "" }

@@ -1,0 +1,45 @@
+header imgui 1.93.1 WIP 19303
+scenario aa_rect
+white_uv 3a800000 3b800000
+cmd_count 1
+cmd 0 clip 00000000 00000000 00000000 00000000 elems 30 vtxoff 0 idxoff 0
+vtx_count 8
+vtx 0 pos 41300000 41a60000 uv 3a800000 3b800000 col ffff0000
+vtx 1 pos 42700000 41a60000 uv 3a800000 3b800000 col ffff0000
+vtx 2 pos 42700000 42490000 uv 3a800000 3b800000 col ffff0000
+vtx 3 pos 41300000 42490000 uv 3a800000 3b800000 col ffff0000
+vtx 4 pos 41200000 419e0000 uv 3a800000 3b800000 col 00ff0000
+vtx 5 pos 42740000 419e0000 uv 3a800000 3b800000 col 00ff0000
+vtx 6 pos 42740000 424d0000 uv 3a800000 3b800000 col 00ff0000
+vtx 7 pos 41200000 424d0000 uv 3a800000 3b800000 col 00ff0000
+idx_count 30
+idx 7
+idx 4
+idx 0
+idx 7
+idx 0
+idx 3
+idx 4
+idx 5
+idx 1
+idx 4
+idx 1
+idx 0
+idx 5
+idx 6
+idx 2
+idx 5
+idx 2
+idx 1
+idx 6
+idx 7
+idx 3
+idx 6
+idx 3
+idx 2
+idx 0
+idx 1
+idx 2
+idx 0
+idx 2
+idx 3
