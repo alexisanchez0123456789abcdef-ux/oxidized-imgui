@@ -1,4 +1,4 @@
-// Reference driver: prints the draw-list dump for one scenario, using the upstream sources.
+// Reference driver: prints the dump for one scenario, using the upstream sources.
 //
 // The Rust side must reproduce this output byte for byte; `gen-golden.ps1` builds this file into
 // the oracle and stores the output as a golden test. Floats are printed as raw bit patterns so
@@ -21,7 +21,12 @@ static unsigned int Bits(float f)
     return u;
 }
 
-static void Dump(const char* scenario, const ImDrawList& list)
+static void P(const char* key, ImVec2 v)
+{
+    printf("%s %08x %08x\n", key, Bits(v.x), Bits(v.y));
+}
+
+static void DumpDrawList(const char* scenario, const ImDrawList& list)
 {
     printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
     printf("scenario %s\n", scenario);
@@ -50,6 +55,54 @@ static void Dump(const char* scenario, const ImDrawList& list)
     printf("idx_count %d\n", list.IdxBuffer.Size);
     for (int i = 0; i < list.IdxBuffer.Size; i++)
         printf("idx %u\n", (unsigned int)list.IdxBuffer[i]);
+}
+
+// window_layout: style, a fixed-size window, two items, a same-line item, and the remembered
+// position on the next frame. No text, no atlas, no scrolling.
+static void DumpWindowLayout()
+{
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
+
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario window_layout\n");
+
+    ImGuiStyle& st = ImGui::GetStyle();
+    printf("style wp %08x %08x is %08x %08x fp %08x %08x\n",
+        Bits(st.WindowPadding.x), Bits(st.WindowPadding.y),
+        Bits(st.ItemSpacing.x), Bits(st.ItemSpacing.y),
+        Bits(st.FramePadding.x), Bits(st.FramePadding.y));
+
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("W", NULL, flags);
+    P("w0 pos", ImGui::GetWindowPos());
+    P("w0 size", ImGui::GetWindowSize());
+    P("w0 content", ImGui::GetContentRegionAvail());
+    P("w0 cursor", ImGui::GetCursorScreenPos());
+
+    ImGui::Dummy(ImVec2(100.0f, 20.0f));
+    P("w0 item0 min", ImGui::GetItemRectMin());
+    P("w0 item0 max", ImGui::GetItemRectMax());
+    P("w0 cursor_after0", ImGui::GetCursorScreenPos());
+
+    ImGui::SameLine();
+    P("w0 sameline", ImGui::GetCursorScreenPos());
+
+    ImGui::Dummy(ImVec2(50.0f, 10.0f));
+    P("w0 item1 min", ImGui::GetItemRectMin());
+    P("w0 item1 max", ImGui::GetItemRectMax());
+    P("w0 cursor_after1", ImGui::GetCursorScreenPos());
+    ImGui::End();
+    ImGui::EndFrame();
+
+    ImGui::NewFrame();
+    ImGui::Begin("W", NULL, flags);
+    P("w1 pos", ImGui::GetWindowPos());
+    P("w1 size", ImGui::GetWindowSize());
+    ImGui::End();
+    ImGui::EndFrame();
 }
 
 // Explicit UVs: no atlas involved.
@@ -89,17 +142,6 @@ int main(int argc, char** argv)
     }
     const char* name = argv[1];
 
-    void (*scene)(ImDrawList&) = NULL;
-    if (strcmp(name, "prim_rect_uv") == 0) scene = ScenePrimRectUV;
-    else if (strcmp(name, "prim_rect") == 0) scene = ScenePrimRect;
-    else if (strcmp(name, "rect_filled") == 0) scene = SceneRectFilled;
-    else if (strcmp(name, "line_h") == 0) scene = SceneLineH;
-    if (scene == NULL)
-    {
-        fprintf(stderr, "unknown scenario: %s\n", name);
-        return 2;
-    }
-
     // Binary stdout: the dump must stay LF-only so it can be compared byte for byte.
     _setmode(_fileno(stdout), _O_BINARY);
 
@@ -110,17 +152,35 @@ int main(int argc, char** argv)
     // No renderer backend here: declare the modern texture contract so NewFrame does not require
     // the atlas to be built beforehand.
     io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
-    ImGui::NewFrame();
 
+    if (strcmp(name, "window_layout") == 0)
+    {
+        DumpWindowLayout();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    void (*scene)(ImDrawList&) = NULL;
+    if (strcmp(name, "prim_rect_uv") == 0) scene = ScenePrimRectUV;
+    else if (strcmp(name, "prim_rect") == 0) scene = ScenePrimRect;
+    else if (strcmp(name, "rect_filled") == 0) scene = SceneRectFilled;
+    else if (strcmp(name, "line_h") == 0) scene = SceneLineH;
+    if (scene == NULL)
+    {
+        fprintf(stderr, "unknown scenario: %s\n", name);
+        ImGui::DestroyContext();
+        return 2;
+    }
+
+    ImGui::NewFrame();
     {
         ImDrawList list(ImGui::GetDrawListSharedData());
         list._ResetForNewFrame();
         list._SetPixelDensity(1.0f);
         list.Flags = 0;
         scene(list);
-        Dump(name, list);
+        DumpDrawList(name, list);
     }
-
     ImGui::EndFrame();
     ImGui::DestroyContext();
     return 0;
