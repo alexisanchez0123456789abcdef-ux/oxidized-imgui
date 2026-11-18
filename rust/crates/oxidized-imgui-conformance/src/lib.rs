@@ -58,6 +58,7 @@ pub const SCENARIOS: &[&str] = &[
     "window_wheel",
     "window_autosize",
     "window_autosize_change",
+    "window_wheel_lock",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -2178,6 +2179,74 @@ pub fn window_autosize_change_dump() -> String {
     out
 }
 
+/// The `window_wheel_lock` scenario: the window the wheel is locked to keeps scrolling even when the
+/// mouse moves over another one, until it moves past the drag threshold.
+///
+/// A = (60,60)-(360,260) and B = (358,60)-(658,260) overlap by two pixels, so a four pixel move takes
+/// the mouse from A alone to a point inside both, where B is on top and therefore hovered.
+pub fn window_wheel_lock_dump() -> String {
+    use oxidized_imgui::{Context, Vec2};
+
+    let mut ctx = Context::new();
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario window_wheel_lock\n");
+
+    let frame = |ctx: &mut Context, out: &mut String, mx: f32, my: f32, wheel_y: f32| {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: mx, y: my });
+        ctx.io_mut().mouse_down[0] = false;
+        ctx.io_mut().mouse_wheel = wheel_y;
+        ctx.begin_frame();
+        ctx.set_next_window_scrollbar(true);
+        ctx.begin_window(
+            "A",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        let scroll_a = ctx.window().scroll.y;
+        ctx.dummy(Vec2 { x: 100.0, y: 300.0 });
+        ctx.end_window();
+        ctx.set_next_window_scrollbar(true);
+        ctx.begin_window(
+            "B",
+            Some(Vec2 { x: 358.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        let scroll_b = ctx.window().scroll.y;
+        ctx.dummy(Vec2 { x: 100.0, y: 300.0 });
+        ctx.end_window();
+        let hovered = ctx.hovered_window_name().unwrap_or("-").to_string();
+        let locked = ctx.wheeling_window_name().unwrap_or("-").to_string();
+        out.push_str(&format!(
+            "frame wheel {:08x} a {:08x} b {:08x} hovered {hovered} locked {locked}\n",
+            wheel_y.to_bits(),
+            scroll_a.to_bits(),
+            scroll_b.to_bits(),
+        ));
+        ctx.end_frame();
+    };
+
+    // Settle with the mouse over A alone (x 355 is left of B's edge at 358).
+    for _ in 0..4 {
+        frame(&mut ctx, &mut out, 355.0, 150.0, 0.0);
+    }
+    // A notch over A.
+    frame(&mut ctx, &mut out, 355.0, 150.0, -1.0);
+    // A four pixel move puts the mouse inside both, where B is on top and hovered.
+    frame(&mut ctx, &mut out, 359.0, 150.0, 0.0);
+    // The lock keeps the wheel on A even though B is hovered now.
+    frame(&mut ctx, &mut out, 359.0, 150.0, -1.0);
+    frame(&mut ctx, &mut out, 359.0, 150.0, 0.0);
+    // A big move takes the mouse to B alone: the lock is released and B scrolls.
+    frame(&mut ctx, &mut out, 500.0, 150.0, 0.0);
+    frame(&mut ctx, &mut out, 500.0, 150.0, -1.0);
+    frame(&mut ctx, &mut out, 500.0, 150.0, 0.0);
+    out
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -2207,6 +2276,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "window_wheel" => Some(window_wheel_dump()),
         "window_autosize" => Some(window_autosize_dump()),
         "window_autosize_change" => Some(window_autosize_change_dump()),
+        "window_wheel_lock" => Some(window_wheel_lock_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),

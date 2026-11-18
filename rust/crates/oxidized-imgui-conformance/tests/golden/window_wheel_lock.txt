@@ -1,0 +1,13 @@
+header imgui 1.93.1 WIP 19303
+scenario window_wheel_lock
+frame wheel 00000000 a 00000000 b 00000000 hovered - locked -
+frame wheel 00000000 a 00000000 b 00000000 hovered A locked -
+frame wheel 00000000 a 00000000 b 00000000 hovered A locked -
+frame wheel 00000000 a 00000000 b 00000000 hovered A locked -
+frame wheel bf800000 a 42820000 b 00000000 hovered A locked A
+frame wheel 00000000 a 42820000 b 00000000 hovered B locked A
+frame wheel bf800000 a 42e80000 b 00000000 hovered B locked A
+frame wheel 00000000 a 42e80000 b 00000000 hovered B locked A
+frame wheel 00000000 a 42e80000 b 00000000 hovered B locked -
+frame wheel bf800000 a 42e80000 b 42820000 hovered B locked B
+frame wheel 00000000 a 42e80000 b 42820000 hovered B locked B

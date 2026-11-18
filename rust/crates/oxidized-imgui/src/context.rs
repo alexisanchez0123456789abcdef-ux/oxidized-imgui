@@ -92,6 +92,13 @@ pub struct Context {
     scrollbar_click_delta: f32,
     /// g.ActiveIdIsJustActivated, as far as the scrollbar needs it.
     active_id_just_activated: bool,
+    /// g.WheelingWindow: the window the wheel is locked to, so it keeps scrolling while the
+    /// mouse wanders over another one.
+    wheeling_window: Option<String>,
+    /// g.WheelingWindowRefMousePos: where the mouse was when the lock was taken.
+    wheeling_ref_mouse: Vec2,
+    /// g.WheelingWindowReleaseTimer: seconds of lock left.
+    wheeling_release_timer: f32,
     /// ImGuiWindowFlags_AlwaysAutoResize for the window about to start.
     next_auto_resize: bool,
     /// Whether the window about to start may show a scrollbar. The other constructors model
@@ -143,6 +150,9 @@ impl Default for Context {
             next_scroll: None,
             next_scrollbar: false,
             next_auto_resize: false,
+            wheeling_window: None,
+            wheeling_ref_mouse: Vec2::default(),
+            wheeling_release_timer: 0.0,
             scrollbar_click_delta: 0.0,
             active_id_just_activated: false,
             display_order: Vec::new(),
@@ -194,6 +204,7 @@ impl Context {
         self.update_keyboard_inputs();
         self.update_mouse_inputs();
         self.update_hovered_window();
+        self.update_wheeling_window_lock();
         // `UpdateMouseMovingWindowNewFrame`: the window being dragged follows the mouse, and the
         // drag ends the moment the button comes up.
         self.update_mouse_moving_window_new_frame();
@@ -242,6 +253,32 @@ impl Context {
     /// The window the mouse is over, as `ImGui::GetHoveredWindow` would report it.
     pub fn hovered_window_name(&self) -> Option<&str> {
         self.hovered_window.as_deref()
+    }
+
+    /// `g.WheelingWindow`: the window the wheel is currently locked to.
+    pub fn wheeling_window_name(&self) -> Option<&str> {
+        self.wheeling_window.as_deref()
+    }
+
+    /// The first half of `UpdateMouseWheel`: the lock ages with the frame and is dropped when the
+    /// mouse has moved further than the drag threshold, or when its timer runs out.
+    fn update_wheeling_window_lock(&mut self) {
+        let Some(name) = self.wheeling_window.clone() else {
+            return;
+        };
+        let _ = name;
+        self.wheeling_release_timer -= self.io.delta_time;
+        if let Some(mouse) = self.io.mouse_pos {
+            let dx = mouse.x - self.wheeling_ref_mouse.x;
+            let dy = mouse.y - self.wheeling_ref_mouse.y;
+            let threshold = self.io.mouse_drag_threshold;
+            if dx * dx + dy * dy > threshold * threshold {
+                self.wheeling_release_timer = 0.0;
+            }
+        }
+        if self.wheeling_release_timer <= 0.0 {
+            self.wheeling_window = None;
+        }
     }
 
     /// `g.Windows` order, back to front: the order the lists are drawn in.
@@ -771,15 +808,28 @@ impl Context {
             .next_scroll
             .take()
             .unwrap_or(remembered_scroll.unwrap_or_default());
-        // `UpdateMouseWheel` + `SetScrollY`: the wheel over the window scrolls it by five font
-        // sizes, capped at two thirds of the interior.
-        if self.io.mouse_wheel != 0.0
-            && self.hovered_window.as_deref() == Some(name)
-            && scroll_max.y != 0.0
-        {
-            let max_step = (inner_rect.1.y - inner_rect.0.y) * 0.67;
-            let scroll_step = (5.0 * self.font.size).min(max_step).trunc();
-            requested.y -= self.io.mouse_wheel * scroll_step;
+        // `UpdateMouseWheel` + `SetScrollY`: the wheel scrolls the window it is locked to, falling
+        // back to the hovered one. The step is five font sizes, capped at two thirds of the
+        // interior.
+        if self.io.mouse_wheel != 0.0 {
+            let owner = self
+                .wheeling_window
+                .clone()
+                .or_else(|| self.hovered_window.clone());
+            if owner.as_deref() == Some(name) && scroll_max.y != 0.0 {
+                // `LockWheelingWindow`: refresh the timer, and take the lock (with the mouse
+                // position it was taken at) when it moves to this window.
+                let amount = self.io.mouse_wheel.abs();
+                self.wheeling_release_timer =
+                    (self.wheeling_release_timer + amount * 0.70).min(0.70);
+                if self.wheeling_window.as_deref() != Some(name) {
+                    self.wheeling_window = Some(name.to_string());
+                    self.wheeling_ref_mouse = self.io.mouse_pos.unwrap_or_default();
+                }
+                let max_step = (inner_rect.1.y - inner_rect.0.y) * 0.67;
+                let scroll_step = (5.0 * self.font.size).min(max_step).trunc();
+                requested.y -= self.io.mouse_wheel * scroll_step;
+            }
         }
         let mut scroll = Vec2 {
             x: requested.x.clamp(0.0, scroll_max.x),
