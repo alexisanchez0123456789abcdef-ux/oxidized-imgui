@@ -393,6 +393,135 @@ impl DrawList {
         self.add_convex_poly_filled_aa(&points, col);
     }
 
+    /// `ImDrawList::AddRectFilled` with rounding, antialiased: the corner arcs, then the same
+    /// convex-polygon fill.
+    ///
+    /// `arc_step` is the sampling step within a quarter circle. The reference derives it from an
+    /// automatic segment count; that formula is not ported yet, so it is an explicit input.
+    pub fn add_rect_filled_aa_rounded(
+        &mut self,
+        min: Vec2,
+        max: Vec2,
+        rounding: f32,
+        col: ImU32,
+        arc_step: i32,
+    ) {
+        let mut rounding = rounding;
+        rounding = rounding.min((max.x - min.x).abs() * 0.5 - 1.0);
+        rounding = rounding.min((max.y - min.y).abs() * 0.5 - 1.0);
+        if rounding < 0.5 {
+            self.add_rect_filled_aa(min, max, col);
+            return;
+        }
+
+        let mut points: Vec<Vec2> = Vec::new();
+        push_arc(
+            &mut points,
+            Vec2 {
+                x: min.x + rounding,
+                y: min.y + rounding,
+            },
+            rounding,
+            6,
+            9,
+            arc_step,
+        );
+        push_arc(
+            &mut points,
+            Vec2 {
+                x: max.x - rounding,
+                y: min.y + rounding,
+            },
+            rounding,
+            9,
+            12,
+            arc_step,
+        );
+        push_arc(
+            &mut points,
+            Vec2 {
+                x: max.x - rounding,
+                y: max.y - rounding,
+            },
+            rounding,
+            0,
+            3,
+            arc_step,
+        );
+        push_arc(
+            &mut points,
+            Vec2 {
+                x: min.x + rounding,
+                y: max.y - rounding,
+            },
+            rounding,
+            3,
+            6,
+            arc_step,
+        );
+        self.add_convex_poly_filled_aa(&points, col);
+    }
+
+    /// `ImDrawList::PathRect` for a fully rounded rectangle: the corner arc points, ready to fill.
+    pub fn path_rect_rounded(min: Vec2, max: Vec2, rounding: f32, arc_step: i32) -> Vec<Vec2> {
+        let mut rounding = rounding;
+        rounding = rounding.min((max.x - min.x).abs() * 0.5 - 1.0);
+        rounding = rounding.min((max.y - min.y).abs() * 0.5 - 1.0);
+        let mut points: Vec<Vec2> = Vec::new();
+        if rounding < 0.5 {
+            points.push(min);
+            points.push(Vec2 { x: max.x, y: min.y });
+            points.push(max);
+            points.push(Vec2 { x: min.x, y: max.y });
+            return points;
+        }
+        push_arc(
+            &mut points,
+            Vec2 {
+                x: min.x + rounding,
+                y: min.y + rounding,
+            },
+            rounding,
+            6,
+            9,
+            arc_step,
+        );
+        push_arc(
+            &mut points,
+            Vec2 {
+                x: max.x - rounding,
+                y: min.y + rounding,
+            },
+            rounding,
+            9,
+            12,
+            arc_step,
+        );
+        push_arc(
+            &mut points,
+            Vec2 {
+                x: max.x - rounding,
+                y: max.y - rounding,
+            },
+            rounding,
+            0,
+            3,
+            arc_step,
+        );
+        push_arc(
+            &mut points,
+            Vec2 {
+                x: min.x + rounding,
+                y: max.y - rounding,
+            },
+            rounding,
+            3,
+            6,
+            arc_step,
+        );
+        points
+    }
+
     /// `ImDrawList::PrimRect`: a rectangle filled with the white pixel, no explicit UVs.
     pub fn prim_rect(&mut self, a: Vec2, c: Vec2, col: ImU32) {
         let uv = self.white_uv;
@@ -447,6 +576,129 @@ fn rsqrt_precise(x: f32) -> f32 {
         }
     }
     1.0 / x.sqrt()
+}
+/// `IM_DRAWLIST_ARCFAST_SAMPLE_MAX`: samples around a full circle in the fast arc table.
+const ARC_SAMPLE_MAX: i32 = 48;
+
+/// The reference's fast arc table (`ImDrawListSharedData::ArcFastVtx`), pinned from the driver.
+/// It is generated at start-up from sin/cos, so it is data, not arithmetic, across compilers.
+fn arc_table() -> [Vec2; 48] {
+    const BITS: [(u32, u32); 48] = [
+        (0x3F80_0000, 0x0000_0000),
+        (0x3F7D_CF55, 0x3E05_A8A9),
+        (0x3F77_46EA, 0x3E84_83EE),
+        (0x3F6C_835E, 0x3EC3_EF16),
+        (0x3F5D_B3D7, 0x3F00_0000),
+        (0x3F4B_1934, 0x3F1B_D7CB),
+        (0x3F35_04F3, 0x3F35_04F3),
+        (0x3F1B_D7C9, 0x3F4B_1935),
+        (0x3EFF_FFFF, 0x3F5D_B3D8),
+        (0x3EC3_EF15, 0x3F6C_835E),
+        (0x3E84_83EB, 0x3F77_46EB),
+        (0x3E05_A8A4, 0x3F7D_CF55),
+        (0xB33B_BD2E, 0x3F80_0000),
+        (0xBE05_A8AA, 0x3F7D_CF55),
+        (0xBE84_83F2, 0x3F77_46EA),
+        (0xBEC3_EF14, 0x3F6C_835F),
+        (0xBF00_0001, 0x3F5D_B3D7),
+        (0xBF1B_D7CA, 0x3F4B_1934),
+        (0xBF35_04F3, 0x3F35_04F3),
+        (0xBF4B_1934, 0x3F1B_D7CA),
+        (0xBF5D_B3D9, 0x3EFF_FFFA),
+        (0xBF6C_8360, 0x3EC3_EF10),
+        (0xBF77_46EB, 0x3E84_83EA),
+        (0xBF7D_CF54, 0x3E05_A8B1),
+        (0xBF80_0000, 0xB3BB_BD2E),
+        (0xBF7D_CF54, 0xBE05_A8AD),
+        (0xBF77_46EA, 0xBE84_83EF),
+        (0xBF6C_835D, 0xBEC3_EF1D),
+        (0xBF5D_B3D5, 0xBF00_0003),
+        (0xBF4B_1935, 0xBF1B_D7C9),
+        (0xBF35_04F4, 0xBF35_04F2),
+        (0xBF1B_D7CB, 0xBF4B_1933),
+        (0xBEFF_FFFD, 0xBF5D_B3D8),
+        (0xBEC3_EF0B, 0xBF6C_8361),
+        (0xBE84_83EC, 0xBF77_46EB),
+        (0xBE05_A896, 0xBF7D_CF55),
+        (0x324C_DE2E, 0xBF80_0000),
+        (0x3E05_A8B7, 0xBF7D_CF54),
+        (0x3E84_83ED, 0xBF77_46EA),
+        (0x3EC3_EF1B, 0xBF6C_835D),
+        (0x3F00_0006, 0xBF5D_B3D4),
+        (0x3F1B_D7CC, 0xBF4B_1933),
+        (0x3F35_04F7, 0xBF35_04EF),
+        (0x3F4B_1935, 0xBF1B_D7C9),
+        (0x3F5D_B3DA, 0xBEFF_FFF8),
+        (0x3F6C_835F, 0xBEC3_EF15),
+        (0x3F77_46E9, 0xBE84_83F6),
+        (0x3F7D_CF56, 0xBE05_A88B),
+    ];
+    let mut table = [Vec2 { x: 0.0, y: 0.0 }; 48];
+    let mut i = 0;
+    while i < 48 {
+        table[i] = Vec2 {
+            x: f32::from_bits(BITS[i].0),
+            y: f32::from_bits(BITS[i].1),
+        };
+        i += 1;
+    }
+    table
+}
+
+/// `ImDrawList::_PathArcToFastEx`: sample the fast arc table between two 12ths of a circle.
+fn push_arc(
+    out: &mut Vec<Vec2>,
+    center: Vec2,
+    radius: f32,
+    min_of_12: i32,
+    max_of_12: i32,
+    arc_step: i32,
+) {
+    if radius < 0.5 {
+        out.push(center);
+        return;
+    }
+
+    let min_sample = min_of_12 * ARC_SAMPLE_MAX / 12;
+    let max_sample = max_of_12 * ARC_SAMPLE_MAX / 12;
+    let range = (max_sample - min_sample).abs();
+
+    let mut first_step = arc_step.max(1);
+    let next_step = first_step;
+    if arc_step > 1 {
+        let overstep = range % arc_step;
+        if overstep > 0 && range > 0 {
+            first_step = arc_step - (arc_step - overstep) / 2;
+        }
+    }
+
+    let table = arc_table();
+    let mut sample_index = min_sample.rem_euclid(ARC_SAMPLE_MAX);
+    let mut a = min_sample;
+    let mut step = first_step;
+    let ascending = min_sample <= max_sample;
+    loop {
+        if ascending && a > max_sample {
+            break;
+        }
+        if !ascending && a < max_sample {
+            break;
+        }
+        let index = sample_index.rem_euclid(ARC_SAMPLE_MAX) as usize;
+        let sample = table[index];
+        out.push(Vec2 {
+            x: center.x + sample.x * radius,
+            y: center.y + sample.y * radius,
+        });
+        if ascending {
+            a += step;
+            sample_index += step;
+        } else {
+            a -= step;
+            sample_index -= step;
+        }
+        step = next_step;
+    }
 }
 
 #[cfg(test)]

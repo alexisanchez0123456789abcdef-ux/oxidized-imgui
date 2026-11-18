@@ -1,0 +1,193 @@
+header imgui 1.93.1 WIP 19303
+scenario aa_round_rect
+p 0 41280000 41ca0000
+p 1 4132b7ce 41b60000
+p 2 41500000 41a75be6
+p 3 41780000 41a20000
+p 4 425e0000 41a20000
+p 5 42680000 41a75be7
+p 6 426f520d 41b60001
+p 7 42720000 41ca0000
+p 8 42720000 42370000
+p 9 426f520d 42410000
+p 10 42680000 4248520d
+p 11 425e0000 424b0000
+p 12 41780000 424b0000
+p 13 41500000 4248520d
+p 14 4132b7cc 42410000
+p 15 41280000 42370000
+white_uv 3a800000 3b800000
+cmd_count 1
+cmd 0 clip 00000000 00000000 00000000 00000000 elems 138 vtxoff 0 idxoff 0
+vtx_count 32
+vtx 0 pos 41300000 41ca86d0 uv 3a800000 3b800000 col ffff0000
+vtx 1 pos 4139e3fe 41b81210 uv 3a800000 3b800000 col ffff0000
+vtx 2 pos 41542420 41aaf1fe uv 3a800000 3b800000 col ffff0000
+vtx 3 pos 41790da0 41a60000 uv 3a800000 3b800000 col ffff0000
+vtx 4 pos 425dbc98 41a60000 uv 3a800000 3b800000 col ffff0000
+vtx 5 pos 4266f6f8 41aaf1ff uv 3a800000 3b800000 col ffff0000
+vtx 6 pos 426d8701 41b81211 uv 3a800000 3b800000 col ffff0000
+vtx 7 pos 42700000 41ca86d0 uv 3a800000 3b800000 col ffff0000
+vtx 8 pos 42700000 4236bc98 uv 3a800000 3b800000 col ffff0000
+vtx 9 pos 426d8701 423ff6f8 uv 3a800000 3b800000 col ffff0000
+vtx 10 pos 4266f6f8 42468701 uv 3a800000 3b800000 col ffff0000
+vtx 11 pos 425dbc98 42490000 uv 3a800000 3b800000 col ffff0000
+vtx 12 pos 41790da0 42490000 uv 3a800000 3b800000 col ffff0000
+vtx 13 pos 4154241f 42468701 uv 3a800000 3b800000 col ffff0000
+vtx 14 pos 4139e3fc 423ff6f8 uv 3a800000 3b800000 col ffff0000
+vtx 15 pos 41300000 4236bc98 uv 3a800000 3b800000 col ffff0000
+vtx 16 pos 41200000 41c97930 uv 3a800000 3b800000 col 00ff0000
+vtx 17 pos 412b8b9e 41b3edf0 uv 3a800000 3b800000 col 00ff0000
+vtx 18 pos 414bdbe0 41a3c5ce uv 3a800000 3b800000 col 00ff0000
+vtx 19 pos 4176f260 419e0000 uv 3a800000 3b800000 col 00ff0000
+vtx 20 pos 425e4368 419e0000 uv 3a800000 3b800000 col 00ff0000
+vtx 21 pos 42690908 41a3c5cf uv 3a800000 3b800000 col 00ff0000
+vtx 22 pos 42711d19 41b3edf1 uv 3a800000 3b800000 col 00ff0000
+vtx 23 pos 42740000 41c97930 uv 3a800000 3b800000 col 00ff0000
+vtx 24 pos 42740000 42374368 uv 3a800000 3b800000 col 00ff0000
+vtx 25 pos 42711d19 42420908 uv 3a800000 3b800000 col 00ff0000
+vtx 26 pos 42690908 424a1d19 uv 3a800000 3b800000 col 00ff0000
+vtx 27 pos 425e4368 424d0000 uv 3a800000 3b800000 col 00ff0000
+vtx 28 pos 4176f260 424d0000 uv 3a800000 3b800000 col 00ff0000
+vtx 29 pos 414bdbe1 424a1d19 uv 3a800000 3b800000 col 00ff0000
+vtx 30 pos 412b8b9c 42420908 uv 3a800000 3b800000 col 00ff0000
+vtx 31 pos 41200000 42374368 uv 3a800000 3b800000 col 00ff0000
+idx_count 138
+idx 31
+idx 16
+idx 0
+idx 31
+idx 0
+idx 15
+idx 16
+idx 17
+idx 1
+idx 16
+idx 1
+idx 0
+idx 17
+idx 18
+idx 2
+idx 17
+idx 2
+idx 1
+idx 18
+idx 19
+idx 3
+idx 18
+idx 3
+idx 2
+idx 19
+idx 20
+idx 4
+idx 19
+idx 4
+idx 3
+idx 20
+idx 21
+idx 5
+idx 20
+idx 5
+idx 4
+idx 21
+idx 22
+idx 6
+idx 21
+idx 6
+idx 5
+idx 22
+idx 23
+idx 7
+idx 22
+idx 7
+idx 6
+idx 23
+idx 24
+idx 8
+idx 23
+idx 8
+idx 7
+idx 24
+idx 25
+idx 9
+idx 24
+idx 9
+idx 8
+idx 25
+idx 26
+idx 10
+idx 25
+idx 10
+idx 9
+idx 26
+idx 27
+idx 11
+idx 26
+idx 11
+idx 10
+idx 27
+idx 28
+idx 12
+idx 27
+idx 12
+idx 11
+idx 28
+idx 29
+idx 13
+idx 28
+idx 13
+idx 12
+idx 29
+idx 30
+idx 14
+idx 29
+idx 14
+idx 13
+idx 30
+idx 31
+idx 15
+idx 30
+idx 15
+idx 14
+idx 0
+idx 1
+idx 2
+idx 0
+idx 2
+idx 3
+idx 0
+idx 3
+idx 4
+idx 0
+idx 4
+idx 5
+idx 0
+idx 5
+idx 6
+idx 0
+idx 6
+idx 7
+idx 0
+idx 7
+idx 8
+idx 0
+idx 8
+idx 9
+idx 0
+idx 9
+idx 10
+idx 0
+idx 10
+idx 11
+idx 0
+idx 11
+idx 12
+idx 0
+idx 12
+idx 13
+idx 0
+idx 13
+idx 14
+idx 0
+idx 14
+idx 15

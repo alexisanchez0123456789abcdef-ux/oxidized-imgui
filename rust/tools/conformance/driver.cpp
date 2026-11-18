@@ -560,6 +560,39 @@ static void SceneAaRect(ImDrawList& list)
     list.AddRectFilled(ImVec2(10.5f, 20.25f), ImVec2(60.5f, 50.75f), COL);
 }
 
+// aa_round_rect: a rounded rectangle, antialiased. Prints the arc points then the draw list.
+static void DumpAaRoundRect()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario aa_round_rect\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    ImGui::NewFrame();
+
+    const ImVec2 a(10.5f, 20.25f);
+    const ImVec2 b(60.5f, 50.75f);
+    ImDrawListSharedData* sd = ImGui::GetDrawListSharedData();
+
+    {
+        ImDrawList path_list(sd);
+        path_list._ResetForNewFrame();
+        path_list._SetPixelDensity(1.0f);
+        path_list.PathRect(a, b, 5.0f, ImDrawFlags_RoundAll);
+        for (int i = 0; i < path_list._Path.Size; i++)
+            printf("p %d %08x %08x\n", i, Bits(path_list._Path[i].x), Bits(path_list._Path[i].y));
+    }
+    {
+        ImDrawList list(sd);
+        list._ResetForNewFrame();
+        list._SetPixelDensity(1.0f);
+        list.Flags = ImDrawListFlags_AntiAliasedFill;
+        list.AddRectFilled(a, b, COL, 5.0f);
+        DumpDrawListBody(list);
+    }
+    ImGui::EndFrame();
+}
+
 // Explicit UVs: no atlas involved.
 static void ScenePrimRectUV(ImDrawList& list)
 {
@@ -680,6 +713,13 @@ int main(int argc, char** argv)
         ImGui::NewFrame();
         DumpClipStack();
         ImGui::EndFrame();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "aa_round_rect") == 0)
+    {
+        DumpAaRoundRect();
         ImGui::DestroyContext();
         return 0;
     }
