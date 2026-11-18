@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 $cargoBin = Join-Path $env:USERPROFILE '.cargo\bin'
 if (Test-Path $cargoBin) { $env:PATH = "$cargoBin;$env:PATH" }
 
-$scenarios = @('prim_rect_uv', 'prim_rect', 'rect_filled', 'line_h', 'window_layout', 'io_mouse_events', 'io_keyboard_events', 'font_metrics', 'clip_stack', 'text_draw', 'button', 'widgets_basic', 'slider_basic', 'style_defaults', 'aa_rect', 'aa_round_rect', 'aa_line', 'aa_bevel', 'arc_steps', 'bezier_points', 'aa_polyline', 'aa_border', 'button_draw', 'window_bg', 'window_border', 'window_title', 'cmd_offsets', 'scene_window_button', 'button_states', 'button_border')
+$scenarios = @('prim_rect_uv', 'prim_rect', 'rect_filled', 'line_h', 'window_layout', 'io_mouse_events', 'io_keyboard_events', 'font_metrics', 'clip_stack', 'text_draw', 'button', 'widgets_basic', 'slider_basic', 'style_defaults', 'aa_rect', 'aa_round_rect', 'aa_line', 'aa_strokes', 'aa_bevel', 'arc_steps', 'bezier_points', 'aa_polyline', 'aa_border', 'button_draw', 'window_bg', 'window_border', 'window_title', 'cmd_offsets', 'scene_window_button', 'button_states', 'button_border')
 
 $conformance = $PSScriptRoot
 $root   = (Resolve-Path "$conformance\..\..\..").Path
@@ -45,12 +45,22 @@ function Compare-Bytes([string]$a, [string]$b) {
 $fixtures = Join-Path $root 'rust\crates\oxidized-imgui-conformance\tests\fixtures'
 New-Item -ItemType Directory -Force -Path $fixtures | Out-Null
 
+# Scenarios whose inputs the reference can only supply from its own process: the glyph table and
+# the atlas line-texture table are only stable inside the run that produced the golden.
+$fixture_names = @{
+    'text_draw'           = 'text_draw.glyphs.txt'
+    'button_draw'         = 'button_draw.glyphs.txt'
+    'window_title'        = 'window_title.glyphs.txt'
+    'scene_window_button' = 'scene_window_button.glyphs.txt'
+    'button_states'       = 'button_states.glyphs.txt'
+    'button_border'       = 'button_border.glyphs.txt'
+    'aa_strokes'          = 'aa_strokes.lineuvs.txt'
+}
+
 foreach ($name in $scenarios) {
     $dump = Join-Path $outDir "dump-$name.txt"
-    # text_draw also writes the glyph table it used: the atlas is only stable inside one process,
-    # so the Rust side consumes that fixture instead of a table generated elsewhere.
-    if ($name -eq 'text_draw' -or $name -eq 'button_draw' -or $name -eq 'window_title' -or $name -eq 'scene_window_button' -or $name -eq 'button_states' -or $name -eq 'button_border') {
-        $fixture = Join-Path $fixtures "$name.glyphs.txt"
+    if ($fixture_names.ContainsKey($name)) {
+        $fixture = Join-Path $fixtures $fixture_names[$name]
         & cmd /c "`"$driver`" $name `"$fixture`" > `"$dump`""
     } else {
         & cmd /c "`"$driver`" $name > `"$dump`""

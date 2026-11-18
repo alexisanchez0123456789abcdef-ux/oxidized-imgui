@@ -37,6 +37,7 @@ pub const SCENARIOS: &[&str] = &[
     "aa_rect",
     "aa_round_rect",
     "aa_line",
+    "aa_strokes",
     "aa_bevel",
     "arc_steps",
     "bezier_points",
@@ -1082,6 +1083,93 @@ pub fn button_border_dump() -> String {
     ctx.end_frame();
     out
 }
+/// The `aa_strokes` scenario: the anti-aliased stroke path **with the atlas line textures**, which
+/// is the path a real window's draw list takes. Three lines of different thickness, an open
+/// polyline with a soft join, the inside stroke with anti-aliased ends that a window icon uses, a
+/// corner sharp enough to bevel, and a closed inside stroke.
+///
+/// The line table is a pinned input: the atlas packer decides where the rows land, so the fixture
+/// is written by the same reference run that produced the golden.
+pub fn aa_strokes_dump() -> String {
+    use oxidized_imgui::{DrawList, Vec2, draw_flags};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/aa_strokes.lineuvs.txt"
+    );
+    let text = std::fs::read_to_string(path).expect("line uv fixture");
+
+    let mut list = DrawList::new();
+    list.white_uv = WHITE_UV;
+    list.fringe_scale = 1.0;
+    list.tex_uv_lines = parse_line_uvs(&text);
+    // `ImDrawListSharedData::InitialDrawFlags`: the defaults a window's draw list starts with.
+    list.flags = draw_flags::AALINES
+        | draw_flags::AAFILL
+        | draw_flags::USE_TEX_FOR_ROUND_CORNERS
+        | draw_flags::ALLOW_TEX_FOR_ROUND_CORNERS;
+
+    let p = |x: f32, y: f32| Vec2 { x, y };
+
+    list.add_line(p(10.0, 10.0), p(50.0, 30.0), COL, 1.0, 0);
+    list.add_line(p(10.0, 40.0), p(50.0, 60.0), COL, 2.0, 0);
+    list.add_line(p(10.0, 70.0), p(50.0, 90.0), COL, 4.0, 0);
+
+    let points = [p(70.5, 10.25), p(120.5, 45.75), p(180.25, 20.5)];
+    list.add_polyline(&points, COL, 3.0, 0);
+
+    // The shape a window's collapse arrow takes: inside stroke, anti-aliased ends, soft join.
+    let arrow = [p(70.5, 120.25), p(75.5, 125.75), p(80.5, 120.25)];
+    list.add_polyline(
+        &arrow,
+        COL,
+        2.0,
+        draw_flags::STROKE_INSIDE | draw_flags::AALINE_ENDS,
+    );
+
+    // A corner sharp enough that the miter limit turns the join into a clipped bevel.
+    let sharp = [p(10.5, 200.25), p(200.5, 200.75), p(10.5, 205.25)];
+    list.add_polyline(
+        &sharp,
+        COL,
+        2.0,
+        draw_flags::STROKE_INSIDE | draw_flags::AALINE_ENDS,
+    );
+
+    list.add_rect_border_inside_aa(p(100.5, 100.25), p(180.5, 150.75), COL, 2.0);
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario aa_strokes\n");
+    out.push_str(&format!("list_flags {:08x}\n", list.flags));
+    let full = dump("aa_strokes", &list);
+    for line in full.lines().skip(2) {
+        out.push_str(line);
+        out.push('\n');
+    }
+    out
+}
+
+/// Reads the atlas line-texture table the reference wrote: one `line <n> <u0> <u1> <v> <1/width>`
+/// per baked thickness, as raw float bits.
+fn parse_line_uvs(text: &str) -> Vec<[f32; 4]> {
+    let mut table: Vec<[f32; 4]> = vec![[0.0; 4]; 46];
+    for line in text.lines().filter(|l| !l.trim().is_empty()) {
+        let mut fields = line.split_whitespace();
+        assert_eq!(fields.next(), Some("line"), "unexpected line fixture row");
+        let index: usize = fields.next().expect("index").parse().expect("line index");
+        let mut entry = [0.0f32; 4];
+        for slot in entry.iter_mut() {
+            let bits = u32::from_str_radix(fields.next().expect("value"), 16).expect("hex bits");
+            *slot = f32::from_bits(bits);
+        }
+        table[index] = entry;
+    }
+    table
+}
+
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -1096,6 +1184,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "slider_basic" => Some(slider_basic_dump()),
         "style_defaults" => Some(style_defaults_dump()),
         "aa_round_rect" => Some(aa_round_rect_dump()),
+        "aa_strokes" => Some(aa_strokes_dump()),
         "window_bg" => Some(window_bg_dump()),
         "window_border" => Some(window_border_dump()),
         "window_title" => Some(window_title_dump()),

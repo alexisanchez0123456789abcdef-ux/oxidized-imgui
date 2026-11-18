@@ -35,7 +35,9 @@ pub const IMGUI_VERSION: &str = "1.93.1 WIP";
 pub const IMGUI_VERSION_NUM: u32 = 19303;
 
 pub use context::{Context, Window};
-pub use draw_list::{DrawCmd, DrawList, DrawVert, ImDrawIdx, TexRef, Vec2, path_bezier_cubic_to};
+pub use draw_list::{
+    DrawCmd, DrawList, DrawVert, ImDrawIdx, TexRef, Vec2, draw_flags, path_bezier_cubic_to,
+};
 pub use font::{Font, Glyph};
 pub use id::{ImGuiID, hash_data, hash_str, hash_str_utf8};
 pub use io::{Io, Key, KeyData};

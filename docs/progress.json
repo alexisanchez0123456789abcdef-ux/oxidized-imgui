@@ -32,7 +32,7 @@
     {
       "id": "draw",
       "title": "Listas de dibujo y primitivas",
-      "weight": 16,
+      "weight": 17,
       "infra": false,
       "items": [
         { "id": "layout_parity", "label": "Estructuras con el layout exacto de C++", "weight": 1, "done": true, "evidence": "draw_list::tests::layouts_match_reference" },
@@ -42,6 +42,7 @@
         { "id": "aa_rect", "label": "Relleno AA de rectángulo (miters)", "weight": 1, "done": true, "evidence": "golden aa_rect" },
         { "id": "aa_round", "label": "AA: rectángulo redondeado (arcos de esquina)", "weight": 1, "done": true, "evidence": "golden aa_round_rect" },
         { "id": "aa_line", "label": "AA: líneas de cualquier grosor", "weight": 1, "done": true, "evidence": "golden aa_line" },
+        { "id": "aa_stroke_tex", "label": "AA: trazos con la textura de líneas del atlas (remates AA, bisel recortado, trazo cerrado)", "weight": 1, "done": true, "evidence": "golden aa_strokes + fixture aa_strokes.lineuvs.txt" },
         { "id": "aa_bevel", "label": "AA: uniones en bisel (esquinas agudas)", "weight": 1, "done": true, "evidence": "golden aa_bevel" },
         { "id": "aa_autoseg", "label": "AA: segmentación automática de arcos", "weight": 1, "done": true, "evidence": "golden arc_steps (radios 1..14)" },
         { "id": "aa_bezier_pts", "label": "AA: puntos de bézier por subdivisión", "weight": 1, "done": true, "evidence": "golden bezier_points" },

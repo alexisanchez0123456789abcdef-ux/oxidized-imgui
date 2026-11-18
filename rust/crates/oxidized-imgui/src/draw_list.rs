@@ -27,6 +27,49 @@ pub const DEFAULT_WHITE_UV: Vec2 = Vec2 {
 /// A packed RGBA color, `ImU32`.
 pub type ImU32 = u32;
 
+/// `ImDrawFlags`: the per-call switches of the primitive functions. The list also carries a set of
+/// defaults in the same bit space (`ImDrawListFlags_AntiAliasedLines` **is** `ImDrawFlags_AALines`),
+/// which is why the two are OR-ed together before use.
+pub mod draw_flags {
+    pub const CLOSED: u32 = 1 << 9;
+    pub const JOIN_MITER: u32 = 1 << 10;
+    pub const CAP_SQUARE: u32 = 1 << 11;
+    /// `ImDrawListFlags_AntiAliasedFill`.
+    pub const AAFILL: u32 = 1 << 12;
+    /// `ImDrawListFlags_AntiAliasedLines`: the default of a window's draw list.
+    pub const AALINES: u32 = 1 << 13;
+    /// `ImDrawListFlags_AntiAliasedLineEnds`.
+    pub const AALINE_ENDS: u32 = 1 << 14;
+    /// `ImDrawFlags_UseTexForRoundCorners`: rounded corners may sample the baked corner texture.
+    pub const USE_TEX_FOR_ROUND_CORNERS: u32 = 1 << 21;
+    /// `ImDrawFlags_AllowTexForRoundCorners_`: internal companion of the flag above.
+    pub const ALLOW_TEX_FOR_ROUND_CORNERS: u32 = 1 << 23;
+    pub const STROKE_INSIDE: u32 = 1 << 17;
+    pub const STROKE_CENTER: u32 = 2 << 17;
+    pub const STROKE_CENTER_BIASED: u32 = 3 << 17;
+    pub const STROKE_OUTSIDE: u32 = 4 << 17;
+    pub const STROKE_LEGACY: u32 = 7 << 17;
+    pub const STROKE_MASK: u32 = 7 << 17;
+}
+
+/// `_GetStrokePos`: the stroke position a call asked for, or the caller's default.
+fn stroke_pos(flags: u32, default: u32) -> u32 {
+    if flags & draw_flags::STROKE_MASK != 0 {
+        flags & draw_flags::STROKE_MASK
+    } else {
+        default
+    }
+}
+
+/// `ImAlphaMultiply`: scales the alpha of a colour, used for sub-pixel thick strokes.
+fn alpha_multiply(col: ImU32, alpha_mul: f32) -> ImU32 {
+    const A_SHIFT: u32 = 24;
+    const A_MASK: u32 = 0xFF00_0000;
+    let a = (col & A_MASK) >> A_SHIFT;
+    let a = (a as f32 * alpha_mul) as u32;
+    (col & !A_MASK) | (a << A_SHIFT)
+}
+
 /// Vertex index, `ImDrawIdx` (16-bit by default upstream).
 pub type ImDrawIdx = u16;
 
@@ -104,6 +147,10 @@ pub struct DrawList {
     pub fullscreen_clip: [f32; 4],
     /// `_FringeScale`: 1 / pixel density. Drives the width of the anti-aliased fringe.
     pub fringe_scale: f32,
+    /// `ImDrawListSharedData::TexUvLines`: the atlas line-texture table, one entry per baked
+    /// thickness as `[u0, u1, v, 1/width]`. Empty until the atlas is built, like the reference's
+    /// null pointer; the harness pins it from a fixture.
+    pub tex_uv_lines: Vec<[f32; 4]>,
     clip_stack: Vec<[f32; 4]>,
     current_clip: [f32; 4],
 }
@@ -621,297 +668,32 @@ impl DrawList {
         points
     }
 
-    /// `ImDrawList::_AddLine` for the case the reference's texture selection resolves to the white
-    /// pixel, which is what the default atlas produces here: a quad from the segment and its
-    /// normal, with no end caps.
+    /// `ImDrawList::_AddLine` with the line textures of the atlas, which is the path a draw list
+    /// takes when anti-aliased strokes are enabled (the default for a window).
     pub fn add_line_aa(&mut self, p1: Vec2, p2: Vec2, col: ImU32, thickness: f32) {
-        const A_MASK: u32 = 0xFF00_0000;
-        if (col & A_MASK) == 0 {
-            return;
-        }
-
-        let mut dir_x = p2.x - p1.x;
-        let mut dir_y = p2.y - p1.y;
-        let d2 = dir_x * dir_x + dir_y * dir_y;
-        let inv_len = if d2 > 0.0 { rsqrt_precise(d2) } else { 0.0 };
-        dir_x *= inv_len;
-        dir_y *= inv_len;
-        let norm_x = -dir_y;
-        let norm_y = dir_x;
-
-        // `_SelectLineTexture` reports no fringe texture for this pipeline.
-        let fringe = 0.0f32;
-        let thickness0 = (thickness + fringe) * 0.5;
-        let thickness1 = (thickness + fringe) - thickness0;
-
-        let base = self.vtx_buffer.len() as u32;
-        for (pos, uv) in [
-            (
-                Vec2 {
-                    x: p1.x - norm_x * thickness0,
-                    y: p1.y - norm_y * thickness0,
-                },
-                self.white_uv,
-            ),
-            (
-                Vec2 {
-                    x: p1.x + norm_x * thickness1,
-                    y: p1.y + norm_y * thickness1,
-                },
-                self.white_uv,
-            ),
-            (
-                Vec2 {
-                    x: p2.x - norm_x * thickness0,
-                    y: p2.y - norm_y * thickness0,
-                },
-                self.white_uv,
-            ),
-            (
-                Vec2 {
-                    x: p2.x + norm_x * thickness1,
-                    y: p2.y + norm_y * thickness1,
-                },
-                self.white_uv,
-            ),
-        ] {
-            self.vtx_buffer.push(DrawVert { pos, uv, col });
-        }
-        for i in [0u32, 2, 3, 0, 3, 1] {
-            self.idx_buffer.push((base + i) as ImDrawIdx);
-        }
-        if let Some(cmd) = self.cmd_buffer.last_mut() {
-            cmd.elem_count += 6;
-        }
+        self.add_line(p1, p2, col, thickness, 0);
     }
 
-    /// `ImDrawList::_AddPolyline` for an **open** polyline with miter joins and no anti-aliased end
-    /// caps: the two simplest caps plus a mitered body. Other combinations (closed paths, bevel
-    /// joins, AA ends, square caps, stroke-position modes) are not ported.
+    /// `ImDrawList::_AddPolyline` for an **open** polyline with miter joins and simple caps: the
+    /// combination the `aa_polyline` scenario pins.
     pub fn add_polyline_aa_miter(&mut self, points: &[Vec2], col: ImU32, thickness: f32) {
-        const A_MASK: u32 = 0xFF00_0000;
-        const MITER_ANGLE_LIMIT: f32 = -0.999_961_9;
-
-        let n = points.len();
-        if n < 2 || (col & A_MASK) == 0 {
-            return;
-        }
-
-        // Segment normals; the last point reuses the previous normal for an open path.
-        let mut normals = vec![Vec2 { x: 0.0, y: 0.0 }; n];
-        for i in 0..n - 1 {
-            let dx = points[i + 1].x - points[i].x;
-            let dy = points[i + 1].y - points[i].y;
-            let d2 = dx * dx + dy * dy;
-            let inv = if d2 > 0.0 { rsqrt_precise(d2) } else { 0.0 };
-            normals[i] = Vec2 {
-                x: -dy * inv,
-                y: dx * inv,
-            };
-        }
-        normals[n - 1] = normals[n - 2];
-
-        // `_SelectLineTexture` resolves to the white pixel with no fringe for this pipeline.
-        let fringe = 0.0f32;
-        let thickness0 = (thickness + fringe) * 0.5;
-        let thickness1 = (thickness + fringe) - thickness0;
-        let uv = self.white_uv;
-
-        let mut base = self.vtx_buffer.len() as u32;
-        let mut idx_count = 0u32;
-
-        // Start cap: two vertices, no connection yet.
-        let n1 = normals[0];
-        let p1 = points[0];
-        for (pos, color) in [
-            (
-                Vec2 {
-                    x: p1.x - n1.x * thickness0,
-                    y: p1.y - n1.y * thickness0,
-                },
-                col,
-            ),
-            (
-                Vec2 {
-                    x: p1.x + n1.x * thickness1,
-                    y: p1.y + n1.y * thickness1,
-                },
-                col,
-            ),
-        ] {
-            self.vtx_buffer.push(DrawVert {
-                pos,
-                uv,
-                col: color,
-            });
-        }
-
-        // Body: one miter pair per interior point.
-        for i in 1..n - 1 {
-            let n0 = normals[i - 1];
-            let n1 = normals[i];
-            let cos_theta = n0.x * n1.x + n0.y * n1.y;
-            let cos_clamped = cos_theta.max(MITER_ANGLE_LIMIT);
-            let miter_scale = (1.0 / (1.0 + cos_clamped)).min(1000.0);
-            let mx = (n0.x + n1.x) * miter_scale;
-            let my = (n0.y + n1.y) * miter_scale;
-            let p = points[i];
-            let next_base = self.vtx_buffer.len() as u32;
-            self.vtx_buffer.push(DrawVert {
-                pos: Vec2 {
-                    x: p.x - mx * thickness0,
-                    y: p.y - my * thickness0,
-                },
-                uv,
-                col,
-            });
-            self.vtx_buffer.push(DrawVert {
-                pos: Vec2 {
-                    x: p.x + mx * thickness1,
-                    y: p.y + my * thickness1,
-                },
-                uv,
-                col,
-            });
-            for tri in [[base, base + 2, base + 3], [base, base + 3, base + 1]] {
-                for vertex in tri {
-                    self.idx_buffer.push(vertex as ImDrawIdx);
-                }
-                idx_count += 3;
-            }
-            base = next_base;
-        }
-
-        // End cap: two vertices and the final connection.
-        let n1 = normals[n - 1];
-        let p1 = points[n - 1];
-        let next_base = self.vtx_buffer.len() as u32;
-        for pos in [
-            Vec2 {
-                x: p1.x - n1.x * thickness0,
-                y: p1.y - n1.y * thickness0,
-            },
-            Vec2 {
-                x: p1.x + n1.x * thickness1,
-                y: p1.y + n1.y * thickness1,
-            },
-        ] {
-            self.vtx_buffer.push(DrawVert { pos, uv, col });
-        }
-        for tri in [[base, base + 2, base + 3], [base, base + 3, base + 1]] {
-            for vertex in tri {
-                self.idx_buffer.push(vertex as ImDrawIdx);
-            }
-            idx_count += 3;
-        }
-        let _ = next_base;
-
-        if let Some(cmd) = self.cmd_buffer.last_mut() {
-            cmd.elem_count += idx_count;
-        }
+        self.add_polyline(points, col, thickness, draw_flags::JOIN_MITER);
     }
 
     /// `ImDrawList::_AddPolyline` for a **closed** path with miter joins and the inside stroke
     /// position, which is what a border (`AddRect` with defaults) takes.
-    ///
-    /// The first two vertices are reserved and patched at the end so the loop closes onto itself.
     pub fn add_closed_polyline_aa_miter_inside(
         &mut self,
         points: &[Vec2],
         col: ImU32,
         thickness: f32,
     ) {
-        const A_MASK: u32 = 0xFF00_0000;
-        const MITER_ANGLE_LIMIT: f32 = -0.999_961_9;
-
-        let n = points.len();
-        if n < 3 || (col & A_MASK) == 0 {
-            return;
-        }
-
-        // Normals for every edge, including the closing one.
-        let mut normals = vec![Vec2 { x: 0.0, y: 0.0 }; n];
-        for i1 in 0..n {
-            let i0 = (i1 + n - 1) % n;
-            let dx = points[i1].x - points[i0].x;
-            let dy = points[i1].y - points[i0].y;
-            let d2 = dx * dx + dy * dy;
-            let inv = if d2 > 0.0 { rsqrt_precise(d2) } else { 0.0 };
-            normals[i0] = Vec2 {
-                x: -dy * inv,
-                y: dx * inv,
-            };
-        }
-
-        let fringe = 0.0f32;
-        // Inside stroke: the fringe half is on the path, the rest goes inward.
-        let thickness0 = fringe * 0.5;
-        let thickness1 = (thickness + fringe) - thickness0;
-        let uv = self.white_uv;
-
-        // Reserved pair for the closing quad.
-        let reserved = self.vtx_buffer.len() as u32;
-        self.vtx_buffer.push(DrawVert {
-            pos: Vec2 { x: 0.0, y: 0.0 },
-            uv,
+        self.add_polyline(
+            points,
             col,
-        });
-        self.vtx_buffer.push(DrawVert {
-            pos: Vec2 { x: 0.0, y: 0.0 },
-            uv,
-            col,
-        });
-        let mut base = reserved;
-        let mut idx_count = 0u32;
-
-        for i in 0..n {
-            let i0 = (i + n - 1) % n;
-            let n0 = normals[i0];
-            let n1 = normals[i];
-            let p = points[i];
-            let cos_theta = n0.x * n1.x + n0.y * n1.y;
-            let cos_clamped = cos_theta.max(MITER_ANGLE_LIMIT);
-            let miter_scale = (1.0 / (1.0 + cos_clamped)).min(1000.0);
-            let mx = (n0.x + n1.x) * miter_scale;
-            let my = (n0.y + n1.y) * miter_scale;
-
-            let next_base = self.vtx_buffer.len() as u32;
-            self.vtx_buffer.push(DrawVert {
-                pos: Vec2 {
-                    x: p.x - mx * thickness0,
-                    y: p.y - my * thickness0,
-                },
-                uv,
-                col,
-            });
-            self.vtx_buffer.push(DrawVert {
-                pos: Vec2 {
-                    x: p.x + mx * thickness1,
-                    y: p.y + my * thickness1,
-                },
-                uv,
-                col,
-            });
-            for tri in [[base, base + 2, base + 3], [base, base + 3, base + 1]] {
-                for vertex in tri {
-                    self.idx_buffer.push(vertex as ImDrawIdx);
-                }
-                idx_count += 3;
-            }
-            base = next_base;
-        }
-
-        // Close the path: the reserved pair takes the last pair's positions.
-        let last_positions = [
-            self.vtx_buffer[(base) as usize].pos,
-            self.vtx_buffer[(base + 1) as usize].pos,
-        ];
-        self.vtx_buffer[reserved as usize].pos = last_positions[0];
-        self.vtx_buffer[(reserved + 1) as usize].pos = last_positions[1];
-
-        if let Some(cmd) = self.cmd_buffer.last_mut() {
-            cmd.elem_count += idx_count;
-        }
+            thickness,
+            draw_flags::CLOSED | draw_flags::JOIN_MITER | draw_flags::STROKE_INSIDE,
+        );
     }
 
     /// `ImDrawList::AddRect` with defaults: a closed miter stroke placed inside the rectangle.
@@ -922,9 +704,826 @@ impl DrawList {
             max,
             Vec2 { x: min.x, y: max.y },
         ];
-        self.add_closed_polyline_aa_miter_inside(&points, col, thickness);
+        // `AddRect` clamps the inner stroke expansion to half the smaller side.
+        let half_min_dim = (max.x - min.x).abs().min((max.y - min.y).abs()) * 0.5;
+        self.add_polyline_max(
+            &points,
+            col,
+            thickness,
+            draw_flags::CLOSED | draw_flags::JOIN_MITER | draw_flags::STROKE_INSIDE,
+            half_min_dim,
+        );
     }
 
+    /// `ImDrawList::AddPolyline`, which is `_AddPolyline` with no clamp on the inner stroke.
+    pub fn add_polyline(&mut self, points: &[Vec2], col: ImU32, thickness: f32, flags: u32) {
+        self.add_polyline_max(points, col, thickness, flags, f32::MAX);
+    }
+
+    /// `ImDrawList::_AddLine`: one segment, selectable cap ends and stroke position.
+    pub fn add_line(
+        &mut self,
+        p1: Vec2,
+        p2: Vec2,
+        col_in: ImU32,
+        thickness_in: f32,
+        flags_in: u32,
+    ) {
+        const A_MASK: u32 = 0xFF00_0000;
+        if (col_in & A_MASK) == 0 {
+            return;
+        }
+
+        let inv_fringe_scale = 1.0 / self.fringe_scale;
+        let mut screen_thickness = thickness_in * inv_fringe_scale;
+        let mut col = col_in;
+        let mut thickness = thickness_in;
+        if screen_thickness < 1.0 {
+            if screen_thickness < 1.0 / 255.0 {
+                return;
+            }
+            col = alpha_multiply(col, screen_thickness);
+            screen_thickness = 1.0;
+            thickness = self.fringe_scale;
+        }
+
+        let mut flags = flags_in | self.flags;
+        let (uv0, uv1, fringe) = self.select_line_texture(screen_thickness, flags);
+
+        let mut dir_x = p2.x - p1.x;
+        let mut dir_y = p2.y - p1.y;
+        let d2 = dir_x * dir_x + dir_y * dir_y;
+        let inv_len = if d2 > 0.0 { rsqrt_precise(d2) } else { 0.0 };
+        dir_x *= inv_len;
+        dir_y *= inv_len;
+        let norm_x = -dir_y;
+        let norm_y = dir_x;
+
+        let col_trans = col & !A_MASK;
+
+        let stroke_pos = stroke_pos(flags, draw_flags::STROKE_CENTER);
+        if stroke_pos == draw_flags::STROKE_LEGACY {
+            flags = (flags | draw_flags::JOIN_MITER) & !draw_flags::AALINE_ENDS;
+        }
+
+        let mut thickness0 = (thickness + fringe) * 0.5;
+        if stroke_pos == draw_flags::STROKE_OUTSIDE {
+            thickness0 = thickness + fringe * 0.5;
+        } else if stroke_pos == draw_flags::STROKE_CENTER_BIASED {
+            thickness0 = self.center_biased_offset(thickness) + fringe * 0.5;
+        } else if stroke_pos == draw_flags::STROKE_INSIDE {
+            thickness0 = fringe * 0.5;
+        }
+        let thickness1 = (thickness + fringe) - thickness0;
+
+        let half_aa = self.fringe_scale * 0.5;
+        let use_aa_ends = (flags & (draw_flags::AALINES | draw_flags::AALINE_ENDS))
+            == (draw_flags::AALINES | draw_flags::AALINE_ENDS);
+
+        let mut p1_x = p1.x;
+        let mut p1_y = p1.y;
+        let mut p2_x = p2.x;
+        let mut p2_y = p2.y;
+        if flags & draw_flags::CAP_SQUARE != 0 {
+            let half_thickness = thickness * 0.5;
+            p1_x -= dir_x * half_thickness;
+            p1_y -= dir_y * half_thickness;
+            p2_x += dir_x * half_thickness;
+            p2_y += dir_y * half_thickness;
+        }
+
+        let mut idx_count = 0u32;
+        if !use_aa_ends {
+            let base_idx = self.vtx_buffer.len() as u32;
+            self.push_vert(
+                Vec2 {
+                    x: p1_x - norm_x * thickness0,
+                    y: p1_y - norm_y * thickness0,
+                },
+                uv0,
+                col,
+            );
+            self.push_vert(
+                Vec2 {
+                    x: p1_x + norm_x * thickness1,
+                    y: p1_y + norm_y * thickness1,
+                },
+                uv1,
+                col,
+            );
+            self.push_vert(
+                Vec2 {
+                    x: p2_x - norm_x * thickness0,
+                    y: p2_y - norm_y * thickness0,
+                },
+                uv0,
+                col,
+            );
+            self.push_vert(
+                Vec2 {
+                    x: p2_x + norm_x * thickness1,
+                    y: p2_y + norm_y * thickness1,
+                },
+                uv1,
+                col,
+            );
+            for (a, b, c) in [
+                (base_idx, base_idx + 2, base_idx + 3),
+                (base_idx, base_idx + 3, base_idx + 1),
+            ] {
+                self.push_tri(a, b, c);
+            }
+            idx_count += 6;
+        } else {
+            // Start: two pairs half a fringe apart, the outer one transparent.
+            let pa_x = p1_x - dir_x * half_aa;
+            let pa_y = p1_y - dir_y * half_aa;
+            let pb_x = p1_x + dir_x * half_aa;
+            let pb_y = p1_y + dir_y * half_aa;
+
+            let base_idx = self.vtx_buffer.len() as u32;
+            self.push_vert(
+                Vec2 {
+                    x: pa_x - norm_x * thickness0,
+                    y: pa_y - norm_y * thickness0,
+                },
+                uv0,
+                col_trans,
+            );
+            self.push_vert(
+                Vec2 {
+                    x: pa_x + norm_x * thickness1,
+                    y: pa_y + norm_y * thickness1,
+                },
+                uv1,
+                col_trans,
+            );
+
+            let mut next_base_idx = self.vtx_buffer.len() as u32;
+            self.push_vert(
+                Vec2 {
+                    x: pb_x - norm_x * thickness0,
+                    y: pb_y - norm_y * thickness0,
+                },
+                uv0,
+                col,
+            );
+            self.push_vert(
+                Vec2 {
+                    x: pb_x + norm_x * thickness1,
+                    y: pb_y + norm_y * thickness1,
+                },
+                uv1,
+                col,
+            );
+
+            for (a, b, c) in [
+                (base_idx, base_idx + 2, base_idx + 3),
+                (base_idx, base_idx + 3, base_idx + 1),
+            ] {
+                self.push_tri(a, b, c);
+            }
+            idx_count += 6;
+            let mut base_idx = next_base_idx;
+
+            // End.
+            let pa_x = p2_x - dir_x * half_aa;
+            let pa_y = p2_y - dir_y * half_aa;
+            let pb_x = p2_x + dir_x * half_aa;
+            let pb_y = p2_y + dir_y * half_aa;
+
+            next_base_idx = self.vtx_buffer.len() as u32;
+            self.push_vert(
+                Vec2 {
+                    x: pa_x - norm_x * thickness0,
+                    y: pa_y - norm_y * thickness0,
+                },
+                uv0,
+                col,
+            );
+            self.push_vert(
+                Vec2 {
+                    x: pa_x + norm_x * thickness1,
+                    y: pa_y + norm_y * thickness1,
+                },
+                uv1,
+                col,
+            );
+            self.push_vert(
+                Vec2 {
+                    x: pb_x - norm_x * thickness0,
+                    y: pb_y - norm_y * thickness0,
+                },
+                uv0,
+                col_trans,
+            );
+            self.push_vert(
+                Vec2 {
+                    x: pb_x + norm_x * thickness1,
+                    y: pb_y + norm_y * thickness1,
+                },
+                uv1,
+                col_trans,
+            );
+
+            for (a, b, c) in [
+                (base_idx, base_idx + 2, base_idx + 3),
+                (base_idx, base_idx + 3, base_idx + 1),
+            ] {
+                self.push_tri(a, b, c);
+            }
+            idx_count += 6;
+            base_idx = next_base_idx;
+
+            for (a, b, c) in [
+                (base_idx, base_idx + 2, base_idx + 3),
+                (base_idx, base_idx + 3, base_idx + 1),
+            ] {
+                self.push_tri(a, b, c);
+            }
+            idx_count += 6;
+        }
+
+        if let Some(cmd) = self.cmd_buffer.last_mut() {
+            cmd.elem_count += idx_count;
+        }
+    }
+
+    /// `ImDrawList::_AddPolyline`: every cap, join and stroke-position mode, with the atlas line
+    /// textures when the flags ask for anti-aliased strokes.
+    ///
+    /// `max_inner_offset` is the clamp `AddRect` passes so a thick stroke cannot fold over itself.
+    pub fn add_polyline_max(
+        &mut self,
+        points: &[Vec2],
+        col_in: ImU32,
+        thickness_in: f32,
+        flags_in: u32,
+        max_inner_offset: f32,
+    ) {
+        const A_MASK: u32 = 0xFF00_0000;
+        const MITER_ANGLE_LIMIT: f32 = -0.999_961_9;
+        const MITER_LIMIT_SQR: f32 = 4.0 * 4.0; // IM_POLYLINE_MITER_LIMIT (4) squared
+
+        let n = points.len();
+        if n < 2 || (col_in & A_MASK) == 0 {
+            return;
+        }
+
+        let inv_fringe_scale = 1.0 / self.fringe_scale;
+        let mut screen_thickness = thickness_in * inv_fringe_scale;
+        let mut col = col_in;
+        let mut thickness = thickness_in;
+        if screen_thickness < 1.0 {
+            if screen_thickness < 1.0 / 255.0 {
+                return;
+            }
+            col = alpha_multiply(col, screen_thickness);
+            screen_thickness = 1.0;
+            thickness = self.fringe_scale;
+        }
+
+        let mut flags = flags_in | self.flags;
+
+        // One normal and one squared length per segment; the last entry is the closing segment
+        // for a closed path, or a copy of the previous normal for an open one.
+        let mut normals = vec![Vec2::default(); n];
+        let mut sqr_lengths = vec![0.0f32; n];
+        for i in 0..n - 1 {
+            let dx = points[i + 1].x - points[i].x;
+            let dy = points[i + 1].y - points[i].y;
+            let d2 = dx * dx + dy * dy;
+            let inv = if d2 > 0.0 { rsqrt_precise(d2) } else { 0.0 };
+            normals[i] = Vec2 {
+                x: -dy * inv,
+                y: dx * inv,
+            };
+            sqr_lengths[i] = d2;
+        }
+        if flags & draw_flags::CLOSED != 0 {
+            let dx = points[0].x - points[n - 1].x;
+            let dy = points[0].y - points[n - 1].y;
+            let d2 = dx * dx + dy * dy;
+            let inv = if d2 > 0.0 { rsqrt_precise(d2) } else { 0.0 };
+            normals[n - 1] = Vec2 {
+                x: -dy * inv,
+                y: dx * inv,
+            };
+            sqr_lengths[n - 1] = d2;
+        } else {
+            normals[n - 1] = normals[n - 2];
+            sqr_lengths[n - 1] = 0.0;
+        }
+
+        let (uv0, mut uv1, fringe) = self.select_line_texture(screen_thickness, flags);
+        let col_trans = col & !A_MASK;
+
+        let stroke_pos = stroke_pos(flags, draw_flags::STROKE_CENTER);
+        if stroke_pos == draw_flags::STROKE_LEGACY {
+            flags = (flags | draw_flags::JOIN_MITER) & !draw_flags::AALINE_ENDS;
+        }
+
+        let closed = flags & draw_flags::CLOSED != 0;
+        let miters_only = flags & draw_flags::JOIN_MITER != 0;
+
+        let mut thickness0 = (thickness + fringe) * 0.5;
+        if stroke_pos == draw_flags::STROKE_OUTSIDE {
+            thickness0 = thickness + fringe * 0.5;
+        } else if stroke_pos == draw_flags::STROKE_CENTER_BIASED {
+            thickness0 = self.center_biased_offset(thickness) + fringe * 0.5;
+        } else if stroke_pos == draw_flags::STROKE_INSIDE {
+            thickness0 = fringe * 0.5;
+        }
+        let mut thickness1 = (thickness + fringe) - thickness0;
+
+        // The vertex that sits exactly on the path reads the texture from the stroke ratio.
+        let ratio = thickness0 / (thickness0 + thickness1);
+        let uv2 = Vec2 {
+            x: uv0.x + (uv1.x - uv0.x) * ratio,
+            y: uv0.y,
+        };
+
+        if thickness1 > max_inner_offset {
+            thickness1 = max_inner_offset;
+            let s = (thickness0 + thickness1) / (thickness + fringe);
+            uv1.x = uv0.x + (uv1.x - uv0.x) * s;
+        }
+
+        let half_aa = self.fringe_scale * 0.5;
+        let use_aa_ends = (flags & (draw_flags::AALINES | draw_flags::AALINE_ENDS))
+            == (draw_flags::AALINES | draw_flags::AALINE_ENDS);
+
+        let first_vtx_offset = self.vtx_buffer.len();
+        let mut base_idx;
+        let mut idx_count = 0u32;
+
+        let mut p1 = points[0];
+        let mut n1 = normals[0];
+        let mut len_sqr1 = sqr_lengths[0];
+
+        let mut point_idx = 0usize;
+        let mut point_end = n;
+        if !closed {
+            // Start cap.
+            point_idx += 1;
+            point_end -= 1;
+
+            let dir_x = n1.y;
+            let dir_y = -n1.x;
+            if flags & draw_flags::CAP_SQUARE != 0 {
+                p1.x -= dir_x * thickness * 0.5;
+                p1.y -= dir_y * thickness * 0.5;
+            }
+
+            if !use_aa_ends {
+                base_idx = self.vtx_buffer.len() as u32;
+                self.push_vert(
+                    Vec2 {
+                        x: p1.x - n1.x * thickness0,
+                        y: p1.y - n1.y * thickness0,
+                    },
+                    uv0,
+                    col,
+                );
+                self.push_vert(
+                    Vec2 {
+                        x: p1.x + n1.x * thickness1,
+                        y: p1.y + n1.y * thickness1,
+                    },
+                    uv1,
+                    col,
+                );
+            } else {
+                let pa = Vec2 {
+                    x: p1.x - dir_x * half_aa,
+                    y: p1.y - dir_y * half_aa,
+                };
+                let pb = Vec2 {
+                    x: p1.x + dir_x * half_aa,
+                    y: p1.y + dir_y * half_aa,
+                };
+
+                base_idx = self.vtx_buffer.len() as u32;
+                self.push_vert(
+                    Vec2 {
+                        x: pa.x - n1.x * thickness0,
+                        y: pa.y - n1.y * thickness0,
+                    },
+                    uv0,
+                    col_trans,
+                );
+                self.push_vert(
+                    Vec2 {
+                        x: pa.x + n1.x * thickness1,
+                        y: pa.y + n1.y * thickness1,
+                    },
+                    uv1,
+                    col_trans,
+                );
+
+                let next_base_idx = self.vtx_buffer.len() as u32;
+                self.push_vert(
+                    Vec2 {
+                        x: pb.x - n1.x * thickness0,
+                        y: pb.y - n1.y * thickness0,
+                    },
+                    uv0,
+                    col,
+                );
+                self.push_vert(
+                    Vec2 {
+                        x: pb.x + n1.x * thickness1,
+                        y: pb.y + n1.y * thickness1,
+                    },
+                    uv1,
+                    col,
+                );
+
+                for (a, b, c) in [
+                    (base_idx, base_idx + 2, base_idx + 3),
+                    (base_idx, base_idx + 3, base_idx + 1),
+                ] {
+                    self.push_tri(a, b, c);
+                }
+                idx_count += 6;
+                base_idx = next_base_idx;
+            }
+        } else {
+            // Wrap-around segment: the pair is reserved and patched once the loop is done.
+            n1 = normals[n - 1];
+            len_sqr1 = sqr_lengths[n - 1];
+
+            base_idx = self.vtx_buffer.len() as u32;
+            self.push_vert(Vec2 { x: 0.0, y: 0.0 }, uv0, col);
+            self.push_vert(Vec2 { x: 0.0, y: 0.0 }, uv1, col);
+        }
+
+        if miters_only {
+            while point_idx < point_end {
+                let n0 = n1;
+                p1 = points[point_idx];
+                n1 = normals[point_idx];
+
+                let cos_theta = n0.x * n1.x + n0.y * n1.y;
+                let cos_theta_clamped = cos_theta.max(MITER_ANGLE_LIMIT);
+                let miter_scale_factor = (1.0 / (1.0 + cos_theta_clamped)).min(1000.0);
+                let miter_offset_x = (n0.x + n1.x) * miter_scale_factor;
+                let miter_offset_y = (n0.y + n1.y) * miter_scale_factor;
+
+                let next_base_idx = self.vtx_buffer.len() as u32;
+                self.push_vert(
+                    Vec2 {
+                        x: p1.x - miter_offset_x * thickness0,
+                        y: p1.y - miter_offset_y * thickness0,
+                    },
+                    uv0,
+                    col,
+                );
+                self.push_vert(
+                    Vec2 {
+                        x: p1.x + miter_offset_x * thickness1,
+                        y: p1.y + miter_offset_y * thickness1,
+                    },
+                    uv1,
+                    col,
+                );
+
+                for (a, b, c) in [
+                    (base_idx, base_idx + 2, base_idx + 3),
+                    (base_idx, base_idx + 3, base_idx + 1),
+                ] {
+                    self.push_tri(a, b, c);
+                }
+                idx_count += 6;
+                base_idx = next_base_idx;
+
+                point_idx += 1;
+            }
+        } else {
+            while point_idx < point_end {
+                let n0 = n1;
+                let len_sqr0 = len_sqr1;
+                p1 = points[point_idx];
+                n1 = normals[point_idx];
+                len_sqr1 = sqr_lengths[point_idx];
+
+                let cos_theta = n0.x * n1.x + n0.y * n1.y;
+                let sin_theta = n0.y * n1.x - n0.x * n1.y;
+
+                let cos_theta_clamped = cos_theta.max(MITER_ANGLE_LIMIT);
+                let miter_scale_factor = (1.0 / (1.0 + cos_theta_clamped)).min(1000.0);
+                let mut miter_offset_x = (n0.x + n1.x) * miter_scale_factor;
+                let mut miter_offset_y = (n0.y + n1.y) * miter_scale_factor;
+
+                let miter_distance_sqr =
+                    miter_offset_x * miter_offset_x + miter_offset_y * miter_offset_y;
+
+                if miter_distance_sqr > MITER_LIMIT_SQR {
+                    // Clipped bevel.
+                    let ref_thickness = if sin_theta < 0.0 {
+                        thickness1
+                    } else {
+                        thickness0
+                    };
+                    let ref_thickness_sqr = ref_thickness * ref_thickness;
+                    let limit_sqr = len_sqr0.max(len_sqr1).max(ref_thickness_sqr);
+                    let ref_miter_dist_sqr = miter_distance_sqr * ref_thickness_sqr;
+                    if ref_miter_dist_sqr > limit_sqr {
+                        let scale = (limit_sqr / ref_miter_dist_sqr).sqrt();
+                        miter_offset_x *= scale;
+                        miter_offset_y *= scale;
+                    }
+
+                    let mut bn_x = n0.x + n1.x;
+                    let mut bn_y = n0.y + n1.y;
+                    let d2 = bn_x * bn_x + bn_y * bn_y;
+                    if d2 > 0.0 {
+                        let inv = rsqrt_precise(d2);
+                        bn_x *= inv;
+                        bn_y *= inv;
+                    }
+
+                    let side_offset =
+                        ((n0.x * bn_x + n0.y * bn_y) - 1.0) / (n0.y * bn_x - n0.x * bn_y);
+                    let sd_x = bn_y * side_offset;
+                    let sd_y = -bn_x * side_offset;
+
+                    if sin_theta < 0.0 {
+                        self.push_vert(
+                            Vec2 {
+                                x: p1.x - (bn_x + sd_x) * thickness0,
+                                y: p1.y - (bn_y + sd_y) * thickness0,
+                            },
+                            uv0,
+                            col,
+                        );
+                        self.push_vert(p1, uv2, col);
+                        let next_base_idx = self.vtx_buffer.len() as u32;
+                        self.push_vert(
+                            Vec2 {
+                                x: p1.x - (bn_x - sd_x) * thickness0,
+                                y: p1.y - (bn_y - sd_y) * thickness0,
+                            },
+                            uv0,
+                            col,
+                        );
+                        self.push_vert(
+                            Vec2 {
+                                x: p1.x + miter_offset_x * thickness1,
+                                y: p1.y + miter_offset_y * thickness1,
+                            },
+                            uv1,
+                            col,
+                        );
+
+                        for (a, b, c) in [
+                            (base_idx, base_idx + 2, base_idx + 5),
+                            (base_idx, base_idx + 5, base_idx + 1),
+                            (base_idx + 3, base_idx + 5, base_idx + 2),
+                            (base_idx + 3, base_idx + 2, base_idx + 4),
+                            (base_idx + 3, base_idx + 4, base_idx + 5),
+                        ] {
+                            self.push_tri(a, b, c);
+                        }
+                        idx_count += 15;
+                        base_idx = next_base_idx;
+                    } else {
+                        self.push_vert(
+                            Vec2 {
+                                x: p1.x + (bn_x + sd_x) * thickness1,
+                                y: p1.y + (bn_y + sd_y) * thickness1,
+                            },
+                            uv1,
+                            col,
+                        );
+                        self.push_vert(p1, uv2, col);
+                        let next_base_idx = self.vtx_buffer.len() as u32;
+                        self.push_vert(
+                            Vec2 {
+                                x: p1.x - miter_offset_x * thickness0,
+                                y: p1.y - miter_offset_y * thickness0,
+                            },
+                            uv0,
+                            col,
+                        );
+                        self.push_vert(
+                            Vec2 {
+                                x: p1.x + (bn_x - sd_x) * thickness1,
+                                y: p1.y + (bn_y - sd_y) * thickness1,
+                            },
+                            uv1,
+                            col,
+                        );
+
+                        for (a, b, c) in [
+                            (base_idx, base_idx + 4, base_idx + 2),
+                            (base_idx, base_idx + 2, base_idx + 1),
+                            (base_idx + 3, base_idx + 2, base_idx + 4),
+                            (base_idx + 3, base_idx + 4, base_idx + 5),
+                            (base_idx + 3, base_idx + 5, base_idx + 2),
+                        ] {
+                            self.push_tri(a, b, c);
+                        }
+                        idx_count += 15;
+                        base_idx = next_base_idx;
+                    }
+                } else {
+                    // Miter.
+                    let next_base_idx = self.vtx_buffer.len() as u32;
+                    self.push_vert(
+                        Vec2 {
+                            x: p1.x - miter_offset_x * thickness0,
+                            y: p1.y - miter_offset_y * thickness0,
+                        },
+                        uv0,
+                        col,
+                    );
+                    self.push_vert(
+                        Vec2 {
+                            x: p1.x + miter_offset_x * thickness1,
+                            y: p1.y + miter_offset_y * thickness1,
+                        },
+                        uv1,
+                        col,
+                    );
+
+                    for (a, b, c) in [
+                        (base_idx, base_idx + 2, base_idx + 3),
+                        (base_idx, base_idx + 3, base_idx + 1),
+                    ] {
+                        self.push_tri(a, b, c);
+                    }
+                    idx_count += 6;
+                    base_idx = next_base_idx;
+                }
+
+                point_idx += 1;
+            }
+        }
+
+        if !closed {
+            // End cap.
+            p1 = points[n - 1];
+            n1 = normals[n - 1];
+
+            let dir_x = n1.y;
+            let dir_y = -n1.x;
+            if flags & draw_flags::CAP_SQUARE != 0 {
+                p1.x += dir_x * thickness * 0.5;
+                p1.y += dir_y * thickness * 0.5;
+            }
+
+            if !use_aa_ends {
+                self.push_vert(
+                    Vec2 {
+                        x: p1.x - n1.x * thickness0,
+                        y: p1.y - n1.y * thickness0,
+                    },
+                    uv0,
+                    col,
+                );
+                self.push_vert(
+                    Vec2 {
+                        x: p1.x + n1.x * thickness1,
+                        y: p1.y + n1.y * thickness1,
+                    },
+                    uv1,
+                    col,
+                );
+
+                for (a, b, c) in [
+                    (base_idx, base_idx + 2, base_idx + 3),
+                    (base_idx, base_idx + 3, base_idx + 1),
+                ] {
+                    self.push_tri(a, b, c);
+                }
+                idx_count += 6;
+            } else {
+                let pa = Vec2 {
+                    x: p1.x - dir_x * half_aa,
+                    y: p1.y - dir_y * half_aa,
+                };
+                let pb = Vec2 {
+                    x: p1.x + dir_x * half_aa,
+                    y: p1.y + dir_y * half_aa,
+                };
+
+                let next_base_idx = self.vtx_buffer.len() as u32;
+                self.push_vert(
+                    Vec2 {
+                        x: pa.x - n1.x * thickness0,
+                        y: pa.y - n1.y * thickness0,
+                    },
+                    uv0,
+                    col,
+                );
+                self.push_vert(
+                    Vec2 {
+                        x: pa.x + n1.x * thickness1,
+                        y: pa.y + n1.y * thickness1,
+                    },
+                    uv1,
+                    col,
+                );
+                self.push_vert(
+                    Vec2 {
+                        x: pb.x - n1.x * thickness0,
+                        y: pb.y - n1.y * thickness0,
+                    },
+                    uv0,
+                    col_trans,
+                );
+                self.push_vert(
+                    Vec2 {
+                        x: pb.x + n1.x * thickness1,
+                        y: pb.y + n1.y * thickness1,
+                    },
+                    uv1,
+                    col_trans,
+                );
+
+                for (a, b, c) in [
+                    (base_idx, base_idx + 2, base_idx + 3),
+                    (base_idx, base_idx + 3, base_idx + 1),
+                ] {
+                    self.push_tri(a, b, c);
+                }
+                idx_count += 6;
+                base_idx = next_base_idx;
+
+                // AA cap.
+                for (a, b, c) in [
+                    (base_idx, base_idx + 2, base_idx + 3),
+                    (base_idx, base_idx + 3, base_idx + 1),
+                ] {
+                    self.push_tri(a, b, c);
+                }
+                idx_count += 6;
+            }
+        } else {
+            // Connect the path: the reserved pair takes the last pair, as the reference copies.
+            let last = self.vtx_buffer[base_idx as usize];
+            self.vtx_buffer[first_vtx_offset] = last;
+            self.vtx_buffer[first_vtx_offset + 1] = self.vtx_buffer[base_idx as usize + 1];
+        }
+
+        if let Some(cmd) = self.cmd_buffer.last_mut() {
+            cmd.elem_count += idx_count;
+        }
+    }
+
+    /// `ImDrawList::_CalculateCenterBiasedOffset`: the outside offset of the center-biased stroke.
+    fn center_biased_offset(&self, thickness: f32) -> f32 {
+        let screen_thickness = thickness / self.fringe_scale;
+        let s_thickness = screen_thickness as i32;
+        ((s_thickness / 2) as f32
+            + (s_thickness & 1) as f32 * (screen_thickness - s_thickness as f32))
+            * self.fringe_scale
+    }
+
+    /// `ImDrawList::_SelectLineTexture`: the atlas row a stroke samples, and the fringe it adds.
+    ///
+    /// Returns `(uv0, uv1, fringe)`. Without `ImDrawFlags_AALines` the reference samples the white
+    /// pixel and adds no fringe, which is the untextured path.
+    fn select_line_texture(&self, screen_thickness: f32, flags: u32) -> (Vec2, Vec2, f32) {
+        const WIDTH_MAX: i32 = 32;
+        const DETAILED_WIDTH: f32 = 4.0;
+        const SAMPLE_COUNT: f32 = 4.0;
+
+        if flags & draw_flags::AALINES == 0 {
+            return (self.white_uv, self.white_uv, 0.0);
+        }
+
+        let texture_idx: i32 = if screen_thickness <= DETAILED_WIDTH {
+            ((screen_thickness - 1.0) * SAMPLE_COUNT + 0.5) as i32 + (WIDTH_MAX + 1)
+        } else if screen_thickness < (WIDTH_MAX as f32) - 1.5 {
+            (screen_thickness + 0.5) as i32
+        } else {
+            WIDTH_MAX - 1
+        };
+        let entry = self.tex_uv_lines[texture_idx as usize];
+        (
+            Vec2 {
+                x: entry[0],
+                y: entry[2],
+            },
+            Vec2 {
+                x: entry[1],
+                y: entry[2],
+            },
+            self.fringe_scale * screen_thickness * entry[3],
+        )
+    }
+
+    fn push_vert(&mut self, pos: Vec2, uv: Vec2, col: ImU32) {
+        self.vtx_buffer.push(DrawVert { pos, uv, col });
+    }
+
+    fn push_tri(&mut self, a: u32, b: u32, c: u32) {
+        for index in [a, b, c] {
+            self.idx_buffer.push(index as ImDrawIdx);
+        }
+    }
     /// `ImDrawList::AddRect` for a pixel-aligned rectangle with the inside stroke: a two-ring frame
     /// (outer and inner corners) of four quads.
     pub fn add_aligned_rect_border(&mut self, min: Vec2, max: Vec2, col: ImU32, thickness: f32) {
