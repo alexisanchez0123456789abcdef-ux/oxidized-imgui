@@ -2,9 +2,9 @@
 
 _Actualizado: 2026-11-18. Generado desde `docs/progress.json`: no editar a mano._
 
-## Reescritura a Rust: **58.3 %**
+## Reescritura a Rust: **59.1 %**
 
-Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 61.3 %.
+Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 62.0 %.
 
 Qué cuenta como hecho: solo lo que tiene una prueba que lo compara con el código C++ original.
 Un cambio de estado sin evidencia no sube el porcentaje.
@@ -13,7 +13,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 | --- | ---: | ---: |
 | Núcleo: contexto, IO, ventanas, identificadores, layout | 58 | 76 % |
 | Listas de dibujo y primitivas | 17 | 88 % |
-| Widgets | 26 | 62 % |
+| Widgets | 26 | 65 % |
 | Fuentes y texto | 13 | 15 % |
 | Docking y viewports | 10 | 0 % |
 | Backends y ejemplos | 8 | 0 % |
@@ -82,6 +82,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Nodos de árbol: fila estrecha, resaltado a todo el ancho, sangría y árbol anidado** — golden tree_node (13 frames, lista completa de 56344 bytes)
 - **Región hija: lista de dibujo propia, recorte interior, borde en la lista del padre y avance del layout** — golden child_region (4 frames, dos listas cada uno, 22092 bytes)
 - **Scroll de la región hija completo: barra en la lista del padre, rueda sobre la región y arrastre de su barra** — golden child_region (13 frames, dos listas, 122487 bytes)
+- **Popup como ventana: lista propia, fondo de popup, medida en el primer frame y z-orden** — golden popup (10 frames, 48770 bytes)
 - **UVs de texto con el atlas fijado por fixture** — golden text_draw con UVs + fixture text_draw.glyphs.txt
 - **Medida de texto (CalcTextSize) con tabla de avances fijada** — golden font_metrics
 - **Oráculo de constantes y layouts desde el C++** — rust/tools/oracle

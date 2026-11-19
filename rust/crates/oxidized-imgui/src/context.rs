@@ -38,6 +38,8 @@ impl WindowFlags {
     pub const ALWAYS_AUTO_RESIZE: Self = Self(1 << 3);
     /// `ImGuiWindowFlags_NoResize`: no resize grips and no resize borders.
     pub const NO_RESIZE: Self = Self(1 << 4);
+    /// `ImGuiWindowFlags_Popup`: draws with the popup background.
+    pub const POPUP: Self = Self(1 << 5);
 
     pub fn contains(self, other: Self) -> bool {
         self.0 & other.0 == other.0
@@ -196,12 +198,24 @@ pub struct Context {
     item_states: Vec<(ImGuiID, bool)>,
     /// The host each closed list belongs to, so a child's list follows its host's.
     list_parents: Vec<Option<String>>,
+    /// `g.OpenPopupStack`: the popup that is open, if any.
+    popup_open: Option<ImGuiID>,
+    /// Set when a click landed outside the popup; the popup closes on the next frame.
+    popup_pending_close: bool,
+    /// Whether the popup is being laid out for the first time, so nothing is drawn.
+    popup_first_frame: bool,
+    /// The lists set aside while a nested window owns the current one.
+    list_stack: Vec<crate::draw_list::DrawList>,
     /// What a child region remembers between frames: its scroll and how big its content was.
     child_memory: Vec<(String, Vec2, Vec2, (Vec2, Vec2))>,
     /// The host window's list, set aside while a child owns the current one.
     parent_list: Option<crate::draw_list::DrawList>,
     /// While a child is open, the name of the window hosting it.
     pending_child_host: Option<String>,
+    /// The popup's rectangle from the last frame, which sits above every window for the mouse.
+    popup_rect: Option<(String, (Vec2, Vec2))>,
+    /// The popup name egin_popup opened, carried to nd_popup for the rectangle.
+    last_popup_name: Option<String>,
     /// `g.HoveredIdTimer`: how long the border under the mouse has been hovered. The reference
     /// waits WINDOWS_RESIZE_FROM_EDGES_FEEDBACK_TIMER before it reports a border, so brushing past
     /// an edge on the way to a widget does not light it up.
@@ -254,9 +268,15 @@ impl Default for Context {
             active_click_offset: Vec2::default(),
             item_states: Vec::new(),
             list_parents: Vec::new(),
+            popup_open: None,
+            popup_pending_close: false,
+            popup_first_frame: false,
+            list_stack: Vec::new(),
             child_memory: Vec::new(),
             parent_list: None,
             pending_child_host: None,
+            popup_rect: None,
+            last_popup_name: None,
             resize_grip_cols: [0; 2],
             resize_hover_timer: 0.0,
             resize_border_prev: -1,
@@ -324,6 +344,17 @@ impl Context {
             return;
         };
         let mut found = None;
+        // A popup is above everything, so the mouse inside one resolves to it before any window.
+        if let Some((name, rect)) = &self.popup_rect {
+            if rect.0.x <= mouse.x
+                && mouse.x < rect.1.x
+                && rect.0.y <= mouse.y
+                && mouse.y < rect.1.y
+            {
+                self.hovered_window = Some(name.clone());
+                return;
+            }
+        }
         // A child is a window of its own and sits above its host, so the mouse inside a child
         // resolves to the child, not to the window hosting it.
         for name in self.display_order.iter().rev() {
@@ -1067,7 +1098,11 @@ impl Context {
                     x: pos.x + size.x,
                     y: pos.y + size.y,
                 },
-                self.style.color_u32(crate::style::Col::WindowBg),
+                if flags.contains(WindowFlags::POPUP) {
+                    self.style.popup_bg
+                } else {
+                    self.style.color_u32(crate::style::Col::WindowBg)
+                },
             );
         }
 
@@ -2456,6 +2491,70 @@ impl Context {
     }
 
     /// `ImGui::Dummy`: an item of a given size that advances the cursor.
+    /// `ImGui::OpenPopup`: remember that a popup is open. Its window is created by `begin_popup`.
+    pub fn open_popup(&mut self, id: &str) {
+        self.popup_open = Some(self.get_id(id));
+    }
+
+    /// `ImGui::BeginPopup`: the popup's window, anchored where the caller asks for.
+    ///
+    /// A popup owns a draw list of its own, which is why the window hosting it keeps its list aside
+    /// while the popup is open. On its first frame a popup only measures its content: the list it
+    /// produced is empty in the reference and never reaches the draw data.
+    pub fn begin_popup(&mut self, id: &str, pos: Option<Vec2>) -> bool {
+        let popup_id = self.get_id(id);
+        // A click outside the popup closed it last frame; that frame still drew it.
+        if self.popup_pending_close {
+            self.popup_open = None;
+            self.popup_pending_close = false;
+        }
+        if self.popup_open != Some(popup_id) {
+            return false;
+        }
+        // `ImFormatString("%08x")`: the reference writes the popup id in lower case.
+        let name = format!("##Popup_{popup_id:08x}");
+        let measured = WindowMemory::find(&self.memory, &name).map(|memory| memory.size_full);
+        self.popup_first_frame = measured.is_none();
+        let flags = WindowFlags::ALWAYS_AUTO_RESIZE
+            | WindowFlags::NO_RESIZE
+            | WindowFlags::NO_MOVE
+            | WindowFlags::NO_SCROLLBAR
+            | WindowFlags::POPUP;
+        self.set_next_window_flags(flags);
+        let host = core::mem::take(&mut self.draw_list);
+        self.list_stack.push(host);
+        self.last_popup_name = Some(name.clone());
+        self.begin_window(&name, pos, None);
+        true
+    }
+
+    /// `ImGui::EndPopup`: close the popup's window, and the popup itself when a click landed outside
+    /// it. The frame that closes it still draws it, so the close is applied on the next `begin_popup`.
+    pub fn end_popup(&mut self) {
+        let (pos, size) = {
+            let window = self.window();
+            (window.pos, window.size)
+        };
+        self.end_window();
+        if self.popup_first_frame {
+            // Nothing was drawn: drop the list the way the reference skips an empty one.
+            self.frame_lists.pop();
+            self.list_parents.pop();
+            self.popup_first_frame = false;
+        }
+        self.draw_list = self
+            .list_stack
+            .pop()
+            .unwrap_or_else(|| self.new_window_draw_list());
+        // The popup sits above every window, so the next frame's hover search needs its rectangle.
+        let name = self.last_popup_name.clone();
+        if let Some(name) = name {
+            self.popup_rect = Some((name, (pos, size)));
+        }
+        // `ClosePopupsOverWindow` only closes a popup when the click lands on another window, which is
+        // not ported yet: a click on empty space leaves it open, as the reference does here.
+    }
+
     pub fn dummy(&mut self, size: Vec2) {
         let spacing = self.style.item_spacing;
         let Some(window) = self.windows.last_mut() else {
@@ -2560,7 +2659,14 @@ impl Context {
                     && m.y < window_pos.y + window_size.y
             })
             .unwrap_or(false);
-        let hovered = over_window
+        // `ButtonBehavior`: an item only hovers while its own window is the one under the mouse, which
+        // is what keeps the items of a popup from reacting through the window that hosts it.
+        let own_window = {
+            let window = self.window();
+            self.hovered_window.as_deref() == Some(window.name.as_str())
+        };
+        let hovered = own_window
+            && over_window
             && self
                 .io
                 .mouse_pos

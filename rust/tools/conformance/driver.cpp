@@ -2365,6 +2365,84 @@ static void DumpSelectable()
         }
     }
 }
+// popup: a button opens a popup, the popup draws with its own background in a list of its own, and a
+// click outside closes it on the following frame.
+static void FramePopup(float mx, float my, bool down)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = down;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("P", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar);
+    if (ImGui::Button("Open"))
+        ImGui::OpenPopup("##p");
+    ImGui::SetNextWindowPos(ImVec2(120.0f, 110.0f));
+    if (ImGui::BeginPopup("##p"))
+    {
+        static const char* items[3] = { "One", "Two", "Three" };
+        for (int n = 0; n < 3; n++)
+            ImGui::Selectable(items[n], false);
+        ImGui::EndPopup();
+    }
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpPopup()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario popup\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    // Every letter of every row, since the reference bakes on demand.
+    const char bake_order[10] = { 'O', 'p', 'e', 'n', 'T', 'w', 'o', 'h', 'r', 'i' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    WriteGlyphFixture(font, bake_order, 10);
+
+    // The button is at (68,68) to (97,87): press and release it, then click outside the popup.
+    const float steps[10][3] = {
+        { 0.0f, 0.0f, 0.0f },
+        { 0.0f, 0.0f, 0.0f },
+        { 80.0f, 75.0f, 0.0f },
+        { 80.0f, 75.0f, 1.0f },
+        { 80.0f, 75.0f, 0.0f },
+        { 150.0f, 120.0f, 0.0f },
+        { 150.0f, 120.0f, 1.0f },
+        { 400.0f, 300.0f, 1.0f },
+        { 400.0f, 300.0f, 0.0f },
+        { 0.0f, 0.0f, 0.0f },
+    };
+    for (int f = 0; f < 10; f++)
+    {
+        FramePopup(steps[f][0], steps[f][1], steps[f][2] != 0.0f);
+        ImGui::Render();
+        ImDrawData* dd = ImGui::GetDrawData();
+        ImGuiContext& g = *GImGui;
+        printf("frame %d lists %d\n", f, dd->CmdListsCount);
+        for (int i = 0; i < dd->CmdListsCount; i++)
+        {
+            const ImDrawList* list = dd->CmdLists[i];
+            const char* name = "?";
+            for (int w = 0; w < g.Windows.Size; w++)
+                if (g.Windows[w]->DrawList == list)
+                    name = g.Windows[w]->Name;
+            printf("list %d %s\n", i, name);
+            DumpDrawListBody(*list);
+        }
+    }
+}
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 
 static void DumpCmdOffsets()
@@ -2614,6 +2692,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_icons") == 0)
     {
         DumpWindowIcons();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "popup") == 0)
+    {
+        DumpPopup();
         ImGui::DestroyContext();
         return 0;
     }
