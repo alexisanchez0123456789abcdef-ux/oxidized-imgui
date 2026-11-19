@@ -2163,12 +2163,36 @@ static void DumpTreeNode()
 
 // child_region: BeginChild gives a region its own layout, padding, border and draw list. The child's
 // list is submitted right after its host's, so the two are dumped in that order.
+static void FrameChildRegionWheel(float mx, float my, float wheel)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = false;
+    io.MouseWheel = wheel;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("P", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar);
+    ImGui::Button("AA");
+    ImGui::BeginChild("Inside", ImVec2(150.0f, 60.0f), ImGuiChildFlags_Borders);
+    ImGui::Button("BB");
+    ImGui::Button("CC");
+    ImGui::Button("DD");
+    ImGui::EndChild();
+    ImGui::Button("EE");
+    ImGui::End();
+    io.MouseWheel = 0.0f;
+}
+
 static void FrameChildRegion()
 {
     ImGuiIO& io = ImGui::GetIO();
     io.DeltaTime = 0.1f;
     io.MousePos = ImVec2(0.0f, 0.0f);
     io.MouseDown[0] = false;
+    io.MouseWheel = 0.0f;
     ImGui::NewFrame();
     ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
     ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
@@ -2205,6 +2229,27 @@ static void DumpChildRegion()
     for (int f = 0; f < 4; f++)
     {
         FrameChildRegion();
+        ImGui::Render();
+        ImDrawData* dd = ImGui::GetDrawData();
+        ImGuiContext& g = *GImGui;
+        printf("frame %d lists %d\n", f, dd->CmdListsCount);
+        for (int i = 0; i < dd->CmdListsCount; i++)
+        {
+            const ImDrawList* list = dd->CmdLists[i];
+            const char* name = "?";
+            for (int w = 0; w < g.Windows.Size; w++)
+                if (g.Windows[w]->DrawList == list)
+                    name = g.Windows[w]->Name;
+            printf("list %d %s\n", i, name);
+            DumpDrawListBody(*list);
+        }
+    }
+
+    // The wheel over the region scrolls the region, not the window hosting it.
+    const float wheel_steps[4] = { -1.0f, -1.0f, 0.0f, 1.0f };
+    for (int f = 4; f < 8; f++)
+    {
+        FrameChildRegionWheel(140.0f, 120.0f, wheel_steps[f - 4]);
         ImGui::Render();
         ImDrawData* dd = ImGui::GetDrawData();
         ImGuiContext& g = *GImGui;

@@ -80,7 +80,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Cabecera colapsable: marco, flecha, hover/activo y alternar (etiqueta al soltar, flecha al pulsar)** — golden collapsing_header (12 frames, lista completa de 79125 bytes)
 - **Nodos de árbol: fila estrecha, resaltado a todo el ancho, sangría y árbol anidado** — golden tree_node (13 frames, lista completa de 56344 bytes)
 - **Región hija: lista de dibujo propia, recorte interior, borde en la lista del padre y avance del layout** — golden child_region (4 frames, dos listas cada uno, 22092 bytes)
-- **Scroll propio de la región hija: barra en la lista del padre y desplazamiento del contenido** — golden child_region ampliado (4 frames, dos listas, 35454 bytes)
+- **Scroll propio de la región hija: barra en la lista del padre, desplazamiento y rueda sobre la región** — golden child_region (8 frames, dos listas, 74134 bytes)
 - **UVs de texto con el atlas fijado por fixture** — golden text_draw con UVs + fixture text_draw.glyphs.txt
 - **Medida de texto (CalcTextSize) con tabla de avances fijada** — golden font_metrics
 - **Oráculo de constantes y layouts desde el C++** — rust/tools/oracle

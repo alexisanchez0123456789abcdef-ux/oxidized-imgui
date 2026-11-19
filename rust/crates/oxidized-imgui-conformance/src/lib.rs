@@ -2973,10 +2973,12 @@ pub fn child_region_dump() -> String {
     ));
     out.push_str("scenario child_region\n");
 
-    for n in 0..4 {
+    // A frame of the same scene, with the mouse and the wheel where the caller wants them.
+    let frame = |ctx: &mut Context, out: &mut String, n: usize, mx: f32, my: f32, wheel: f32| {
         ctx.io_mut().delta_time = 0.1;
-        ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: mx, y: my });
         ctx.io_mut().mouse_down[0] = false;
+        ctx.io_mut().mouse_wheel = wheel;
         ctx.begin_frame();
         ctx.set_next_window_flags(
             WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
@@ -2995,6 +2997,7 @@ pub fn child_region_dump() -> String {
         ctx.button("EE");
         ctx.end_window();
         ctx.end_frame();
+        ctx.io_mut().mouse_wheel = 0.0;
         let lists = ctx.render_lists();
         out.push_str(&format!("frame {n} lists {}\n", lists.len()));
         for (i, (name, list)) in lists.iter().enumerate() {
@@ -3005,6 +3008,15 @@ pub fn child_region_dump() -> String {
                 out.push('\n');
             }
         }
+    };
+
+    for n in 0..4 {
+        frame(&mut ctx, &mut out, n, 0.0, 0.0, 0.0);
+    }
+    // The wheel over the region scrolls the region, not the window hosting it.
+    let wheel_steps = [-1.0f32, -1.0, 0.0, 1.0];
+    for (index, wheel) in wheel_steps.iter().enumerate() {
+        frame(&mut ctx, &mut out, 4 + index, 140.0, 120.0, *wheel);
     }
     out
 }
