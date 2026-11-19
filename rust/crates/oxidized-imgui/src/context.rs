@@ -1568,10 +1568,30 @@ impl Context {
         };
 
         // `RenderWindowOuterBorders` and the scrollbars run while the host still owns the list, so a
-        // child's border and its scrollbar are part of the host's draw list, not of the child's.
+        // child's border and its scrollbar are part of the host's draw list, not of the child's. The
+        // bar is still the child's own item, so its id lives under the child.
+        let mut scroll = scroll;
+        let mut content_origin = content_origin;
+        self.push_id(id);
         if scrollbar_y {
-            self.draw_scrollbar(id, child_rect, inner_rect, content_before, scroll, false);
+            // The hover search names the child Parent/Child_HASH, so that is the name the bar
+            // has to match to be hovered.
+            if let Some(seeked) = self.draw_scrollbar(
+                &child_name,
+                child_rect,
+                inner_rect,
+                content_before,
+                scroll,
+                false,
+            ) {
+                scroll = seeked;
+                content_origin = Vec2 {
+                    x: inner_rect.0.x + pad.x - scroll.x,
+                    y: inner_rect.0.y + pad.y - scroll.y,
+                };
+            }
         }
+        self.pop_id();
         if borders && self.style.child_border_size > 0.0 {
             // The border goes around the whole region, not around its interior.
             self.draw_list.add_aligned_rect_border(
