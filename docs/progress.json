@@ -90,7 +90,7 @@
         { "id": "w_input", "label": "Entrada de texto", "weight": 4, "done": false, "evidence": "" },
         { "id": "w_selectable", "label": "Selectable: fila a todo el ancho, resalte por estado y clic", "weight": 1, "done": true, "evidence": "golden selectable (8 frames, 38668 bytes)" },
         { "id": "w_popup_click", "label": "Clic en una fila del popup: pulsación, cierre y foco del anfitrión", "weight": 1, "done": true, "evidence": "golden popup_click (12 frames, 45697 bytes)" },
-        { "id": "w_combo", "label": "Combo desplegable: caja, flecha y popup", "weight": 1, "done": false, "evidence": "" },
+        { "id": "w_combo", "label": "Combo desplegable: caja, flecha, popup colocado bajo la caja y filas", "weight": 1, "done": true, "evidence": "golden combo (11 frames, 52130 bytes)" },
         { "id": "w_collapsing_header", "label": "Cabecera colapsable: marco, flecha, hover/activo y alternar (etiqueta al soltar, flecha al pulsar)", "weight": 2, "done": true, "evidence": "golden collapsing_header (12 frames, lista completa de 79125 bytes)" },
         { "id": "w_tree", "label": "Nodos de árbol: fila estrecha, resaltado a todo el ancho, sangría y árbol anidado", "weight": 1, "done": true, "evidence": "golden tree_node (13 frames, lista completa de 56344 bytes)" },
         { "id": "w_child", "label": "Región hija: lista de dibujo propia, recorte interior, borde en la lista del padre y avance del layout", "weight": 1, "done": true, "evidence": "golden child_region (4 frames, dos listas cada uno, 22092 bytes)" },

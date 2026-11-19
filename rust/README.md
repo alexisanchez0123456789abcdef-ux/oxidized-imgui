@@ -38,6 +38,7 @@ instead of against our own expectations:
 | Child region | `BeginChild` gives a region its own layout, padding, border and **own draw list**, submitted right after its host's; the host's list keeps the border and the child's list carries its own clip | `child_region` golden (two lists per frame) |
 | Popup row click | a row of a popup reports the press, and choosing one closes the popup and hands the focus back to its host, which is drawn on top that frame | `popup_click` golden |
 | Popup | a popup owns a draw list of its own, paints `PopupBg`, measures itself on its first frame and sits above every window for the mouse | `popup` golden |
+| Combo | the box shows its preview and its arrow, pressing it opens a popup as wide as the box, laid out under it and falling back to the other three sides | `combo` golden |
 | Selectable | a row fills the work rectangle, highlights with the header colours by state, and its clickable box is expanded by half the item spacing | `selectable` golden |
 | Tree node | an unframed tree node: the row only reacts where the arrow and text are while the hover highlight spans the work area, children indent by `IndentSpacing`, and the arrow opens on press | `tree_node` golden |
 | Collapsing header | a framed full-width header with the collapsing arrow, header colours on hover and press, and the open state remembered per id; a click on the label toggles on release, a click on the arrow toggles on press | `collapsing_header` golden |
