@@ -214,6 +214,8 @@ pub struct Context {
     pending_child_host: Option<String>,
     /// The popup's rectangle from the last frame, which sits above every window for the mouse.
     popup_rect: Option<(String, (Vec2, Vec2))>,
+    /// The window a popup belongs to, which takes the focus back when the popup closes.
+    popup_host: Option<String>,
     /// The popup name egin_popup opened, carried to nd_popup for the rectangle.
     last_popup_name: Option<String>,
     /// `g.HoveredIdTimer`: how long the border under the mouse has been hovered. The reference
@@ -276,6 +278,7 @@ impl Default for Context {
             parent_list: None,
             pending_child_host: None,
             popup_rect: None,
+            popup_host: None,
             last_popup_name: None,
             resize_grip_cols: [0; 2],
             resize_hover_timer: 0.0,
@@ -2520,6 +2523,8 @@ impl Context {
             | WindowFlags::NO_MOVE
             | WindowFlags::NO_SCROLLBAR
             | WindowFlags::POPUP;
+        // The popup belongs to the window that is current now: it takes the focus back when it closes.
+        self.popup_host = self.windows.last().map(|window| window.name.clone());
         self.set_next_window_flags(flags);
         let host = core::mem::take(&mut self.draw_list);
         self.list_stack.push(host);
@@ -2551,8 +2556,6 @@ impl Context {
         if let Some(name) = name {
             self.popup_rect = Some((name, (pos, size)));
         }
-        // `ClosePopupsOverWindow` only closes a popup when the click lands on another window, which is
-        // not ported yet: a click on empty space leaves it open, as the reference does here.
     }
 
     pub fn dummy(&mut self, size: Vec2) {
@@ -2661,9 +2664,10 @@ impl Context {
             .unwrap_or(false);
         // `ButtonBehavior`: an item only hovers while its own window is the one under the mouse, which
         // is what keeps the items of a popup from reacting through the window that hosts it.
-        let own_window = {
-            let window = self.window();
-            self.hovered_window.as_deref() == Some(window.name.as_str())
+        // `update_resize` runs before the window is on the stack, so this must not assume one.
+        let own_window = match self.windows.last() {
+            Some(window) => self.hovered_window.as_deref() == Some(window.name.as_str()),
+            None => false,
         };
         let hovered = own_window
             && over_window
@@ -3197,6 +3201,26 @@ impl Context {
         let text_col = self.style.color_u32(crate::style::Col::Text);
         self.draw_list
             .add_text(&font, font.size, pos, text_col, label);
+        // `CloseCurrentPopup` from `Selectable`: choosing a row of a popup closes it, and that
+        // frame still draws the popup, so the close lands on the next one.
+        if pressed {
+            let popup = self
+                .windows
+                .last()
+                .map(|window| window.flags.contains(WindowFlags::POPUP))
+                .unwrap_or(false);
+            if popup {
+                self.popup_pending_close = true;
+                // `ClosePopupToLevel` focuses the window the popup belonged to, and `FocusWindow`
+                // moves it to the end of the display order, so the host is drawn on top that frame.
+                if let Some(host) = self.popup_host.clone() {
+                    if let Some(index) = self.display_order.iter().position(|name| *name == host) {
+                        let host = self.display_order.remove(index);
+                        self.display_order.push(host);
+                    }
+                }
+            }
+        }
         pressed
     }
 
