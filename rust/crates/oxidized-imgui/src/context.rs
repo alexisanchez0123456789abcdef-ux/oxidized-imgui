@@ -19,6 +19,41 @@ const ARROW_DOWN_SIN: f32 = 1.0;
 const ARROW_RIGHT_COS: f32 = 1.0;
 const ARROW_RIGHT_SIN: f32 = 0.0;
 
+/// `FindBestWindowPosForPopupEx` with the combo box policy: below and toward the right first, then
+/// above it, then the two left-aligned variants, taking the first that fits the work area.
+fn combo_popup_pos(outer: (Vec2, Vec2), avoid: (Vec2, Vec2), size: Vec2) -> Vec2 {
+    let fits = |pos: Vec2| {
+        pos.x >= outer.0.x
+            && pos.y >= outer.0.y
+            && pos.x + size.x <= outer.1.x
+            && pos.y + size.y <= outer.1.y
+    };
+    let down = Vec2 {
+        x: avoid.0.x,
+        y: avoid.1.y,
+    };
+    let up_same = Vec2 {
+        x: avoid.0.x,
+        y: avoid.0.y - size.y,
+    };
+    let down_left = Vec2 {
+        x: avoid.1.x - size.x,
+        y: avoid.1.y,
+    };
+    let up_left = Vec2 {
+        x: avoid.1.x - size.x,
+        y: avoid.0.y - size.y,
+    };
+    for candidate in [down, up_same, down_left, up_left] {
+        if fits(candidate) {
+            return candidate;
+        }
+    }
+    Vec2 {
+        x: down.x.clamp(outer.0.x, (outer.1.x - size.x).max(outer.0.x)),
+        y: down.y.clamp(outer.0.y, (outer.1.y - size.y).max(outer.0.y)),
+    }
+}
 /// The per-window flags the port models, mirroring the `ImGuiWindowFlags` bits of the same name.
 ///
 /// They used to be one `set_next_window_*` call per flag, which does not scale: this is the
@@ -214,6 +249,10 @@ pub struct Context {
     pending_child_host: Option<String>,
     /// The popup's rectangle from the last frame, which sits above every window for the mouse.
     popup_rect: Option<(String, (Vec2, Vec2))>,
+    /// `SetNextWindowSizeConstraints`: the smallest size the next window may take.
+    next_size_min: Option<Vec2>,
+    /// The horizontal window padding to restore once the combo popup closes.
+    combo_saved_padding: Option<f32>,
     /// The window a popup belongs to, which takes the focus back when the popup closes.
     popup_host: Option<String>,
     /// The popup name egin_popup opened, carried to nd_popup for the rectangle.
@@ -278,6 +317,8 @@ impl Default for Context {
             parent_list: None,
             pending_child_host: None,
             popup_rect: None,
+            next_size_min: None,
+            combo_saved_padding: None,
             popup_host: None,
             last_popup_name: None,
             resize_grip_cols: [0; 2],
@@ -943,6 +984,12 @@ impl Context {
                 x: (content.x + pad.x * 2.0).min(self.io.display_size.x),
                 y: (content.y + pad.y * 2.0 + decoration).min(self.io.display_size.y),
             };
+        }
+        // `CalcWindowSizeAfterConstraint`: the minimum a popup is given keeps it at least as wide
+        // as the box it belongs to.
+        if let Some(minimum) = self.next_size_min.take() {
+            size_full.x = size_full.x.max(minimum.x);
+            size_full.y = size_full.y.max(minimum.y);
         }
         // `ClampWindowPos`: unless the position was asked for explicitly this frame, the window is
         // pushed back so at least part of it stays inside the work area.
@@ -2495,6 +2542,189 @@ impl Context {
 
     /// `ImGui::Dummy`: an item of a given size that advances the cursor.
     /// `ImGui::OpenPopup`: remember that a popup is open. Its window is created by `begin_popup`.
+    /// `ImGui::BeginCombo`: the framed box with its arrow. Returns true while its popup is open, and
+    /// `end_combo` closes it.
+    ///
+    /// The box is one item: pressing it opens the popup. The popup is a window of its own, as wide as
+    /// the box and laid out under it, falling back to the other three sides when it does not fit.
+    pub fn begin_combo(&mut self, label: &str, preview: &str, width: f32) -> bool {
+        let id = self.get_id(label);
+        let pad = self.style.frame_padding;
+        // `FindRenderedTextEnd`: the part after `##` identifies the widget but is not drawn.
+        let shown = match label.find("##") {
+            Some(at) => &label[..at],
+            None => label,
+        };
+        let label_size = self.font.calc_text_size(shown, self.font.size);
+        let arrow_size = self.frame_height();
+        let bb_min = self.window().cursor;
+        let bb_max = Vec2 {
+            x: bb_min.x + width,
+            y: bb_min.y + label_size.y + pad.y * 2.0,
+        };
+        let total = Vec2 {
+            x: width
+                + if label_size.x > 0.0 {
+                    self.style.item_inner_spacing.x + label_size.x
+                } else {
+                    0.0
+                },
+            y: label_size.y + pad.y * 2.0,
+        };
+        let pressed = self.interact_rect_spanning(id, bb_min, bb_max, total, false);
+        let hovered = self.last_item_hovered;
+        let popup_id = hash_str_utf8("##ComboPopup", id);
+        // A row chosen last frame closes the popup now, so that frame still drew it.
+        if self.popup_pending_close {
+            self.popup_open = None;
+            self.popup_pending_close = false;
+        }
+        let mut open = self.popup_open == Some(popup_id);
+        if pressed && !open {
+            self.popup_open = Some(popup_id);
+            open = true;
+        }
+
+        // Render shape: the preview's frame, then the arrow's own button on the right.
+        let value_x2 = (bb_max.x - arrow_size).max(bb_min.x);
+        let frame_col = if hovered {
+            self.style.color_u32(crate::style::Col::FrameBgHovered)
+        } else {
+            self.style.color_u32(crate::style::Col::FrameBg)
+        };
+        self.draw_list.prim_rect(
+            bb_min,
+            Vec2 {
+                x: value_x2,
+                y: bb_max.y,
+            },
+            frame_col,
+        );
+        let arrow_bg = if open || hovered {
+            self.style.color_u32(crate::style::Col::ButtonHovered)
+        } else {
+            self.style.color_u32(crate::style::Col::Button)
+        };
+        self.draw_list.prim_rect(
+            Vec2 {
+                x: value_x2,
+                y: bb_min.y,
+            },
+            bb_max,
+            arrow_bg,
+        );
+        let text_col = self.style.color_u32(crate::style::Col::Text);
+        self.draw_list.add_arrow(
+            Vec2 {
+                x: value_x2 + pad.y,
+                y: bb_min.y + pad.y,
+            },
+            text_col,
+            ARROW_DOWN_COS,
+            ARROW_DOWN_SIN,
+            1.0,
+            self.font.size,
+            self.style.symbol_arrow_size_factor,
+            self.style.symbol_arrow_thickness_factor,
+        );
+        if self.style.frame_border_size > 0.0 {
+            self.draw_list.add_aligned_rect_border(
+                bb_min,
+                bb_max,
+                self.style.color_u32(crate::style::Col::Border),
+                self.style.frame_border_size,
+            );
+        }
+        let font = self.font.clone();
+        self.draw_list.add_text(
+            &font,
+            font.size,
+            Vec2 {
+                x: bb_min.x + pad.x,
+                y: bb_min.y + pad.y,
+            },
+            text_col,
+            preview,
+        );
+        if label_size.x > 0.0 {
+            self.draw_list.add_text(
+                &font,
+                font.size,
+                Vec2 {
+                    x: bb_max.x + self.style.item_inner_spacing.x,
+                    y: bb_min.y + pad.y,
+                },
+                text_col,
+                shown,
+            );
+        }
+        if !open {
+            return false;
+        }
+        self.begin_combo_popup(bb_min, bb_max)
+    }
+
+    /// `BeginComboPopup`: the popup window, laid out under the box and toward the right.
+    fn begin_combo_popup(&mut self, bb_min: Vec2, bb_max: Vec2) -> bool {
+        // `ImFormatString("##Combo_%02d")`: the window is recycled by depth.
+        let name = "##Combo_00";
+        let measured = WindowMemory::find(&self.memory, name).map(|memory| memory.size_full);
+        let pos = combo_popup_pos(
+            (Vec2::default(), self.io.display_size),
+            (bb_min, bb_max),
+            measured.unwrap_or_default(),
+        );
+        self.popup_first_frame = measured.is_none();
+        // `SetNextWindowSizeConstraints(constraint_min = (width, 0), ...)`: at least as wide as the box.
+        self.next_size_min = Some(Vec2 {
+            x: bb_max.x - bb_min.x,
+            y: 0.0,
+        });
+        let flags = WindowFlags::ALWAYS_AUTO_RESIZE
+            | WindowFlags::NO_RESIZE
+            | WindowFlags::NO_MOVE
+            | WindowFlags::NO_SCROLLBAR
+            | WindowFlags::POPUP;
+        self.set_next_window_flags(flags);
+        // The popup belongs to the window that is current now, and owns a list of its own.
+        self.popup_host = self.windows.last().map(|window| window.name.clone());
+        let host = core::mem::take(&mut self.draw_list);
+        self.list_stack.push(host);
+        // `PushStyleVarX(WindowPadding, FramePadding.x)`: the rows line up with the framed preview.
+        self.combo_saved_padding = Some(self.style.window_padding.x);
+        self.style.window_padding.x = self.style.frame_padding.x;
+        self.last_popup_name = Some(name.to_string());
+        self.begin_window(name, Some(pos), None);
+        true
+    }
+
+    /// `ImGui::EndCombo`: close the popup's window and hand the host its list back.
+    pub fn end_combo(&mut self) {
+        let (pos, size) = {
+            let window = self.window();
+            (window.pos, window.size)
+        };
+        self.end_window();
+        if self.popup_first_frame {
+            // Nothing was drawn: drop the list the way the reference skips an empty one.
+            self.frame_lists.pop();
+            self.list_parents.pop();
+            self.popup_first_frame = false;
+        }
+        self.draw_list = self
+            .list_stack
+            .pop()
+            .unwrap_or_else(|| self.new_window_draw_list());
+        if let Some(saved) = self.combo_saved_padding.take() {
+            self.style.window_padding.x = saved;
+        }
+        self.popup_rect = self
+            .last_popup_name
+            .take()
+            .map(|name| (name, (pos, size)))
+            .or(self.popup_rect.take());
+    }
+
     pub fn open_popup(&mut self, id: &str) {
         self.popup_open = Some(self.get_id(id));
     }

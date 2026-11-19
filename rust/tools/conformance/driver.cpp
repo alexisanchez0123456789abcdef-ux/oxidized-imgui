@@ -2527,6 +2527,89 @@ static void DumpPopupClick()
         }
     }
 }
+// combo: the box shows its preview and its popup is a window of its own under it, holding the rows.
+static int g_combo_current = 0;
+
+static void FrameCombo(float mx, float my, bool down)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = down;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("W", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar);
+    static const char* items[3] = { "One", "Two", "Three" };
+    ImGui::SetNextItemWidth(150.0f);
+    if (ImGui::BeginCombo("##combo", items[g_combo_current], ImGuiComboFlags_None))
+    {
+        for (int n = 0; n < 3; n++)
+            if (ImGui::Selectable(items[n], g_combo_current == n))
+                g_combo_current = n;
+        ImGui::EndCombo();
+    }
+    printf("frame current %d\n", g_combo_current);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpCombo()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario combo\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    // Every letter of every row, since the reference bakes on demand.
+    const char bake_order[8] = { 'O', 'n', 'e', 'T', 'w', 'o', 'h', 'r' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    // The arrow is a stroke, so the fixture carries the line rows too.
+    ImGui::NewFrame();
+    WriteWindowIconsFixture(font, bake_order, 8);
+    ImGui::EndFrame();
+
+    // The box is at (68,68) to (218,87): press it, hover a row, choose it, then click outside.
+    const float steps[11][3] = {
+        { 0.0f, 0.0f, 0.0f },
+        { 0.0f, 0.0f, 0.0f },
+        { 140.0f, 75.0f, 0.0f },
+        { 140.0f, 75.0f, 1.0f },
+        { 140.0f, 75.0f, 0.0f },
+        { 140.0f, 108.0f, 0.0f },
+        { 140.0f, 108.0f, 1.0f },
+        { 140.0f, 108.0f, 0.0f },
+        { 140.0f, 135.0f, 0.0f },
+        { 5.0f, 5.0f, 1.0f },
+        { 5.0f, 5.0f, 0.0f },
+    };
+    for (int f = 0; f < 11; f++)
+    {
+        FrameCombo(steps[f][0], steps[f][1], steps[f][2] != 0.0f);
+        ImGui::Render();
+        ImDrawData* dd = ImGui::GetDrawData();
+        ImGuiContext& g = *ImGui::GetCurrentContext();
+        printf("frame %d lists %d\n", f, dd->CmdListsCount);
+        for (int i = 0; i < dd->CmdListsCount; i++)
+        {
+            const ImDrawList* list = dd->CmdLists[i];
+            const char* name = "?";
+            for (int w = 0; w < g.Windows.Size; w++)
+                if (g.Windows[w]->DrawList == list)
+                    name = g.Windows[w]->Name;
+            printf("list %d %s\n", i, name);
+            DumpDrawListBody(*list);
+        }
+    }
+}
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 
 static void DumpCmdOffsets()
@@ -2776,6 +2859,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_icons") == 0)
     {
         DumpWindowIcons();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "combo") == 0)
+    {
+        DumpCombo();
         ImGui::DestroyContext();
         return 0;
     }

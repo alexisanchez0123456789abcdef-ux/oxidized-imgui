@@ -74,6 +74,7 @@ pub const SCENARIOS: &[&str] = &[
     "selectable",
     "popup",
     "popup_click",
+    "combo",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -3259,6 +3260,80 @@ pub fn popup_click_dump() -> String {
     }
     out
 }
+/// The `combo` scenario: the box shows its preview and its popup is a window of its own under it,
+/// holding the rows.
+pub fn combo_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/combo.glyphs.txt"
+    );
+    let text = std::fs::read_to_string(path).expect("combo fixture");
+    let font = Font::from_pinned(&text).expect("font fixture");
+    let line_uvs = parse_line_uvs(&text);
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    ctx.set_line_uv_lines(line_uvs);
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario combo\n");
+
+    let items = ["One", "Two", "Three"];
+    let mut current = 0usize;
+    let steps = [
+        (0.0f32, 0.0f32, false),
+        (0.0, 0.0, false),
+        (140.0, 75.0, false),
+        (140.0, 75.0, true),
+        (140.0, 75.0, false),
+        (140.0, 108.0, false),
+        (140.0, 108.0, true),
+        (140.0, 108.0, false),
+        (140.0, 135.0, false),
+        (5.0, 5.0, true),
+        (5.0, 5.0, false),
+    ];
+    for (n, (mx, my, down)) in steps.iter().enumerate() {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: *mx, y: *my });
+        ctx.io_mut().mouse_down[0] = *down;
+        ctx.begin_frame();
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+        );
+        ctx.begin_window(
+            "W",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        if ctx.begin_combo("##combo", items[current], 150.0) {
+            for (index, item) in items.iter().enumerate() {
+                if ctx.selectable(item, current == index) {
+                    current = index;
+                }
+            }
+            ctx.end_combo();
+        }
+        ctx.end_window();
+        ctx.end_frame();
+        out.push_str(&format!("frame current {current}\n"));
+        let lists = ctx.render_lists();
+        out.push_str(&format!("frame {n} lists {}\n", lists.len()));
+        for (i, (name, list)) in lists.iter().enumerate() {
+            out.push_str(&format!("list {i} {name}\n"));
+            let body = dump("combo", list);
+            for line in body.lines().skip(2) {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
+    }
+    out
+}
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -3303,6 +3378,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "selectable" => Some(selectable_dump()),
         "popup" => Some(popup_dump()),
         "popup_click" => Some(popup_click_dump()),
+        "combo" => Some(combo_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),
