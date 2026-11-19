@@ -2161,14 +2161,21 @@ static void DumpTreeNode()
     FrameTreeNode(100.0f, 74.0f, false);
 }
 
+static void FrameChildRegionWheelDown(float mx, float my, float wheel, bool down);
+
 // child_region: BeginChild gives a region its own layout, padding, border and draw list. The child's
 // list is submitted right after its host's, so the two are dumped in that order.
 static void FrameChildRegionWheel(float mx, float my, float wheel)
 {
+    FrameChildRegionWheelDown(mx, my, wheel, false);
+}
+
+static void FrameChildRegionWheelDown(float mx, float my, float wheel, bool down)
+{
     ImGuiIO& io = ImGui::GetIO();
     io.DeltaTime = 0.1f;
     io.MousePos = ImVec2(mx, my);
-    io.MouseDown[0] = false;
+    io.MouseDown[0] = down;
     io.MouseWheel = wheel;
     ImGui::NewFrame();
     ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
@@ -2250,6 +2257,33 @@ static void DumpChildRegion()
     for (int f = 4; f < 8; f++)
     {
         FrameChildRegionWheel(140.0f, 120.0f, wheel_steps[f - 4]);
+        ImGui::Render();
+        ImDrawData* dd = ImGui::GetDrawData();
+        ImGuiContext& g = *GImGui;
+        printf("frame %d lists %d\n", f, dd->CmdListsCount);
+        for (int i = 0; i < dd->CmdListsCount; i++)
+        {
+            const ImDrawList* list = dd->CmdLists[i];
+            const char* name = "?";
+            for (int w = 0; w < g.Windows.Size; w++)
+                if (g.Windows[w]->DrawList == list)
+                    name = g.Windows[w]->Name;
+            printf("list %d %s\n", i, name);
+            DumpDrawListBody(*list);
+        }
+    }
+
+    // Grabbing the region's own scrollbar and dragging it down.
+    const float bar_pos[5][3] = {
+        { 210.0f, 100.0f, 0.0f },
+        { 210.0f, 100.0f, 1.0f },
+        { 210.0f, 120.0f, 1.0f },
+        { 210.0f, 130.0f, 1.0f },
+        { 210.0f, 130.0f, 0.0f },
+    };
+    for (int f = 8; f < 13; f++)
+    {
+        FrameChildRegionWheelDown(bar_pos[f - 8][0], bar_pos[f - 8][1], 0.0f, bar_pos[f - 8][2] != 0.0f);
         ImGui::Render();
         ImDrawData* dd = ImGui::GetDrawData();
         ImGuiContext& g = *GImGui;

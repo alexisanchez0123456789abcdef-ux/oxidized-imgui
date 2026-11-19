@@ -92,7 +92,7 @@
         { "id": "w_collapsing_header", "label": "Cabecera colapsable: marco, flecha, hover/activo y alternar (etiqueta al soltar, flecha al pulsar)", "weight": 2, "done": true, "evidence": "golden collapsing_header (12 frames, lista completa de 79125 bytes)" },
         { "id": "w_tree", "label": "Nodos de árbol: fila estrecha, resaltado a todo el ancho, sangría y árbol anidado", "weight": 1, "done": true, "evidence": "golden tree_node (13 frames, lista completa de 56344 bytes)" },
         { "id": "w_child", "label": "Región hija: lista de dibujo propia, recorte interior, borde en la lista del padre y avance del layout", "weight": 1, "done": true, "evidence": "golden child_region (4 frames, dos listas cada uno, 22092 bytes)" },
-        { "id": "w_scroll", "label": "Scroll propio de la región hija: barra en la lista del padre, desplazamiento y rueda sobre la región", "weight": 1, "done": true, "evidence": "golden child_region (8 frames, dos listas, 74134 bytes)" },
+        { "id": "w_scroll", "label": "Scroll de la región hija completo: barra en la lista del padre, rueda sobre la región y arrastre de su barra", "weight": 1, "done": true, "evidence": "golden child_region (13 frames, dos listas, 122487 bytes)" },
         { "id": "w_popup", "label": "Tooltips, menús y popups", "weight": 3, "done": false, "evidence": "" },
         { "id": "w_tables", "label": "Tablas", "weight": 2, "done": false, "evidence": "" }
       ]
