@@ -2990,6 +2990,7 @@ pub fn child_region_dump() -> String {
         ctx.begin_child("Inside", Vec2 { x: 150.0, y: 60.0 }, true);
         ctx.button("BB");
         ctx.button("CC");
+        ctx.button("DD");
         ctx.end_child();
         ctx.button("EE");
         ctx.end_window();

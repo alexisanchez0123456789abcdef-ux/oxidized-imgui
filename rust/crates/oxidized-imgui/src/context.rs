@@ -196,6 +196,8 @@ pub struct Context {
     item_states: Vec<(ImGuiID, bool)>,
     /// The host each closed list belongs to, so a child's list follows its host's.
     list_parents: Vec<Option<String>>,
+    /// What a child region remembers between frames: its scroll and how big its content was.
+    child_memory: Vec<(String, Vec2, Vec2)>,
     /// The host window's list, set aside while a child owns the current one.
     parent_list: Option<crate::draw_list::DrawList>,
     /// While a child is open, the name of the window hosting it.
@@ -252,6 +254,7 @@ impl Default for Context {
             active_click_offset: Vec2::default(),
             item_states: Vec::new(),
             list_parents: Vec::new(),
+            child_memory: Vec::new(),
             parent_list: None,
             pending_child_host: None,
             resize_grip_cols: [0; 2],
@@ -1490,21 +1493,49 @@ impl Context {
                 y: pos.y + size.y,
             },
         );
+        // `Begin` decides the scrollbar from the content the child had last frame, exactly as a
+        // window does, so a region whose content grew shows its bar one frame later.
+        let previous = self
+            .child_memory
+            .iter()
+            .find(|(name, _, _)| name == &format!("{host}/{id}_{:08X}", self.get_id(id)));
+        let content_before = previous.map(|(_, _, content)| *content).unwrap_or_default();
+        let scroll_before = previous.map(|(_, scroll, _)| *scroll).unwrap_or_default();
+        // The bar sits against the region's own edge, so the outer rectangle is the one before the
+        // bar took its width out of the interior.
+        let child_rect = inner_rect;
+        let mut inner_rect = inner_rect;
+        let scrollbar_y = content_before.y + pad.y * 2.0 > inner_rect.1.y - inner_rect.0.y;
+        if scrollbar_y {
+            inner_rect.1.x -= self.style.scrollbar_size;
+        }
+        let scroll_max = Vec2 {
+            x: (content_before.x + pad.x * 2.0 - (inner_rect.1.x - inner_rect.0.x)).max(0.0),
+            y: (content_before.y + pad.y * 2.0 - (inner_rect.1.y - inner_rect.0.y)).max(0.0),
+        };
+        let scroll = Vec2 {
+            x: scroll_before.x.clamp(0.0, scroll_max.x),
+            y: scroll_before.y.clamp(0.0, scroll_max.y),
+        };
         let content_origin = Vec2 {
-            x: pos.x + pad.x,
-            y: pos.y + pad.y,
+            x: inner_rect.0.x + pad.x - scroll.x,
+            y: inner_rect.0.y + pad.y - scroll.y,
         };
         let content_size = Vec2 {
-            x: size.x - pad.x * 2.0,
-            y: size.y - pad.y * 2.0,
+            x: inner_rect.1.x - inner_rect.0.x - pad.x * 2.0,
+            y: inner_rect.1.y - inner_rect.0.y - pad.y * 2.0,
         };
 
-        // `RenderWindowOuterBorders` runs while the host still owns the list, so a child's border is
-        // part of the host's draw list and not of the child's own.
+        // `RenderWindowOuterBorders` and the scrollbars run while the host still owns the list, so a
+        // child's border and its scrollbar are part of the host's draw list, not of the child's.
+        if scrollbar_y {
+            self.draw_scrollbar(id, child_rect, inner_rect, content_before, scroll, false);
+        }
         if borders && self.style.child_border_size > 0.0 {
+            // The border goes around the whole region, not around its interior.
             self.draw_list.add_aligned_rect_border(
-                inner_rect.0,
-                inner_rect.1,
+                child_rect.0,
+                child_rect.1,
                 self.style.color_u32(crate::style::Col::Border),
                 self.style.child_border_size,
             );
@@ -1522,10 +1553,10 @@ impl Context {
             collapsed: false,
             want_collapse_toggle: false,
             flags: WindowFlags::NONE,
-            scroll: Vec2::default(),
-            scroll_max: Vec2::default(),
-            content_extent: Vec2::default(),
-            scrollbar_y: false,
+            scroll,
+            scroll_max,
+            content_extent: content_before,
+            scrollbar_y,
             scrollbar_x: false,
             inner_rect,
             is_child: true,
@@ -1571,6 +1602,24 @@ impl Context {
         }
         self.pop_id();
         self.draw_list.pop_clip_rect();
+        // CalcWindowContentSizes: the extent the layout reached, measured from the scrolled start.
+        let content = Vec2 {
+            x: (child.cursor_max.x - child.cursor_start.x).trunc(),
+            y: (child.cursor_max.y - child.cursor_start.y).trunc(),
+        };
+        match self
+            .child_memory
+            .iter_mut()
+            .find(|(name, _, _)| *name == child.name)
+        {
+            Some(slot) => {
+                slot.1 = child.scroll;
+                slot.2 = content;
+            }
+            None => self
+                .child_memory
+                .push((child.name.clone(), child.scroll, content)),
+        }
         let child_list = core::mem::take(&mut self.draw_list);
         self.frame_lists.push((child.name.clone(), child_list));
         self.list_parents.push(self.pending_child_host.take());
