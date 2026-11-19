@@ -3029,6 +3029,71 @@ impl Context {
         pressed
     }
 
+    /// `window->WorkRect.Max.x`: the right edge a widget may fill, which is the interior's left edge
+    /// plus the inner width minus the padding on both sides.
+    fn work_rect_max_x(&self) -> f32 {
+        let window = self.window();
+        let pad = self.style.window_padding.x;
+        let border = self.style.window_border_size;
+        let min_x = (window.inner_rect.0.x - window.scroll.x + pad.max(border)).trunc();
+        let inner_width = window.inner_rect.1.x - window.inner_rect.0.x;
+        min_x + (inner_width - pad * 2.0).max(0.0)
+    }
+
+    /// `ImGui::Selectable`: a row that fills the available width and highlights when hovered or
+    /// selected. Returns true on the frame it is clicked.
+    ///
+    /// The row advances by the label height with no padding of its own, while the clickable box is
+    /// expanded by half the item spacing on each side so that consecutive rows leave no gap the
+    /// mouse can fall into.
+    pub fn selectable(&mut self, label: &str, selected: bool) -> bool {
+        let id = self.get_id(label);
+        let text = self.font.calc_text_size(label, self.font.size);
+        let spacing = self.style.item_spacing;
+        let max_x = self.work_rect_max_x();
+        let pos = self.window().cursor;
+        // No size given: the row runs from the cursor to the right edge of the work rectangle.
+        let size = Vec2 {
+            x: text.x.max(max_x - pos.x),
+            y: text.y,
+        };
+        let spacing_l = (spacing.x * 0.5).trunc();
+        let spacing_u = (spacing.y * 0.5).trunc();
+        let click_min = Vec2 {
+            x: pos.x - spacing_l,
+            y: pos.y - spacing_u,
+        };
+        let click_max = Vec2 {
+            x: pos.x + size.x + (spacing.x - spacing_l),
+            y: pos.y + size.y + (spacing.y - spacing_u),
+        };
+        let pressed = self.interact_rect_spanning(id, click_min, click_max, size, false);
+        let highlighted = self.last_item_hovered;
+        let held = self.last_item_active;
+        if highlighted || selected {
+            let col = if held && highlighted {
+                crate::style::Col::HeaderActive
+            } else if highlighted {
+                crate::style::Col::HeaderHovered
+            } else {
+                crate::style::Col::Header
+            };
+            let colour = self.style.color_u32(col);
+            let rounding = self.style.selectable_rounding;
+            if rounding > 0.0 {
+                self.draw_list
+                    .add_rect_filled_aa_rounded(click_min, click_max, rounding, colour);
+            } else {
+                self.draw_list.prim_rect(click_min, click_max, colour);
+            }
+        }
+        let font = self.font.clone();
+        let text_col = self.style.color_u32(crate::style::Col::Text);
+        self.draw_list
+            .add_text(&font, font.size, pos, text_col, label);
+        pressed
+    }
+
     /// `ImGui::Text` for an unformatted string: an item as wide as the text, no interaction.
     pub fn label(&mut self, text: &str) {
         let size = self.font.calc_text_size(text, self.font.size);

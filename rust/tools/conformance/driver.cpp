@@ -2300,6 +2300,71 @@ static void DumpChildRegion()
         }
     }
 }
+// selectable: a row fills the available width and highlights when hovered or selected.
+static int g_selectable_selected = 0;
+
+static void FrameSelectable(float mx, float my, bool down)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = down;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(200.0f, 160.0f));
+    ImGui::Begin("S", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar);
+    static const char* items[3] = { "One", "Two", "Three" };
+    for (int n = 0; n < 3; n++)
+        if (ImGui::Selectable(items[n], g_selectable_selected == n))
+            g_selectable_selected = n;
+    printf("frame selected %d\n", g_selectable_selected);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpSelectable()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario selectable\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    // Every letter of every row: the reference bakes on demand, so a missing one changes the picture.
+    const char bake_order[8] = { 'O', 'n', 'e', 'T', 'w', 'o', 'h', 'r' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    WriteGlyphFixture(font, bake_order, 8);
+
+    const float steps[8][3] = {
+        { 0.0f, 0.0f, 0.0f },
+        { 0.0f, 0.0f, 0.0f },
+        { 100.0f, 75.0f, 0.0f },
+        { 100.0f, 75.0f, 1.0f },
+        { 100.0f, 75.0f, 0.0f },
+        { 100.0f, 95.0f, 0.0f },
+        { 100.0f, 95.0f, 1.0f },
+        { 100.0f, 95.0f, 0.0f },
+    };
+    for (int f = 0; f < 8; f++)
+    {
+        FrameSelectable(steps[f][0], steps[f][1], steps[f][2] != 0.0f);
+        ImGui::Render();
+        ImDrawData* dd = ImGui::GetDrawData();
+        printf("frame %d lists %d\n", f, dd->CmdListsCount);
+        for (int i = 0; i < dd->CmdListsCount; i++)
+        {
+            printf("list %d S\n", i);
+            DumpDrawListBody(*dd->CmdLists[i]);
+        }
+    }
+}
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 
 static void DumpCmdOffsets()
@@ -2549,6 +2614,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_icons") == 0)
     {
         DumpWindowIcons();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "selectable") == 0)
+    {
+        DumpSelectable();
         ImGui::DestroyContext();
         return 0;
     }

@@ -71,6 +71,7 @@ pub const SCENARIOS: &[&str] = &[
     "collapsing_header",
     "tree_node",
     "child_region",
+    "selectable",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -3038,6 +3039,74 @@ pub fn child_region_dump() -> String {
     out
 }
 
+/// The `selectable` scenario: a row fills the available width and highlights when hovered or
+/// selected, and a click on it reports which row it was.
+pub fn selectable_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/selectable.glyphs.txt"
+    );
+    let text = std::fs::read_to_string(path).expect("selectable fixture");
+    let font = Font::from_pinned(&text).expect("font fixture");
+    let line_uvs = parse_line_uvs(&text);
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    ctx.set_line_uv_lines(line_uvs);
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario selectable\n");
+
+    let items = ["One", "Two", "Three"];
+    let mut selected = 0usize;
+    let steps = [
+        (0.0f32, 0.0f32, false),
+        (0.0, 0.0, false),
+        (100.0, 75.0, false),
+        (100.0, 75.0, true),
+        (100.0, 75.0, false),
+        (100.0, 95.0, false),
+        (100.0, 95.0, true),
+        (100.0, 95.0, false),
+    ];
+    for (n, (mx, my, down)) in steps.iter().enumerate() {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: *mx, y: *my });
+        ctx.io_mut().mouse_down[0] = *down;
+        ctx.begin_frame();
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+        );
+        ctx.begin_window(
+            "S",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 200.0, y: 160.0 }),
+        );
+        for (index, item) in items.iter().enumerate() {
+            if ctx.selectable(item, selected == index) {
+                selected = index;
+            }
+        }
+        ctx.end_window();
+        ctx.end_frame();
+        out.push_str(&format!("frame selected {selected}\n"));
+        let lists = ctx.render_lists();
+        out.push_str(&format!("frame {n} lists {}\n", lists.len()));
+        for (i, (name, list)) in lists.iter().enumerate() {
+            out.push_str(&format!("list {i} {name}\n"));
+            let body = dump("selectable", list);
+            for line in body.lines().skip(2) {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
+    }
+    out
+}
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -3079,6 +3148,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "collapsing_header" => Some(collapsing_header_dump()),
         "tree_node" => Some(tree_node_dump()),
         "child_region" => Some(child_region_dump()),
+        "selectable" => Some(selectable_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),
