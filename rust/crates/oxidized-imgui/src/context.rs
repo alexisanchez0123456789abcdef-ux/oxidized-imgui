@@ -197,7 +197,7 @@ pub struct Context {
     /// The host each closed list belongs to, so a child's list follows its host's.
     list_parents: Vec<Option<String>>,
     /// What a child region remembers between frames: its scroll and how big its content was.
-    child_memory: Vec<(String, Vec2, Vec2)>,
+    child_memory: Vec<(String, Vec2, Vec2, (Vec2, Vec2))>,
     /// The host window's list, set aside while a child owns the current one.
     parent_list: Option<crate::draw_list::DrawList>,
     /// While a child is open, the name of the window hosting it.
@@ -324,7 +324,22 @@ impl Context {
             return;
         };
         let mut found = None;
+        // A child is a window of its own and sits above its host, so the mouse inside a child
+        // resolves to the child, not to the window hosting it.
         for name in self.display_order.iter().rev() {
+            // A child is a window of its own and sits above its host, so the mouse inside a child
+            // resolves to the child, not to the window hosting it.
+            let prefix = format!("{name}/");
+            if let Some((child, _, _, _)) = self.child_memory.iter().find(|(child, _, _, rect)| {
+                child.starts_with(&prefix)
+                    && rect.0.x <= mouse.x
+                    && mouse.x < rect.1.x
+                    && rect.0.y <= mouse.y
+                    && mouse.y < rect.1.y
+            }) {
+                found = Some(child.clone());
+                break;
+            }
             if !self.last_frame_windows.contains(name) {
                 continue;
             }
@@ -1498,9 +1513,13 @@ impl Context {
         let previous = self
             .child_memory
             .iter()
-            .find(|(name, _, _)| name == &format!("{host}/{id}_{:08X}", self.get_id(id)));
-        let content_before = previous.map(|(_, _, content)| *content).unwrap_or_default();
-        let scroll_before = previous.map(|(_, scroll, _)| *scroll).unwrap_or_default();
+            .find(|(name, _, _, _)| name == &format!("{host}/{id}_{:08X}", self.get_id(id)));
+        let content_before = previous
+            .map(|(_, _, content, _)| *content)
+            .unwrap_or_default();
+        let scroll_before = previous
+            .map(|(_, scroll, _, _)| *scroll)
+            .unwrap_or_default();
         // The bar sits against the region's own edge, so the outer rectangle is the one before the
         // bar took its width out of the interior.
         let child_rect = inner_rect;
@@ -1513,9 +1532,31 @@ impl Context {
             x: (content_before.x + pad.x * 2.0 - (inner_rect.1.x - inner_rect.0.x)).max(0.0),
             y: (content_before.y + pad.y * 2.0 - (inner_rect.1.y - inner_rect.0.y)).max(0.0),
         };
+        let mut requested = scroll_before;
+        let child_now = format!("{host}/{id}_{:08X}", self.get_id(id));
+        // `UpdateMouseWheel`: the wheel scrolls what it is locked to, falling back to whatever is
+        // under the mouse, with the same five-font-size step a window uses.
+        if self.io.mouse_wheel != 0.0 {
+            let owner = self
+                .wheeling_window
+                .clone()
+                .or_else(|| self.hovered_window.clone());
+            if owner.as_deref() == Some(child_now.as_str()) && scroll_max.y != 0.0 {
+                let amount = self.io.mouse_wheel.abs();
+                self.wheeling_release_timer =
+                    (self.wheeling_release_timer + amount * 0.70).min(0.70);
+                if self.wheeling_window.as_deref() != Some(child_now.as_str()) {
+                    self.wheeling_window = Some(child_now.clone());
+                    self.wheeling_ref_mouse = self.io.mouse_pos.unwrap_or_default();
+                }
+                let max_step = (inner_rect.1.y - inner_rect.0.y) * 0.67;
+                let scroll_step = (5.0 * self.font.size).min(max_step).trunc();
+                requested.y -= self.io.mouse_wheel * scroll_step;
+            }
+        }
         let scroll = Vec2 {
-            x: scroll_before.x.clamp(0.0, scroll_max.x),
-            y: scroll_before.y.clamp(0.0, scroll_max.y),
+            x: requested.x.clamp(0.0, scroll_max.x),
+            y: requested.y.clamp(0.0, scroll_max.y),
         };
         let content_origin = Vec2 {
             x: inner_rect.0.x + pad.x - scroll.x,
@@ -1607,18 +1648,26 @@ impl Context {
             x: (child.cursor_max.x - child.cursor_start.x).trunc(),
             y: (child.cursor_max.y - child.cursor_start.y).trunc(),
         };
+        let rect = (
+            child.pos,
+            Vec2 {
+                x: child.pos.x + child.size.x,
+                y: child.pos.y + child.size.y,
+            },
+        );
         match self
             .child_memory
             .iter_mut()
-            .find(|(name, _, _)| *name == child.name)
+            .find(|(name, _, _, _)| *name == child.name)
         {
             Some(slot) => {
                 slot.1 = child.scroll;
                 slot.2 = content;
+                slot.3 = rect;
             }
             None => self
                 .child_memory
-                .push((child.name.clone(), child.scroll, content)),
+                .push((child.name.clone(), child.scroll, content, rect)),
         }
         let child_list = core::mem::take(&mut self.draw_list);
         self.frame_lists.push((child.name.clone(), child_list));
