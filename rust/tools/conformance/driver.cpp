@@ -2443,6 +2443,90 @@ static void DumpPopup()
         }
     }
 }
+// popup_click: a click on a row inside a popup. The row must report the press on release, the state
+// must clear on the next frame, and choosing a row closes the popup one frame later.
+static int g_popup_row = -1;
+
+static void FramePopupClick(float mx, float my, bool down)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = down;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("P", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar);
+    if (ImGui::Button("Open"))
+        ImGui::OpenPopup("##p");
+    ImGui::SetNextWindowPos(ImVec2(120.0f, 110.0f));
+    if (ImGui::BeginPopup("##p"))
+    {
+        static const char* items[3] = { "One", "Two", "Three" };
+        for (int n = 0; n < 3; n++)
+            if (ImGui::Selectable(items[n], n == g_popup_row))
+                g_popup_row = n;
+        ImGui::EndPopup();
+    }
+    printf("frame row %d\n", g_popup_row);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpPopupClick()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario popup_click\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    // Every letter of every row, since the reference bakes on demand.
+    const char bake_order[10] = { 'O', 'p', 'e', 'n', 'T', 'w', 'o', 'h', 'r', 'i' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    WriteGlyphFixture(font, bake_order, 10);
+
+    // The popup sits at (120,110); its rows run from y 120 down. Frame 2 presses Open, 3 releases it.
+    const float steps[12][3] = {
+        { 0.0f, 0.0f, 0.0f },
+        { 0.0f, 0.0f, 0.0f },
+        { 80.0f, 75.0f, 1.0f },
+        { 80.0f, 75.0f, 0.0f },
+        { 150.0f, 135.0f, 0.0f },
+        { 150.0f, 135.0f, 1.0f },
+        { 150.0f, 135.0f, 0.0f },
+        { 150.0f, 135.0f, 0.0f },
+        { 0.0f, 0.0f, 0.0f },
+        { 0.0f, 0.0f, 0.0f },
+        { 0.0f, 0.0f, 0.0f },
+        { 0.0f, 0.0f, 0.0f },
+    };
+    for (int f = 0; f < 12; f++)
+    {
+        FramePopupClick(steps[f][0], steps[f][1], steps[f][2] != 0.0f);
+        ImGui::Render();
+        ImDrawData* dd = ImGui::GetDrawData();
+        ImGuiContext& g = *GImGui;
+        printf("frame %d lists %d\n", f, dd->CmdListsCount);
+        for (int i = 0; i < dd->CmdListsCount; i++)
+        {
+            const ImDrawList* list = dd->CmdLists[i];
+            const char* name = "?";
+            for (int w = 0; w < g.Windows.Size; w++)
+                if (g.Windows[w]->DrawList == list)
+                    name = g.Windows[w]->Name;
+            printf("list %d %s\n", i, name);
+            DumpDrawListBody(*list);
+        }
+    }
+}
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 
 static void DumpCmdOffsets()
@@ -2692,6 +2776,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "window_icons") == 0)
     {
         DumpWindowIcons();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "popup_click") == 0)
+    {
+        DumpPopupClick();
         ImGui::DestroyContext();
         return 0;
     }
