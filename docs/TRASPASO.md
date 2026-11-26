@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **117 escenarios** más la **prueba negativa**.
+   que ejecuta **118 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,9 +46,9 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **126 PRs** fusionados.
-- **117 escenarios** con golden propio, todos en verde, más la prueba negativa.
-- **Reescritura: 69.4 %.** Proyecto (contando el arnés): **71.4 %**.
+- `master` limpio, **127 PRs** fusionados.
+- **118 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- **Reescritura: 69.7 %.** Proyecto (contando el arnés): **71.6 %**.
 - 39 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
@@ -248,6 +248,16 @@ Golden `separator`: tres etiquetas con un separador entre ellas en una ventana d
 - El rectángulo del ítem es la línea (`(8,25)-(292,26)`), no la caja del texto: el golden lo imprime
   tras cada `Separator`.
 - La forma **vertical** (la barra de menús) tiene su propia sección más abajo.
+
+### BulletText (peso 1): cerrada
+
+Golden `bullet_text`: dos entradas en una ventana de 300×200.
+
+- No es "texto + `SameLine` + bullet": es **un solo ítem** de tamaño
+  `(FontSize + (etiqueta > 0 ? etiqueta.x + FramePadding.x*2 : 0), etiqueta.y)`. Medido: `(8,8)-(36,21)`
+  = 13 + 7 + 8 de ancho y 13 de alto.
+- El disco va en `bb.Min + (FramePadding.x + FontSize*0.5, FontSize*0.5)` y el texto en
+  `bb.Min + (FontSize + FramePadding.x*2, 0)`, los dos dentro del mismo ítem, sin recorte propio.
 
 ### LabelText (peso 1): cerrada
 
@@ -701,7 +711,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 117 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 118 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```

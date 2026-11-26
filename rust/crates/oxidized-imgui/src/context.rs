@@ -3446,6 +3446,68 @@ impl Context {
         }
     }
 
+    /// `ImGui::BulletText`: one item that holds a disc followed by the text, so the entry is indented
+    /// by the bullet and the text starts at `FontSize + FramePadding.x * 2` from the item's left.
+    pub fn bullet_text(&mut self, text: &str) {
+        if self
+            .windows
+            .last()
+            .map(|window| window.collapsed)
+            .unwrap_or(false)
+        {
+            return;
+        }
+        let font_size = self.font.size;
+        let frame_padding = self.style.frame_padding;
+        let font = self.font.clone();
+        let label_size = font.calc_text_size(text, font.size);
+        // `ImVec2(FontSize + (label > 0 ? label.x + FramePadding.x * 2 : 0), label.y)`: empty text adds
+        // no padding.
+        let total = Vec2 {
+            x: font_size
+                + if label_size.x > 0.0 {
+                    label_size.x + frame_padding.x * 2.0
+                } else {
+                    0.0
+                },
+            y: label_size.y,
+        };
+        let pos = self.window().cursor;
+        self.dummy(total);
+        if let Some(window) = self.windows.last_mut() {
+            window.last_min = pos;
+            window.last_max = Vec2 {
+                x: pos.x + total.x,
+                y: pos.y + total.y,
+            };
+            window.has_item = true;
+        }
+        let colour = self.style.color_u32(crate::style::Col::Text);
+        // `RenderBullet` at `bb.Min + (FramePadding.x + FontSize * 0.5, FontSize * 0.5)`.
+        self.draw_list.add_circle_filled(
+            Vec2 {
+                x: pos.x + frame_padding.x + font_size * 0.5,
+                y: pos.y + font_size * 0.5,
+            },
+            font_size * 0.20,
+            colour,
+            8,
+        );
+        let clip = self.window().clip_rect;
+        self.draw_list.add_text_in(
+            &font,
+            font.size,
+            Vec2 {
+                x: pos.x + font_size + frame_padding.x * 2.0,
+                y: pos.y,
+            },
+            colour,
+            text,
+            clip,
+            None,
+        );
+    }
+
     /// `ImGui::Bullet`: a disc of radius `FontSize * 0.2` at the start of a line, with the next item
     /// kept on that same line, which is what makes it indent a list entry.
     pub fn bullet(&mut self) {
