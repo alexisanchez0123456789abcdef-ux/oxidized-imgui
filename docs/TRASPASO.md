@@ -521,6 +521,22 @@ reference (`cross_extent = FontSize * 0.5 * 0.7071 - 1`).
 Lo cubren los goldens `window_icons`, `window_icons_states` y `window_icons_drag` (hover, pulsado y
 arrastre sobre el aspa). Consecuencia: **no hay que "portar CloseButton"**; si alguna vez hace falta un aspa
 suelta, lo correcto es exponer un `button` con ese dibujo, no duplicar el de la ventana.
+### Golden pendiente del marco redondeado: medido y acotado
+
+Intento de golden `frame_rounding` (dos botones, cuadrado y con `PushStyleVar(ImGuiStyleVar_FrameRounding, 6)`):
+el recorte coincide pero **no la geometria**. Medido: el comando del marco redondeado lleva **72
+elementos en el reference y 156 en el port**; el rectangulo del item es identico (`15x19`) en los dos.
+
+La causa esta localizada en el reference (`imgui_draw.cpp:2622-2626`): con `rounding >= 0.5` NO usa
+`AddConvexPolyFilled` con cuatro esquinas, sino `PathRect(p_min, p_max, rounding, flags)` seguido de
+`PathFillConvex(col, JoinMiter)`. Es decir, la ruta se construye con **arcos** y el numero de segmentos lo
+decide `PathArcTo` con `num_segments = 0` (calculo automatico), no `arc_step_for_radius`, que es lo que usa
+hoy `add_rect_filled_aa_rounded` (escrito para el *stroke* redondeado, no para el relleno).
+
+Siguiente paso concreto: leer `PathArcTo`/`CalcArcSegmentCount` del reference, alinear el conteo de
+segmentos del relleno y volver a medir: el objetivo es **72** elementos. Mientras tanto el marco redondeado
+queda verificado solo por el test de enrutado (`frame_rounding_switches_the_button_frame_to_the_aa_path`),
+no por un golden, y asi esta escrito en la seccion de `FrameRounding`.
 ### FrameRounding en el marco de un boton (peso 1): cerrada
 
 `RenderFrame` del reference usa el camino **antialiased** cuando `FrameRounding` es al menos medio pixel, y
