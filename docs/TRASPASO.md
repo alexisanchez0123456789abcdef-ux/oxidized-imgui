@@ -46,7 +46,9 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **154 PRs** fusionados (el número sale de la búsqueda de la API: `is:pr is:merged`).
+- `master` limpio. **PRs fusionados: 158** al cerrar esta sesion (2026-11-26). Ese numero es una foto
+  fija y **no se mantiene a mano**: el valor vivo sale de la busqueda de la API
+  (`is:pr is:merged`). Si lees esto mucho despues, consultalo en vez de fiarte de la cifra.
 - **138 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 69.9 %.** Proyecto (contando el arnés): **71.8 %**.
 - 42 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
