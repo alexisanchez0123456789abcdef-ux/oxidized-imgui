@@ -5616,6 +5616,56 @@ static void DumpSmallButton()
     }
 }
 
+// same_line_offset: SameLine(offset, spacing) places the next item at an absolute offset from the
+// window edge, and SameLine(0, spacing) places it after the previous item at that spacing.
+static void DumpSameLineOffset()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario same_line_offset\n");
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[1] = { 'A' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    WriteGlyphFixture(font, bake_order, 1);
+
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
+    for (int frame = 0; frame < 2; frame++)
+    {
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+        ImGui::Begin("W", NULL, flags);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        const ImVec2 wpos = ImGui::GetWindowPos();
+        ImGui::Text("A");
+        ImGui::SameLine(50.0f);
+        ImGui::Text("A");
+        ImGui::SameLine(0.0f, 10.0f);
+        ImGui::Text("A");
+        ImGui::SameLine(0.0f, -1.0f);
+        ImGui::Text("A");
+        ImVec2 mn = PSub(ImGui::GetItemRectMin(), wpos);
+        ImVec2 mx = PSub(ImGui::GetItemRectMax(), wpos);
+        printf("frame %d last item %08x %08x %08x %08x\n", frame, Bits(mn.x), Bits(mn.y),
+            Bits(mx.x), Bits(mx.y));
+        ImGui::End();
+        if (frame == 1)
+            DumpDrawListBody(*dl);
+        ImGui::EndFrame();
+    }
+}
+
 // windows_move: dragging a window by its title bar and by its body, and the clamp that keeps it
 // reachable when it is dragged off the display. Only the positions are dumped: the geometry of a
 // window is what windows_order already covers.
@@ -7504,6 +7554,13 @@ int main(int argc, char** argv)
         return 0;
     }
 
+
+    if (strcmp(name, "same_line_offset") == 0)
+    {
+        DumpSameLineOffset();
+        ImGui::DestroyContext();
+        return 0;
+    }
 
     if (strcmp(name, "small_button") == 0)
     {

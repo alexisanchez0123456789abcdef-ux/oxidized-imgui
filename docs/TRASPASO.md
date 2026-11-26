@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **138 escenarios** más la **prueba negativa**.
+   que ejecuta **139 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -49,7 +49,7 @@ comparar.
 - `master` limpio. **PRs fusionados: 158** al cerrar esta sesion (2026-11-26). Ese numero es una foto
   fija y **no se mantiene a mano**: el valor vivo sale de la busqueda de la API
   (`is:pr is:merged`). Si lees esto mucho despues, consultalo en vez de fiarte de la cifra.
-- **138 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- **139 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 69.9 %.** Proyecto (contando el arnés): **71.8 %**.
 - 42 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
@@ -473,6 +473,16 @@ tamano. Asi, olvidar el cuarto sitio ya no puede pasar en silencio.
 Regla que queda: al anadir un escenario hay que tocar **cuatro** sitios (driver, ``dump_for``,
 `SCENARIOS` y `gen-golden.ps1`); si falta `SCENARIOS` el golden es decorativo y el `cargo test` no
 lo nota.
+### SameLine con offset (peso 1): cerrada
+
+Golden `same_line_offset`: cuatro textos en la misma linea con `SameLine(50)`, `SameLine(0, 10)` y
+`SameLine(0, -1)`. Medido: el ultimo empieza en **x = 82**.
+
+- Con **offset distinto de cero** la x es `Pos.x + offset + max(spacing, 0)`: el primero deja el segundo
+  texto en x=50 (offset 50, spacing -1 que cuenta como 0).
+- Con **offset cero** la x es `ultimo_max.x + spacing`, y un **spacing negativo significa
+  `ItemSpacing.x`** (8): de 74 a 82 es lo que separa los dos ultimos.
+- La `y` siempre es la de la linea anterior, que es lo que hace que `SameLine` sea "misma linea".
 ### SmallButton (peso 1): cerrada, con la regla medida
 
 Golden `small_button`: un `Button("A")` y un `SmallButton("A")` en la misma ventana. Medido: el boton
@@ -978,7 +988,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 138 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 139 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
