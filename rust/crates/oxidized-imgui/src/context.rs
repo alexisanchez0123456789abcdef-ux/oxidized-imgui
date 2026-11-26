@@ -4859,11 +4859,11 @@ impl Context {
         }
     }
 
-    pub fn last_item_hovered(&self) -> bool {
+    pub fn is_item_hovered(&self) -> bool {
         self.last_item_hovered
     }
 
-    pub fn last_item_active(&self) -> bool {
+    pub fn is_item_active(&self) -> bool {
         self.last_item_active
     }
 

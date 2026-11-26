@@ -549,6 +549,12 @@ Ruta anterior (superada por la de arriba): leer ``PathArcTo``/``CalcArcSegmentCo
 segmentos del relleno y volver a medir: el objetivo es **72** elementos. Mientras tanto el marco redondeado
 queda verificado solo por el test de enrutado (`frame_rounding_switches_the_button_frame_to_the_aa_path`),
 no por un golden, y asi esta escrito en la seccion de `FrameRounding`.
+### Estado del item con los nombres del reference (peso 1): cerrada
+
+Los dos getters publicos se llamaban `last_item_hovered()` / `last_item_active()`, que son los nombres de
+los **campos** internos. Ahora son `is_item_hovered()` / `is_item_active()`, como `IsItemHovered` e
+`IsItemActive`; los campos conservan su nombre. Cero cambios de comportamiento: 141 goldens y 43 tests
+unitarios identicos (los tres sitios de llamada del arnes se actualizaron, y no habia ninguno interno).
 ### FrameRounding en el marco de un boton (peso 1): cerrada
 
 `RenderFrame` del reference usa el camino **antialiased** cuando `FrameRounding` es al menos medio pixel, y

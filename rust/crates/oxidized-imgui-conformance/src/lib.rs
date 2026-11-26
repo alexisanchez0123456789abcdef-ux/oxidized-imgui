@@ -4163,8 +4163,8 @@ pub fn button_dump() -> String {
             bits(min.y),
             bits(max.x),
             bits(max.y),
-            ctx.last_item_hovered() as u8,
-            ctx.last_item_active() as u8,
+            ctx.is_item_hovered() as u8,
+            ctx.is_item_active() as u8,
             ret as u8,
             bits(cursor.x),
             bits(cursor.y),
@@ -4253,8 +4253,8 @@ pub fn widgets_basic_dump() -> String {
             bits(min.y),
             bits(max.x),
             bits(max.y),
-            ctx.last_item_hovered() as u8,
-            ctx.last_item_active() as u8,
+            ctx.is_item_hovered() as u8,
+            ctx.is_item_active() as u8,
             value as u8,
             ret as u8,
             bits(cursor.x),
@@ -4313,8 +4313,8 @@ pub fn slider_basic_dump() -> String {
             bits(min.y),
             bits(max.x),
             bits(max.y),
-            ctx.last_item_hovered() as u8,
-            ctx.last_item_active() as u8,
+            ctx.is_item_hovered() as u8,
+            ctx.is_item_active() as u8,
             bits(value),
             ret as u8,
             bits(cursor.x),
@@ -9368,7 +9368,7 @@ pub fn tooltip_dump() -> String {
             Some(Vec2 { x: 300.0, y: 200.0 }),
         );
         ctx.button("Hover");
-        if ctx.last_item_hovered() {
+        if ctx.is_item_hovered() {
             ctx.begin_tooltip();
             ctx.text("Tip");
             ctx.end_tooltip();
