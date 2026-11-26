@@ -29,6 +29,8 @@ pub mod table_flags {
     pub const RESIZABLE: u32 = 1 << 0;
     /// `ImGuiTableFlags_Sortable`: the table exposes sort specs.
     pub const SORTABLE: u32 = 1 << 3;
+    /// `ImGuiTableFlags_SortMulti`: the specs may hold more than one column.
+    pub const SORT_MULTI: u32 = 1 << 26;
     /// `ImGuiTableFlags_SortTristate`: the specs may end up empty.
     pub const SORT_TRISTATE: u32 = 1 << 27;
     /// `ImGuiTableFlags_RowBg`: every other row gets `TableRowBgAlt`.
@@ -61,6 +63,8 @@ pub mod column_flags {
     pub const DEFAULT_SORT: u32 = 1 << 2;
     /// `ImGuiTableColumnFlags_NoSort`.
     pub const NO_SORT: u32 = 1 << 9;
+    /// `ImGuiTableColumnFlags_PreferSortDescending`: the direction its `DefaultSort` starts with.
+    pub const PREFER_SORT_DESCENDING: u32 = 1 << 15;
     /// `ImGuiTableColumnFlags_NoResize`.
     pub const NO_RESIZE: u32 = 1 << 5;
     /// `ImGuiTableColumnFlags_IndentEnable`: column 0 keeps the current indent.
@@ -172,6 +176,13 @@ pub struct Table {
     pub sort_specs: Vec<(usize, i32)>,
     /// `table->IsSortSpecsDirty`: set when the specs changed and cleared when they are handed out.
     pub sort_specs_dirty: bool,
+    /// `column->SortOrder`: where the column sits in the specs, `-1` when it is not sorted.
+    pub sort_orders: Vec<i32>,
+    /// `column->SortDirection`: `0` none, `1` ascending, `2` descending.
+    pub sort_directions: Vec<i32>,
+    /// True once the sort state came from a previous frame (or from the table's settings) instead of
+    /// from the `DefaultSort` flags just declared.
+    pub sort_state_loaded: bool,
     /// `table->HoveredColumnBody`: the column under the mouse, `-1` outside the table and the column
     /// count in the unused space right of the last one.
     pub hovered_column_body: i32,
@@ -198,6 +209,8 @@ impl Table {
             hovered_column_body: -1,
             hovered_row_last: 0,
             hovered_row_next: 0,
+            sort_orders: vec![-1; columns],
+            sort_directions: vec![0; columns],
             ..Self::default()
         }
     }
@@ -238,7 +251,131 @@ impl Table {
             init_width: width,
             ..TableColumn::default()
         };
+        // `TableInitColumnDefaults` for the sort bits, which the reference applies when the column is
+        // created (or its settings loaded): a `DefaultSort` column starts at sort order 0 — several of
+        // them are linearized when the specs are built — and its direction comes from
+        // `PreferSortDescending`. A column that is not sorted keeps `-1`.
+        if !self.sort_state_loaded && index < self.sort_orders.len() {
+            self.sort_orders[index] = if flags & column_flags::DEFAULT_SORT != 0 {
+                0
+            } else {
+                -1
+            };
+            self.sort_directions[index] = if flags & column_flags::DEFAULT_SORT != 0 {
+                if flags & column_flags::PREFER_SORT_DESCENDING != 0 {
+                    2
+                } else {
+                    1
+                }
+            } else {
+                0
+            };
+        }
         self.decl_columns += 1;
+    }
+
+    /// `TableSortSpecsSanitize` plus `TableSortSpecsBuild`: turns the columns' `SortOrder` values into
+    /// the public specs, in sort order.
+    ///
+    /// The sanitize step closes the gaps and duplicates the orders may have — several `DefaultSort`
+    /// columns start at order 0 — and keeps a single one unless `SortMulti` allows more. When no
+    /// column is sorted, the first sortable one takes order 0, so a sortable table always starts with
+    /// one spec (the rule the `tables_sort_tristate` golden pins).
+    pub fn build_sort_specs(&mut self) {
+        if self.flags & table_flags::SORTABLE == 0 {
+            self.sort_specs.clear();
+            self.sort_specs_dirty = false;
+            return;
+        }
+        let columns = self.columns.len();
+        let mut sort_order_count = 0u32;
+        let mut sort_order_mask = 0u64;
+        for n in 0..columns {
+            let order = self.sort_orders.get(n).copied().unwrap_or(-1);
+            if order == -1 {
+                continue;
+            }
+            sort_order_count += 1;
+            if (0..64).contains(&order) {
+                sort_order_mask |= 1u64 << order;
+            }
+        }
+        let need_fix_linearize = (1u64 << sort_order_count.min(63)) != sort_order_mask + 1;
+        let need_fix_single_sort_order =
+            sort_order_count > 1 && self.flags & table_flags::SORT_MULTI == 0;
+        if need_fix_linearize || need_fix_single_sort_order {
+            let mut fixed_mask = 0u64;
+            for sort_n in 0..sort_order_count {
+                let mut smallest: Option<usize> = None;
+                for n in 0..columns {
+                    if fixed_mask & (1u64 << n) != 0
+                        || self.sort_orders.get(n).copied().unwrap_or(-1) == -1
+                    {
+                        continue;
+                    }
+                    if smallest.is_none_or(|s| {
+                        self.sort_orders[n] < self.sort_orders.get(s).copied().unwrap_or(-1)
+                    }) {
+                        smallest = Some(n);
+                    }
+                }
+                let Some(column_n) = smallest else { break };
+                fixed_mask |= 1u64 << column_n;
+                self.sort_orders[column_n] = sort_n as i32;
+                if need_fix_single_sort_order {
+                    for (n, order) in self.sort_orders.iter_mut().enumerate().take(columns) {
+                        if n != column_n {
+                            *order = -1;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        // `TableSortSpecsSanitize`'s fallback: the first sortable column takes the only order.
+        let mut count = self
+            .sort_orders
+            .iter()
+            .take(columns)
+            .filter(|order| **order != -1)
+            .count();
+        if count == 0 {
+            if let Some(n) = self
+                .columns
+                .iter()
+                .position(|column| column.flags & column_flags::NO_SORT == 0)
+            {
+                self.sort_orders[n] = 0;
+                self.sort_directions[n] = 1;
+                count = 1;
+            }
+        }
+        // `TableSortSpecsBuild`: one entry per sorted column, indexed by its sort order.
+        let mut specs: Vec<(usize, i32)> = Vec::with_capacity(count);
+        for n in 0..columns {
+            let order = self.sort_orders.get(n).copied().unwrap_or(-1);
+            if order == -1 || order as usize >= count {
+                continue;
+            }
+            let direction = self.sort_directions.get(n).copied().unwrap_or(0);
+            if specs.len() <= order as usize {
+                specs.resize(order as usize + 1, (n, direction));
+            } else {
+                specs[order as usize] = (n, direction);
+            }
+        }
+        self.sort_specs = specs;
+        self.sort_specs_dirty = !self.sort_specs.is_empty();
+    }
+
+    /// `column->SortOrder`: where the column sits in the specs, `-1` when it is not sorted.
+    pub fn sort_order(&self, column: usize) -> i32 {
+        self.sort_orders.get(column).copied().unwrap_or(-1)
+    }
+
+    /// `column->SortDirection`: `0` none, `1` ascending, `2` descending.
+    pub fn sort_direction(&self, column: usize) -> i32 {
+        self.sort_directions.get(column).copied().unwrap_or(0)
     }
 
     /// `TableUpdateLayout`, for the paths the first cut supports: every column is `WidthFixed` with
@@ -329,29 +466,10 @@ impl Table {
             }
         }
 
-        // `TableUpdateSpecs`: the columns that asked for the default sort become the first specs, in
-        // column order, and the specs are marked dirty so the caller re-sorts.
-        if self.flags & table_flags::SORTABLE != 0 && self.sort_specs.is_empty() {
-            for (n, column) in self.columns.iter().enumerate() {
-                if column.flags & column_flags::DEFAULT_SORT != 0
-                    && column.flags & column_flags::NO_SORT == 0
-                {
-                    self.sort_specs.push((n, 1));
-                }
-            }
-            // `TableSortSpecsSanitize`: with no `DefaultSort` the first sortable column takes over, so
-            // a sortable table always starts with exactly one spec.
-            if self.sort_specs.is_empty() {
-                if let Some(n) = self
-                    .columns
-                    .iter()
-                    .position(|column| column.flags & column_flags::NO_SORT == 0)
-                {
-                    self.sort_specs.push((n, 1));
-                }
-            }
-            self.sort_specs_dirty = !self.sort_specs.is_empty();
-        }
+        // `TableUpdateSpecs` and `TableSortSpecsBuild`: the columns that asked for the default sort
+        // become the specs, their sort orders are linearized, and the specs are marked dirty so the
+        // caller re-sorts.
+        self.build_sort_specs();
 
         // [Part 3b] The request of each column and, for the stretch ones, its weight.
         let mut sum_width_requests = 0.0f32;
@@ -434,7 +552,7 @@ impl Table {
             // `TableUpdateLayout` clears the status bits and marks the column it lays out.
             column.flags &= !column_flags::STATUS_MASK;
             column.flags |= column_flags::IS_ENABLED | column_flags::IS_VISIBLE;
-            if self.sort_specs.iter().any(|(sorted, _)| *sorted == n) {
+            if self.sort_orders.get(n).copied().unwrap_or(-1) != -1 {
                 column.flags |= column_flags::IS_SORTED;
             }
             column.next_enabled_column = if (n as i32) + 1 < columns_count {

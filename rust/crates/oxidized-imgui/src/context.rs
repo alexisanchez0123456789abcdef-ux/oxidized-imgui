@@ -18,6 +18,9 @@ const ARROW_DOWN_SIN: f32 = 1.0;
 /// `g_ImGuiDirCosSin[ImGuiDir_Right]`: the arrow a collapsed window shows.
 const ARROW_RIGHT_COS: f32 = 1.0;
 const ARROW_RIGHT_SIN: f32 = 0.0;
+/// `g_ImGuiDirCosSin[ImGuiDir_Up]`: the sort arrow of a column sorted ascending.
+const ARROW_UP_COS: f32 = 0.0;
+const ARROW_UP_SIN: f32 = -1.0;
 
 /// `Shortcut(ImGuiMod_Ctrl | key)` reduced to the ones a text field acts on.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -261,6 +264,10 @@ pub struct Context {
     table_last_outer_height: std::collections::HashMap<String, f32>,
     /// `table_instance->HoveredRowNext` from the last frame, which is what the next layout reads.
     table_hovered_row_next: std::collections::HashMap<String, i32>,
+    /// `column->SortOrder` and `column->SortDirection` from the last frame a table was built, by table
+    /// identifier: the reference keeps them in the `ImGuiTable` it reuses (and reloads them from its
+    /// settings), so a sort applied by a click survives to the frames that draw it.
+    table_sort_state: std::collections::HashMap<String, (Vec<i32>, Vec<i32>)>,
     /// `g.ActiveId` for the header cells: the one held with the mouse, until the button is released.
     header_active: Option<(String, usize)>,
     /// Per-window state between frames: position, size, scroll, content size and flags.
@@ -386,6 +393,7 @@ impl Default for Context {
             header_hovered_next: None,
             table_last_outer_height: std::collections::HashMap::new(),
             table_hovered_row_next: std::collections::HashMap::new(),
+            table_sort_state: std::collections::HashMap::new(),
             header_active: None,
             table_host: None,
             table_indices: Vec::new(),
@@ -3136,6 +3144,16 @@ impl Context {
         if let Some(&next) = self.table_hovered_row_next.get(id) {
             table.hovered_row_next = next;
         }
+        // `TableLoadSettings`: the sort orders the table ended the previous frame with (the reference
+        // keeps them in the table it reuses and reloads them from its `.ini`), so the `DefaultSort`
+        // flags only pick the starting state of a table that has none.
+        if let Some((orders, directions)) = self.table_sort_state.get(id) {
+            if orders.len() == columns && directions.len() == columns {
+                table.sort_orders.clone_from(orders);
+                table.sort_directions.clone_from(directions);
+                table.sort_state_loaded = true;
+            }
+        }
         self.table = Some(table);
         self.table_id = Some(id.to_string());
         true
@@ -3287,9 +3305,20 @@ impl Context {
     /// `ImGui::TableHeader`: the label of one header cell. Its item is the whole cell, not the text
     /// box, which is what `GetItemRect` reports while the label is being submitted.
     ///
-    /// Hover, click, sorting and the reorder drag are not ported: this only lays the label out.
+    /// A sortable column reserves the right end of the cell for the sort arrow and draws it, with the
+    /// sort order number when the spec is not the first one. Hover, the click that changes the specs
+    /// and the reorder drag are not ported yet.
     pub fn table_header(&mut self, label: &str) {
-        let (cell, row_min_height, row_padding_y, column_n) = {
+        let (
+            cell,
+            row_min_height,
+            row_padding_y,
+            column_n,
+            sortable,
+            no_sort,
+            sort_order,
+            sort_direction,
+        ) = {
             let Some(table) = self.table.as_ref() else {
                 return;
             };
@@ -3297,11 +3326,20 @@ impl Context {
                 return;
             }
             let column_n = table.current_column as usize;
+            let column_flags = table
+                .columns
+                .get(column_n)
+                .map(|column| column.flags)
+                .unwrap_or(0);
             (
                 table.cell_rect(column_n),
                 table.row_min_height,
                 table.row_cell_padding_y,
                 column_n,
+                table.flags & crate::tables::table_flags::SORTABLE != 0,
+                column_flags & crate::tables::column_flags::NO_SORT != 0,
+                table.sort_order(column_n),
+                table.sort_direction(column_n),
             )
         };
         // `FindRenderedTextEnd`: everything after "##" identifies the column but is not drawn.
@@ -3324,6 +3362,33 @@ impl Context {
                     .max(cell.0.y + label_height + self.style.cell_padding.y * 2.0),
             },
         );
+        // `TableHeader`'s ideal sort arrow: every sortable column reserves it, whether or not it is
+        // the sorted one, and a spec that is not the first one also gets its order number.
+        const ARROW_SCALE: f32 = 0.65;
+        let mut w_arrow = 0.0f32;
+        let mut w_sort_text = 0.0f32;
+        let mut sort_arrow = false;
+        let mut sort_order_suf = String::new();
+        if sortable && !no_sort {
+            w_arrow = (font.size * ARROW_SCALE + self.style.frame_padding.x).trunc();
+            if sort_order != -1 {
+                sort_arrow = true;
+            }
+            if sort_order > 0 {
+                sort_order_suf = (sort_order + 1).to_string();
+                w_sort_text = self.style.item_inner_spacing.x
+                    + font.calc_text_size(&sort_order_suf, font.size).x;
+            }
+        }
+        // `ellipsis_max`: the label is clipped where the arrow starts. The clipping itself is not
+        // modelled yet, because no golden reaches a label that long.
+        let _ellipsis_max = (cell.1.x
+            - if sort_arrow {
+                w_arrow + w_sort_text
+            } else {
+                0.0
+            })
+        .max(label_pos.x);
         // `TableHeader` hover: the header is an `AllowOverlap` item, so it only reports hover when it
         // already was the hovered item on the frame before; the mouse over it latches the id for the
         // next frame either way.
@@ -3361,6 +3426,43 @@ impl Context {
         if let Some(bg) = bg {
             self.table_set_cell_bg_color(bg);
         }
+        // The sort order number, faded to 70 %, and the arrow, both before the label.
+        if sort_arrow {
+            let mut x = cell.0.x.max(cell.1.x - w_arrow - w_sort_text);
+            let y = label_pos.y;
+            if sort_order > 0 {
+                let faded = self.style.color_u32_alpha(crate::style::Col::Text, 0.70);
+                self.draw_list.add_text(
+                    &font,
+                    font.size,
+                    Vec2 {
+                        x: x + self.style.item_inner_spacing.x,
+                        y,
+                    },
+                    faded,
+                    &sort_order_suf,
+                );
+                x += w_sort_text;
+            }
+            let (cos_a, sin_a) = if sort_direction == 2 {
+                (ARROW_DOWN_COS, ARROW_DOWN_SIN)
+            } else {
+                (ARROW_UP_COS, ARROW_UP_SIN)
+            };
+            self.draw_list.add_arrow(
+                Vec2 {
+                    x: x + font.size * (1.0 - ARROW_SCALE) * 0.5,
+                    y,
+                },
+                self.style.color_u32(crate::style::Col::Text),
+                cos_a,
+                sin_a,
+                ARROW_SCALE,
+                font.size,
+                self.style.symbol_arrow_size_factor,
+                self.style.symbol_arrow_thickness_factor,
+            );
+        }
         let colour = self.style.color_u32(crate::style::Col::Text);
         self.draw_list
             .add_text(&font, font.size, label_pos, colour, shown);
@@ -3392,7 +3494,17 @@ impl Context {
 
     /// `ImGui::TableGetSortSpecs`: the columns to sort by and whether they changed, or `None` when the
     /// table is not sortable. Reading them clears the dirty flag, as the reference does.
+    ///
+    /// The reference locks the layout first, because building the specs is what linearizes the sort
+    /// orders; that also makes the call usable before the first row.
     pub fn table_get_sort_specs(&mut self) -> Option<(Vec<(usize, i32)>, bool)> {
+        self.table.as_ref()?;
+        if let Some(mut table) = self.table.take() {
+            if table.flags & crate::tables::table_flags::SORTABLE != 0 {
+                self.table_lock_layout(&mut table);
+            }
+            self.table = Some(table);
+        }
         let table = self.table.as_mut()?;
         if table.flags & crate::tables::table_flags::SORTABLE == 0 {
             return None;
@@ -3604,7 +3716,13 @@ impl Context {
                 .iter()
                 .map(|column| column.content_width)
                 .collect();
-            self.table_content_max_x.insert(id, extents);
+            self.table_content_max_x.insert(id.clone(), extents);
+            // `TableSaveSettings` for the sort bits: the orders and directions the next frame starts
+            // from, kept by table identifier like the content extents.
+            self.table_sort_state.insert(
+                id,
+                (table.sort_orders.clone(), table.sort_directions.clone()),
+            );
         }
         // Back at the table's top-left and at the host's line start, then laid out as one item.
         if let Some(window) = self.windows.last_mut() {
