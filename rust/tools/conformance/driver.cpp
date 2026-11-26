@@ -5218,6 +5218,14 @@ static void DumpItemWidth()
         mx = PSub(ImGui::GetItemRectMax(), wpos);
         printf("frame %d popped item %08x %08x %08x %08x\n", frame, Bits(mn.x), Bits(mn.y),
             Bits(mx.x), Bits(mx.y));
+        // A negative width is that much less than the content available from the cursor.
+        ImGui::PushItemWidth(-20.0f);
+        ImGui::LabelText("N", "42");
+        mn = PSub(ImGui::GetItemRectMin(), wpos);
+        mx = PSub(ImGui::GetItemRectMax(), wpos);
+        printf("frame %d negative item %08x %08x %08x %08x\n", frame, Bits(mn.x), Bits(mn.y),
+            Bits(mx.x), Bits(mx.y));
+        ImGui::PopItemWidth();
         ImGui::End();
         if (frame == 1)
             DumpDrawListBody(*dl);
