@@ -65,8 +65,10 @@ pub mod column_flags {
     pub const IS_ENABLED: u32 = 1 << 24;
     /// `ImGuiTableColumnFlags_IsVisible`.
     pub const IS_VISIBLE: u32 = 1 << 25;
+    /// `ImGuiTableColumnFlags_IsHovered`: the column under the mouse.
+    pub const IS_HOVERED: u32 = 1 << 27;
     /// `ImGuiTableColumnFlags_StatusMask_`, as far as this port sets it.
-    pub const STATUS_MASK: u32 = 1 << 24 | 1 << 25;
+    pub const STATUS_MASK: u32 = 1 << 24 | 1 << 25 | 1 << 27;
 }
 
 /// `TABLE_BORDER_SIZE`.
