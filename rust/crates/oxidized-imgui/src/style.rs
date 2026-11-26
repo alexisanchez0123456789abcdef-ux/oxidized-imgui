@@ -288,3 +288,34 @@ impl Default for Style {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `GetColorU32(vec4)` packs in ABGR order with `+ 0.5` rounding: pure red is `0xFF0000FF`.
+    #[test]
+    fn color_u32_from_packs_abgr() {
+        let style = Style::default();
+        assert_eq!(style.color_u32_from([1.0, 0.0, 0.0, 1.0]), 0xFF00_00FF);
+        assert_eq!(style.color_u32_from([0.0, 1.0, 0.0, 1.0]), 0xFF00_FF00);
+    }
+
+    /// `Style::Alpha` multiplies the alpha channel, which is what `BeginDisabled` relies on.
+    #[test]
+    fn style_alpha_scales_every_colour() {
+        let mut style = Style::default();
+        assert_eq!(style.color_u32(Col::Text), 0xFFFF_FFFF);
+        style.alpha = style.disabled_alpha;
+        assert_eq!(style.color_u32(Col::Text), 0x99FF_FFFF);
+        assert_eq!(style.color_u32_from([1.0, 1.0, 1.0, 1.0]), 0x99FF_FFFF);
+    }
+
+    /// The `Text` colour at 0.70 rounds to `0xB3`, not `0xB2`: the conversion goes through floats
+    /// and adds `0.5`, which is why `color_u32_alpha` exists instead of an integer scale.
+    #[test]
+    fn color_u32_alpha_rounds_like_the_reference() {
+        let style = Style::default();
+        assert_eq!(style.color_u32_alpha(Col::Text, 0.70), 0xB3FF_FFFF);
+    }
+}
