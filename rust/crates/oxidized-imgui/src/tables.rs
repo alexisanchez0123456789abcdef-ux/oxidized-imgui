@@ -24,10 +24,13 @@ pub mod table_flags {
     pub const NO_PAD_OUTER_X: u32 = 1 << 22;
     /// `ImGuiTableFlags_NoPadInnerX`.
     pub const NO_PAD_INNER_X: u32 = 1 << 23;
+    /// `ImGuiTableFlags_Resizable`: columns can be resized, so a fixed one keeps its request
+    /// instead of tracking its contents.
+    pub const RESIZABLE: u32 = 1 << 0;
     /// `ImGuiTableFlags_RowBg`: every other row gets `TableRowBgAlt`.
     pub const ROW_BG: u32 = 1 << 6;
     /// `ImGuiTableFlags_SizingMask_`: the bits that pick the table sizing policy.
-    pub const SIZING_MASK: u32 = 4 << 13;
+    pub const SIZING_MASK: u32 = 7 << 13;
     /// `ImGuiTableFlags_SizingFixedFit`: the default policy.
     pub const SIZING_FIXED_FIT: u32 = 1 << 13;
     /// `ImGuiTableFlags_SizingFixedSame`.
@@ -63,8 +66,13 @@ pub struct TableColumn {
     /// `column->NameOffset` resolved: the label `TableSetupColumn` was given.
     pub name: String,
     pub flags: u32,
-    /// `column->WidthRequest`: what `TableSetupColumn` asked for.
+    /// `column->WidthRequest`: what the layout will give the column.
     pub width_request: f32,
+    /// `column->InitStretchWeightOrWidth`: what `TableSetupColumn` asked for, kept apart because the
+    /// request is rewritten every frame.
+    pub init_width: f32,
+    /// `column->WidthAuto`: the width the column's contents reached on the previous frame.
+    pub width_auto: f32,
     /// `column->WidthGiven`: what the layout gave it.
     pub width_given: f32,
     /// `column->StretchWeight`: the share of the leftover width a stretch column asks for.
@@ -82,6 +90,9 @@ pub struct TableColumn {
     /// `column->ContentMaxXUnfrozen`: the furthest the column's content reached this frame, which
     /// decides whether the column can share a draw command with the others.
     pub content_max_x: f32,
+    /// How wide the column's content turned out to be, kept for the next frame's width: the
+    /// reference derives it from the extents it keeps in the reused `ImGuiTable`.
+    pub content_width: f32,
     /// `column->NextEnabledColumn`: the next visible column, `-1` for the last one.
     pub next_enabled_column: i32,
 }
@@ -163,6 +174,7 @@ impl Table {
             name: label.to_string(),
             flags,
             width_request: width,
+            init_width: width,
             ..TableColumn::default()
         };
         self.decl_columns += 1;
@@ -230,6 +242,7 @@ impl Table {
         // `SizingFixedFit` when the flags say nothing.
         let policy = self.flags & table_flags::SIZING_MASK;
         let min_column_width = frame_padding_x.max(1.0);
+        let resizable = self.flags & table_flags::RESIZABLE != 0;
         let mut sum_width_requests = 0.0f32;
         let mut stretch_sum_weights = 0.0f32;
         for column in self.columns.iter_mut() {
@@ -243,6 +256,17 @@ impl Table {
                 };
             }
             if column.flags & column_flags::WIDTH_FIXED != 0 {
+                // `TableGetColumnWidthAuto` from the extents the previous frame left behind: a fixed
+                // column that cannot be resized tracks its contents, unless it was declared with an
+                // explicit width, which it then keeps.
+                let content_width = column.content_width.max(min_column_width);
+                column.width_auto = content_width;
+                if column.init_width > 0.0 && !resizable {
+                    column.width_auto = column.init_width;
+                }
+                if !resizable {
+                    column.width_request = column.width_auto;
+                }
                 sum_width_requests += column.width_request;
             } else {
                 // `InitStretchWeightOrWidth` is the weight when the column asked for one; the

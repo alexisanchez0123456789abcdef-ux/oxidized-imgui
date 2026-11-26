@@ -246,6 +246,11 @@ pub struct Context {
     table_bg_indices: Vec<crate::draw_list::ImDrawIdx>,
     /// Where the current cell's indices start in the list, so they can be moved to their channel.
     cell_index_start: usize,
+    /// The identifier of the table being built, which keys the per-column content extents that have
+    /// to survive to the next frame (the reference keeps them in the `ImGuiTable` it reuses).
+    table_id: Option<String>,
+    /// `column->ContentMaxX*` from the last frame a table was built, by table identifier.
+    table_content_max_x: std::collections::HashMap<String, Vec<f32>>,
     /// Per-window state between frames: position, size, scroll, content size and flags.
     memory: Vec<WindowMemory>,
     /// `SetNextWindowScroll` for the window about to start.
@@ -363,6 +368,8 @@ impl Default for Context {
             time: 0.0,
             windows: Vec::new(),
             table: None,
+            table_id: None,
+            table_content_max_x: std::collections::HashMap::new(),
             table_host: None,
             table_indices: Vec::new(),
             table_bg_indices: Vec::new(),
@@ -3105,6 +3112,7 @@ impl Context {
         self.table_indices = vec![Vec::new(); columns];
         self.table_bg_indices.clear();
         self.table = Some(crate::tables::Table::new(flags, columns, outer_rect));
+        self.table_id = Some(id.to_string());
         true
     }
 
@@ -3112,8 +3120,19 @@ impl Context {
     ///
     /// The `label` is the column name the headers draw.
     pub fn table_setup_column(&mut self, label: &str, flags: u32, width: f32) {
+        let extents = self
+            .table_id
+            .as_ref()
+            .and_then(|id| self.table_content_max_x.get(id))
+            .cloned();
         if let Some(table) = self.table.as_mut() {
+            let index = table.decl_columns;
             table.setup_column(label, flags, width);
+            if let Some(column) = table.columns.get_mut(index) {
+                if let Some(extent) = extents.and_then(|e| e.get(index).copied()) {
+                    column.content_width = extent;
+                }
+            }
         }
     }
 
@@ -3462,6 +3481,16 @@ impl Context {
             self.draw_list.start_command(window_clip);
         }
         self.pop_id();
+        // The content extents are what sizes the columns on the next frame, so they outlive the
+        // table instance; the reference keeps them in the `ImGuiTable` it reuses.
+        if let Some(id) = self.table_id.take() {
+            let extents = table
+                .columns
+                .iter()
+                .map(|column| column.content_width)
+                .collect();
+            self.table_content_max_x.insert(id, extents);
+        }
         // Back at the table's top-left and at the host's line start, then laid out as one item.
         if let Some(window) = self.windows.last_mut() {
             window.cursor = table.outer_rect.0;
@@ -3599,6 +3628,7 @@ impl Context {
         let column = table.current_column.max(0) as usize;
         if let Some(col) = table.columns.get_mut(column) {
             col.content_max_x = col.content_max_x.max(max_x);
+            col.content_width = col.content_max_x - col.work_min_x;
         }
         let column = table.current_column.max(0) as usize;
         let tail = self.draw_list.idx_buffer.split_off(self.cell_index_start);
