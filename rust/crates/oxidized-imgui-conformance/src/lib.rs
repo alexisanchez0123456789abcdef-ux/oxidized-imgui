@@ -133,6 +133,7 @@ pub const SCENARIOS: &[&str] = &[
     "same_line_offset",
     "arrow_button",
     "rect_filled_aa",
+    "progress_bar_indeterminate",
     "window_scroll",
     "window_scrollbar",
     "window_scrollbar_drag",
@@ -7659,6 +7660,68 @@ pub fn rect_filled_aa_dump() -> String {
     out
 }
 
+/// The `progress_bar_indeterminate` scenario: a negative fraction animates a strip 20 % of the bar
+/// wide, with fixed fractions so the result does not depend on time.
+pub fn progress_bar_indeterminate_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2, WindowFlags};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/progress_bar_indeterminate.glyphs.txt"
+    );
+    let glyphs = std::fs::read_to_string(path).expect("progress bar indeterminate fixture");
+    let font = Font::from_pinned(&glyphs).expect("font fixture");
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario progress_bar_indeterminate\n");
+
+    for frame in 0..2 {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+        ctx.io_mut().mouse_down[0] = false;
+        ctx.begin_frame();
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+        );
+        ctx.begin_window_ex(
+            "W",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+            true,
+        );
+        let window_pos = ctx.window().pos;
+        let report = |ctx: &Context, out: &mut String, tag: &str| {
+            let (min, max) = (ctx.item_rect_min(), ctx.item_rect_max());
+            out.push_str(&format!(
+                "frame {frame} {tag} {:08x} {:08x} {:08x} {:08x}\n",
+                bits(min.x - window_pos.x),
+                bits(min.y - window_pos.y),
+                bits(max.x - window_pos.x),
+                bits(max.y - window_pos.y)
+            ));
+        };
+        ctx.progress_bar(-1.25, Some(Vec2 { x: 200.0, y: 20.0 }), None);
+        report(&ctx, &mut out, "quarter");
+        ctx.progress_bar(-1.75, Some(Vec2 { x: 200.0, y: 20.0 }), None);
+        report(&ctx, &mut out, "threequarters");
+        ctx.end_window();
+        if frame == 1 {
+            let body = dump("progress_bar_indeterminate", ctx.draw_list());
+            for line in body.lines().skip(2) {
+                out.push_str(&format!("{line}\n"));
+            }
+        }
+        ctx.end_frame();
+    }
+    out
+}
+
 /// The `windows_move` scenario: dragging one window by its title bar and by its body, and the clamp
 /// that keeps it reachable when it is dragged off the display.
 ///
@@ -9630,6 +9693,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "same_line_offset" => Some(same_line_offset_dump()),
         "arrow_button" => Some(arrow_button_dump()),
         "rect_filled_aa" => Some(rect_filled_aa_dump()),
+        "progress_bar_indeterminate" => Some(progress_bar_indeterminate_dump()),
         "window_scroll" => Some(window_scroll_dump()),
         "window_scrollbar" => Some(window_scrollbar_dump()),
         "window_scrollbar_drag" => Some(window_scrollbar_drag_dump()),
