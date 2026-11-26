@@ -509,6 +509,16 @@ impl DrawList {
     /// Layout matches the reference: the inner ring first, then one outer vertex per edge, with the
     /// first edge's two triangles patched to wrap onto the last outer vertex.
     pub fn add_convex_poly_filled_aa(&mut self, points: &[Vec2], col: ImU32) -> u32 {
+        self.add_convex_poly_filled(points, col, 0)
+    }
+
+    /// The full `ImDrawList::AddConvexPolyFilled`, anti-aliased.
+    ///
+    /// `flags` only matters for `ImDrawFlags_JoinMiter`: with it every corner is a plain miter, which
+    /// is what `PathFillConvex(col, ImDrawFlags_JoinMiter)` asks for (circles and rounded
+    /// rectangles). Without it a corner whose miter would overshoot gets a bevel, up to two of them,
+    /// which is the path a rectangle fill takes.
+    pub fn add_convex_poly_filled(&mut self, points: &[Vec2], col: ImU32, flags: u32) -> u32 {
         const MITER_ANGLE_LIMIT: f32 = -0.999_961_9;
         const MITER_LIMIT_SQR: f32 = 4.0 * 4.0;
         const MAX_BEVELS: i32 = 2;
@@ -518,7 +528,7 @@ impl DrawList {
         if n < 3 || (col & A_MASK) == 0 {
             return 0;
         }
-
+        let miters_only = flags & draw_flags::JOIN_MITER != 0;
         let half_aa = self.fringe_scale * 0.5;
         let col_trans = col & !A_MASK;
 
@@ -568,7 +578,7 @@ impl DrawList {
             let mut offset_y = (n0.y + n1.y) * miter_scale;
 
             let miter_distance_sqr = offset_x * offset_x + offset_y * offset_y;
-            let bevel = miter_distance_sqr > MITER_LIMIT_SQR;
+            let bevel = !miters_only && miter_distance_sqr > MITER_LIMIT_SQR;
             if bevel {
                 // Keep the worst-case overshoot no bigger than the polygon itself.
                 let reference = half_aa * half_aa;
@@ -799,7 +809,266 @@ impl DrawList {
         points
     }
 
-    /// `ImDrawList::_AddLine` with the line textures of the atlas, which is the path a draw list
+    /// `IM_HAS_ROUNDING`: a radius this small is drawn as a point, not as a polygon.
+    fn has_rounding(&self, radius: f32) -> bool {
+        radius >= 0.25 * self.fringe_scale
+    }
+
+    /// `ImDrawList::_CalcCircleAutoSegmentCount`: the cached count for this radius, or the formula
+    /// past the table. The radius is scaled back to screen pixels before the lookup.
+    fn calc_circle_auto_segment_count(&self, radius: f32) -> i32 {
+        let radius = radius * (1.0 / self.fringe_scale);
+        let radius_idx = (radius + 0.999) as i32;
+        if (0..CIRCLE_SEGMENT_COUNTS.len() as i32).contains(&radius_idx) {
+            return CIRCLE_SEGMENT_COUNTS[radius_idx as usize] as i32;
+        }
+        circle_segment_count(radius, CIRCLE_TESS_MAX_ERROR)
+    }
+
+    /// `ImDrawList::_PathArcToFastEx`: the sampled points of an arc. `a_step <= 0` asks for the
+    /// automatic step of this radius.
+    fn path_arc_to_fast_ex(
+        &self,
+        out: &mut Vec<Vec2>,
+        center: Vec2,
+        radius: f32,
+        a_min_sample: i32,
+        a_max_sample: i32,
+        a_step: i32,
+    ) {
+        if !self.has_rounding(radius) {
+            out.push(center);
+            return;
+        }
+        let step = if a_step <= 0 {
+            corner_arc_step_and_count(self.calc_circle_auto_segment_count(radius)).0
+        } else {
+            a_step.clamp(1, ARC_SAMPLE_MAX / 4)
+        };
+        push_arc_samples(out, center, radius, a_min_sample, a_max_sample, step);
+    }
+
+    /// `ImDrawList::_PathArcToN`: `num_segments` even steps between the two angles, both ends
+    /// included. This is the path that needs `cos`/`sin`, so no golden can pin it across platforms
+    /// yet.
+    fn path_arc_to_n(
+        &self,
+        out: &mut Vec<Vec2>,
+        center: Vec2,
+        radius: f32,
+        a_min: f32,
+        a_max: f32,
+        num_segments: i32,
+    ) {
+        if !self.has_rounding(radius) {
+            out.push(center);
+            return;
+        }
+        for i in 0..=num_segments {
+            let a = a_min + (i as f32 / num_segments as f32) * (a_max - a_min);
+            out.push(Vec2 {
+                x: center.x + a.cos() * radius,
+                y: center.y + a.sin() * radius,
+            });
+        }
+    }
+
+    /// `ImDrawList::PathArcTo`: explicit segments, the fast arc table below the cutoff radius and
+    /// exact trigonometry above it. The cutoff branch is the one a circle takes.
+    fn path_arc_to(
+        &self,
+        out: &mut Vec<Vec2>,
+        center: Vec2,
+        radius: f32,
+        a_min: f32,
+        a_max: f32,
+        num_segments: i32,
+    ) {
+        if !self.has_rounding(radius) {
+            out.push(center);
+            return;
+        }
+        if num_segments > 0 {
+            self.path_arc_to_n(out, center, radius, a_min, a_max, num_segments);
+            return;
+        }
+        if radius <= ARC_FAST_RADIUS_CUTOFF {
+            let a_is_reverse = a_max < a_min;
+            let auto_seg_count = self.calc_circle_auto_segment_count(radius);
+            let (arc_step, arc_step_count) = corner_arc_step_and_count(auto_seg_count);
+            let arc_seg_count = arc_step_count * 4;
+            let two_pi = core::f32::consts::PI * 2.0;
+            let a_min_sample_f = arc_seg_count as f32 * a_min / two_pi;
+            let a_max_sample_f = arc_seg_count as f32 * a_max / two_pi;
+            let a_min_sample = (if a_is_reverse {
+                a_min_sample_f.floor()
+            } else {
+                a_min_sample_f.ceil()
+            }) as i32
+                * arc_step;
+            let a_max_sample = (if a_is_reverse {
+                a_max_sample_f.ceil()
+            } else {
+                a_max_sample_f.floor()
+            }) as i32
+                * arc_step;
+            let a_mid_samples = if a_is_reverse {
+                (a_min_sample - a_max_sample).max(0)
+            } else {
+                (a_max_sample - a_min_sample).max(0)
+            };
+            let a_min_segment_angle = a_min_sample as f32 * two_pi / ARC_SAMPLE_MAX as f32;
+            let a_max_segment_angle = a_max_sample as f32 * two_pi / ARC_SAMPLE_MAX as f32;
+            // The exact ends are only emitted when the table sample does not already land on them.
+            let a_emit_start = (a_min_segment_angle - a_min).abs() >= 1e-5;
+            let a_emit_end = (a_max - a_max_segment_angle).abs() >= 1e-5;
+            if a_emit_start {
+                out.push(Vec2 {
+                    x: center.x + a_min.cos() * radius,
+                    y: center.y + a_min.sin() * radius,
+                });
+            }
+            if a_mid_samples > 0 {
+                self.path_arc_to_fast_ex(out, center, radius, a_min_sample, a_max_sample, arc_step);
+            }
+            if a_emit_end {
+                out.push(Vec2 {
+                    x: center.x + a_max.cos() * radius,
+                    y: center.y + a_max.sin() * radius,
+                });
+            }
+        } else {
+            let arc_length = (a_max - a_min).abs();
+            let circle_segment_count = self.calc_circle_auto_segment_count(radius);
+            let arc_segment_count = ((circle_segment_count as f32 * arc_length
+                / (core::f32::consts::PI * 2.0))
+                .ceil() as i32)
+                .max(1);
+            self.path_arc_to_n(out, center, radius, a_min, a_max, arc_segment_count);
+        }
+    }
+
+    /// `ImDrawList::AddCircleFilled`: a filled disc with the automatic segment count when
+    /// `num_segments` is 0. Below `ArcFastRadiusCutoff` it samples the fast arc table, which is why
+    /// it needs no trigonometry.
+    pub fn add_circle_filled(&mut self, center: Vec2, radius: f32, col: ImU32, num_segments: i32) {
+        const A_MASK: u32 = 0xFF00_0000;
+        if (col & A_MASK) == 0 {
+            return;
+        }
+        // The smallest radius whose edge fringe does not overlap itself.
+        let min_radius = self.fringe_scale * REF_1_41421356 * 0.5;
+        let mut radius = radius;
+        let mut col = col;
+        if radius < min_radius {
+            if radius < (1.0 / 255.0) * min_radius {
+                return;
+            }
+            col = alpha_multiply(col, radius / min_radius);
+            radius = min_radius;
+        }
+
+        let mut path: Vec<Vec2> = Vec::new();
+        let mut num_segments = num_segments;
+        if num_segments <= 0 && radius <= ARC_FAST_RADIUS_CUTOFF {
+            self.path_arc_to_fast_ex(&mut path, center, radius, 0, ARC_SAMPLE_MAX, 0);
+            // The full circle ends where it starts: the reference drops the duplicate point.
+            path.pop();
+        } else {
+            if num_segments <= 0 {
+                num_segments = self.calc_circle_auto_segment_count(radius);
+            }
+            num_segments = num_segments.clamp(CIRCLE_SEGMENT_MIN, CIRCLE_SEGMENT_MAX);
+            // A closed shape repeats no vertex, so the last segment is left out of the count.
+            let a_max =
+                core::f32::consts::PI * 2.0 * (num_segments as f32 - 1.0) / num_segments as f32;
+            self.path_arc_to(&mut path, center, radius, 0.0, a_max, num_segments - 1);
+        }
+        self.add_convex_poly_filled(&path, col, draw_flags::JOIN_MITER);
+    }
+
+    /// `ImDrawList::AddCircle` with the default inside stroke position.
+    pub fn add_circle(
+        &mut self,
+        center: Vec2,
+        radius: f32,
+        col: ImU32,
+        num_segments: i32,
+        thickness: f32,
+    ) {
+        self.add_circle_ex(center, radius, col, num_segments, thickness, 0);
+    }
+
+    /// `ImDrawList::AddCircle` with explicit flags: the outline of a circle, which is a closed
+    /// polyline over the same path a fill uses.
+    pub fn add_circle_ex(
+        &mut self,
+        center: Vec2,
+        radius: f32,
+        col: ImU32,
+        num_segments: i32,
+        thickness: f32,
+        flags_in: u32,
+    ) {
+        const A_MASK: u32 = 0xFF00_0000;
+        if (col & A_MASK) == 0 {
+            return;
+        }
+        let flags = flags_in | self.flags;
+        let mut stroke = stroke_pos(flags, draw_flags::STROKE_INSIDE);
+        let mut radius = radius;
+        if stroke == draw_flags::STROKE_LEGACY {
+            radius -= 0.5;
+            stroke = draw_flags::STROKE_CENTER;
+        }
+        radius = radius.max(0.01);
+
+        let outer_radius = if stroke == draw_flags::STROKE_CENTER {
+            radius + thickness * 0.5
+        } else if stroke == draw_flags::STROKE_CENTER_BIASED {
+            radius + self.center_biased_offset(thickness)
+        } else if stroke == draw_flags::STROKE_OUTSIDE {
+            radius + thickness
+        } else {
+            radius
+        };
+        if outer_radius <= thickness {
+            // The stroke swallowed the circle: the reference draws a filled disc instead.
+            self.add_circle_filled(center, outer_radius, col, num_segments);
+            return;
+        }
+
+        let mut path: Vec<Vec2> = Vec::new();
+        let mut num_segments = num_segments;
+        if num_segments <= 0 && outer_radius <= ARC_FAST_RADIUS_CUTOFF {
+            // The step comes from the outer radius, to agree with a rounded rectangle of that size.
+            let a_step = ARC_SAMPLE_MAX / self.calc_circle_auto_segment_count(outer_radius);
+            self.path_arc_to_fast_ex(&mut path, center, radius, 0, ARC_SAMPLE_MAX, a_step);
+            path.pop();
+        } else {
+            if num_segments <= 0 {
+                num_segments = self.calc_circle_auto_segment_count(outer_radius);
+            }
+            num_segments = num_segments.clamp(3, CIRCLE_SEGMENT_MAX);
+            let a_max =
+                core::f32::consts::PI * 2.0 * (num_segments as f32 - 1.0) / num_segments as f32;
+            self.path_arc_to(&mut path, center, radius, 0.0, a_max, num_segments - 1);
+        }
+
+        if path.len() >= 3 {
+            // Clamp the inner stroke expansion so it cannot fold over the edge of the polygon.
+            let edge_dist = radius * approx_apothem(path.len() as i32);
+            self.add_polyline_max(
+                &path,
+                col,
+                thickness,
+                draw_flags::CLOSED | draw_flags::JOIN_MITER | stroke,
+                edge_dist,
+            );
+        }
+    }
+
+    /// `ImDrawList::AddLine` with the line textures of the atlas, which is the path a draw list
     /// takes when anti-aliased strokes are enabled (the default for a window).
     pub fn add_line_aa(&mut self, p1: Vec2, p2: Vec2, col: ImU32, thickness: f32) {
         self.add_line(p1, p2, col, thickness, 0);
@@ -1930,6 +2199,33 @@ pub fn path_bezier_cubic_to(
 /// `IM_DRAWLIST_ARCFAST_SAMPLE_MAX`: samples around a full circle in the fast arc table.
 const ARC_SAMPLE_MAX: i32 = 48;
 
+/// `IM_DRAWLIST_CIRCLE_AUTO_SEGMENT_MIN` / `_MAX`: what `AddCircle*` clamps a segment count to.
+const CIRCLE_SEGMENT_MIN: i32 = 4;
+const CIRCLE_SEGMENT_MAX: i32 = 512;
+
+/// `ImGuiStyle::CircleTessellationMaxError` for the default style.
+const CIRCLE_TESS_MAX_ERROR: f32 = 0.30;
+
+/// `ImDrawListSharedData::CircleSegmentCounts`: the auto segment count cached for integer radii
+/// 0..=63. The reference fills it at start-up with `IM_DRAWLIST_CIRCLE_AUTO_SEGMENT_CALC`, whose
+/// `acos` is not portable in its last bits, and a golden has to come out the same on every machine.
+/// Radii past the table go through [`circle_segment_count`], the same formula, unpinned.
+const CIRCLE_SEGMENT_COUNTS: [u8; 64] = [
+    48, 4, 6, 8, 10, 10, 10, 12, 12, 14, 14, 14, 16, 16, 16, 16, 18, 18, 18, 18, 20, 20, 20, 20,
+    20, 22, 22, 22, 22, 22, 24, 24, 24, 24, 24, 24, 26, 26, 26, 26, 26, 26, 28, 28, 28, 28, 28, 28,
+    30, 30, 30, 30, 30, 30, 30, 32, 32, 32, 32, 32, 32, 32, 32, 34,
+];
+
+/// `ImDrawListSharedData::ArcFastRadiusCutoff` = `CALC_R(48, 0.30)`, pinned as bits (140.1176) for
+/// the same reason as the table: the formula needs `cos`.
+const ARC_FAST_RADIUS_CUTOFF: f32 = f32::from_bits(0x430c_1e1c);
+
+/// The reference writes `1.41421356f` literally for the smallest radius whose edge fringe does not
+/// overlap itself. That is not an exact `sqrt(2)` and the digits past the f32 mantissa are kept as
+/// written, so the literal stays instead of a "better" constant.
+#[allow(clippy::approx_constant, clippy::excessive_precision)]
+const REF_1_41421356: f32 = 1.414_213_56;
+
 /// The reference's fast arc table (`ImDrawListSharedData::ArcFastVtx`), pinned from the driver.
 /// It is generated at start-up from sin/cos, so it is data, not arithmetic, across compilers.
 fn arc_table() -> [Vec2; 48] {
@@ -1998,9 +2294,11 @@ fn arc_table() -> [Vec2; 48] {
 /// `IM_DRAWLIST_CIRCLE_AUTO_SEGMENT_CALC`: the number of segments the reference picks for a circle
 /// of this radius, rounded up to an even number and clamped to [4, 512]. The default tessellation
 /// error is 0.30 (`ImGuiStyle::CircleTessellationMaxError`).
+///
+/// It uses `acos`, so its last bits are not portable: the reference caches it for radii 0..=63 in
+/// `CircleSegmentCounts` (pinned below) and only calls this for the radii past the table, which no
+/// golden covers yet.
 pub fn circle_segment_count(radius: f32, max_error: f32) -> i32 {
-    const MIN: i32 = 4;
-    const MAX: i32 = 512;
     if radius <= 0.0 {
         return ARC_SAMPLE_MAX;
     }
@@ -2008,25 +2306,115 @@ pub fn circle_segment_count(radius: f32, max_error: f32) -> i32 {
     let angle = (1.0f32 - error / radius).acos();
     let raw = (core::f32::consts::PI / angle).ceil() as i32;
     let even = ((raw + 1) / 2) * 2;
-    even.clamp(MIN, MAX)
+    even.clamp(CIRCLE_SEGMENT_MIN, CIRCLE_SEGMENT_MAX)
 }
 
-/// `CalcCornerArcStepAndCount`: the sampling step within a quarter circle for a given segment count.
-pub fn arc_step_for_segments(segment_count: i32) -> i32 {
+/// `CalcCornerArcStepAndCount`: the sampling step for a 90 degree arc, and how many steps fill it.
+/// The step has to divide the quarter circle exactly, which is what the re-derivation at the end
+/// guarantees.
+fn corner_arc_step_and_count(segment_count: i32) -> (i32, i32) {
     const QUARTER: i32 = ARC_SAMPLE_MAX / 4;
-    let mut step = (ARC_SAMPLE_MAX / segment_count.max(1)).clamp(1, QUARTER);
-    let count = QUARTER / step;
-    if step * count != QUARTER {
-        step = QUARTER / count.max(1);
+    let mut arc_step = (ARC_SAMPLE_MAX / segment_count.max(1)).clamp(1, QUARTER);
+    let arc_step_count = QUARTER / arc_step;
+    if arc_step * arc_step_count != QUARTER {
+        arc_step = QUARTER / arc_step_count.max(1);
     }
-    step
+    (arc_step, arc_step_count)
+}
+
+/// The sampling step within a quarter circle for a given segment count.
+pub fn arc_step_for_segments(segment_count: i32) -> i32 {
+    corner_arc_step_and_count(segment_count).0
 }
 
 /// The sampling step the reference uses for a corner of this radius.
 pub fn arc_step_for_radius(radius: f32) -> i32 {
-    arc_step_for_segments(circle_segment_count(radius, 0.30))
+    arc_step_for_segments(circle_segment_count(radius, CIRCLE_TESS_MAX_ERROR))
 }
-/// `ImDrawList::_PathArcToFastEx`: sample the fast arc table between two 12ths of a circle.
+
+/// `ImDrawList::_PathArcToFastEx`, the body after the shared data has been consulted: it walks the
+/// fast arc table from `a_min_sample` to `a_max_sample` and pushes one point per sample.
+///
+/// `a_step` must already be resolved and clamped. When the range is not a multiple of the step the
+/// reference distributes the remainder: it shortens the first step and appends one last point at the
+/// exact maximum sample.
+fn push_arc_samples(
+    out: &mut Vec<Vec2>,
+    center: Vec2,
+    radius: f32,
+    a_min_sample: i32,
+    a_max_sample: i32,
+    mut a_step: i32,
+) {
+    let sample_range = (a_max_sample - a_min_sample).abs();
+    let next_step = a_step;
+    let mut extra_max_sample = false;
+    if a_step > 1 {
+        let overstep = sample_range % a_step;
+        if overstep > 0 {
+            extra_max_sample = true;
+            if sample_range > 0 {
+                a_step -= (a_step - overstep) / 2;
+            }
+        }
+    }
+
+    let table = arc_table();
+    let mut sample_index = a_min_sample;
+    if !(0..ARC_SAMPLE_MAX).contains(&sample_index) {
+        sample_index %= ARC_SAMPLE_MAX;
+        if sample_index < 0 {
+            sample_index += ARC_SAMPLE_MAX;
+        }
+    }
+
+    let mut step = a_step;
+    let mut a = a_min_sample;
+    if a_max_sample >= a_min_sample {
+        while a <= a_max_sample {
+            if sample_index >= ARC_SAMPLE_MAX {
+                sample_index -= ARC_SAMPLE_MAX;
+            }
+            let sample = table[sample_index as usize];
+            out.push(Vec2 {
+                x: center.x + sample.x * radius,
+                y: center.y + sample.y * radius,
+            });
+            a += step;
+            sample_index += step;
+            step = next_step;
+        }
+    } else {
+        while a >= a_max_sample {
+            if sample_index < 0 {
+                sample_index += ARC_SAMPLE_MAX;
+            }
+            let sample = table[sample_index as usize];
+            out.push(Vec2 {
+                x: center.x + sample.x * radius,
+                y: center.y + sample.y * radius,
+            });
+            a -= step;
+            sample_index -= step;
+            step = next_step;
+        }
+    }
+
+    if extra_max_sample {
+        let mut index = a_max_sample % ARC_SAMPLE_MAX;
+        if index < 0 {
+            index += ARC_SAMPLE_MAX;
+        }
+        let sample = table[index as usize];
+        out.push(Vec2 {
+            x: center.x + sample.x * radius,
+            y: center.y + sample.y * radius,
+        });
+    }
+}
+
+/// `ImDrawList::PathArcToFast`, which the rounded corners use: the two ends come as twelfths of a
+/// circle and the step was already chosen for the radius.
 fn push_arc(
     out: &mut Vec<Vec2>,
     center: Vec2,
@@ -2039,47 +2427,17 @@ fn push_arc(
         out.push(center);
         return;
     }
-
     let min_sample = min_of_12 * ARC_SAMPLE_MAX / 12;
     let max_sample = max_of_12 * ARC_SAMPLE_MAX / 12;
-    let range = (max_sample - min_sample).abs();
+    let step = arc_step.clamp(1, ARC_SAMPLE_MAX / 4);
+    push_arc_samples(out, center, radius, min_sample, max_sample, step);
+}
 
-    let mut first_step = arc_step.max(1);
-    let next_step = first_step;
-    if arc_step > 1 {
-        let overstep = range % arc_step;
-        if overstep > 0 && range > 0 {
-            first_step = arc_step - (arc_step - overstep) / 2;
-        }
-    }
-
-    let table = arc_table();
-    let mut sample_index = min_sample.rem_euclid(ARC_SAMPLE_MAX);
-    let mut a = min_sample;
-    let mut step = first_step;
-    let ascending = min_sample <= max_sample;
-    loop {
-        if ascending && a > max_sample {
-            break;
-        }
-        if !ascending && a < max_sample {
-            break;
-        }
-        let index = sample_index.rem_euclid(ARC_SAMPLE_MAX) as usize;
-        let sample = table[index];
-        out.push(Vec2 {
-            x: center.x + sample.x * radius,
-            y: center.y + sample.y * radius,
-        });
-        if ascending {
-            a += step;
-            sample_index += step;
-        } else {
-            a -= step;
-            sample_index -= step;
-        }
-        step = next_step;
-    }
+/// `ApproxApothem`: the cosine of half the angle of a regular polygon, to 0.001 %, which the
+/// reference uses to clamp the inner stroke of a circle so it does not shoot past the edge.
+fn approx_apothem(num_segments: i32) -> f32 {
+    let u = 1.0 / num_segments as f32;
+    ((4.058_712 * u * u) - 4.934_802) * u * u + 1.0
 }
 
 #[cfg(test)]

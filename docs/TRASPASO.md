@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **68 escenarios** más la **prueba negativa**.
+   que ejecuta **69 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,9 +46,9 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **75 PRs** fusionados.
-- **68 escenarios** con golden propio, todos en verde, más la prueba negativa.
-- **Reescritura: 66.7 %.** Proyecto (contando el arnés): **68.9 %**.
+- `master` limpio, **76 PRs** fusionados.
+- **69 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- **Reescritura: 67.4 %.** Proyecto (contando el arnés): **69.6 %**.
 - 30 tests unitarios en 6 binarios.
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
 
@@ -77,7 +77,10 @@ Esto está aprendido a base de fallar, y ahorra sesiones enteras:
   cambia en silencio. Hay que hornear **todas** las letras de **todas** las cadenas del
   escenario. Esto ya ha mordido tres veces.
 - Los escenarios con **trazo de flecha** necesitan las filas de línea: usar
-  `WriteWindowIconsFixture` en vez de `WriteGlyphFixture`.
+  `WriteWindowIconsFixture` en vez de `WriteGlyphFixture`. Cualquier escenario con un **trazo AA**
+  (los círculos, por ejemplo) necesita la tabla de líneas entera: `WriteLineUvFixture`, escrita tras
+  un frame que haya seleccionado la fuente del atlas. Sin ella el port falla con
+  `the atlas line-texture table is not pinned`.
 - Las ventanas de tipo **popup, tooltip y menú hijo** se **miden en su primer frame y no
   dibujan nada** en él (la lista vacía no llega a los datos de dibujo). Por eso parecen
   aparecer un frame después.
@@ -91,10 +94,10 @@ caracteres y la repetición de una tecla mantenida), fondo, borde,
 barra de título, iconos y su interacción, arrastre de ventana, scroll (barra, arrastre,
 página, rueda, bloqueo de rueda), auto-ajuste de tamaño, tamaño mínimo, tiradores de
 redimensión (bordes, cursor, doble clic, autofit), orden de ventanas, y todas las
-primitivas de dibujo y antialiasing. Los recortes también están cerrados: la pila de
-`PushClipRect`/`PopClipRect` con su intersección (`clip_stack`) y el corte de comandos de
-`_OnChangedClipRect` (`cmd_split`: el clip que no cambia no parte, el que cambia sí, y el
-push/pop sin geometría se fusiona con el comando anterior).
+primitivas de dibujo y antialiasing, incluidos los círculos (`aa_circles`). Los recortes también
+están cerrados: la pila de `PushClipRect`/`PopClipRect` con su intersección (`clip_stack`) y el
+corte de comandos de `_OnChangedClipRect` (`cmd_split`: el clip que no cambia no parte, el que
+cambia sí, y el push/pop sin geometría se fusiona con el comando anterior).
 
 Widgets: botón (geometría, dibujo, estados, borde), label y checkbox, slider,
 **cabecera colapsable**, **nodos de árbol**, **región hija** (lista propia, recorte,
@@ -107,23 +110,10 @@ El detalle por pieza y su peso, en `docs/progress.json`.
 
 ## Pendiente, en el orden sugerido
 
-La entrada de texto (peso 4) está cerrada y su sección queda más abajo como referencia de lo ya
-medido. Lo que sigue, por orden de coste:
+La entrada de texto (peso 4) y las curvas AA (peso 1) están cerradas y su sección queda más abajo
+como referencia de lo ya medido. Lo que queda:
 
-### 1. Curvas AA (peso 1): círculos
-
-`AddCircleFilled` y `AddCircle` arrastran casi todo el sistema de arcos: `_PathArcToFastEx` (la
-tabla de 22 muestras), `PathArcTo`, el corte `ArcFastRadiusCutoff`, la tabla cacheada
-`CircleSegmentCounts` y el escalado de fringe. La referencia reescribió estas funciones, así que
-**medir antes de escribir código**: con `num_segments = 0`, para radios 1..40, cuántos vértices
-emite `AddCircleFilled`. De esa medida sale la tabla de segmentos automáticos
-(`IM_DRAWLIST_CIRCLE_AUTO_SEGMENT_CALC`) y se puede comprobar contra el arnés actual
-(`arc_steps` ya pinna los pasos de arco de radios 1..14, pero no los círculos).
-
-El escenario puede pintar círculos rellenos y contorneados de varios radios sobre la lista de una
-ventana y comparar la lista entera, como los demás escenarios de AA.
-
-### 2. Tablas (peso 2)
+### Tablas (peso 2)
 
 Sistema aparte, el más grande de todos. **Medido** (sonda `probe-tables`, ventana de 400×300 en
 (40,40), padding 8, fuente 13 px, `ItemSpacing` 8×4, `CellPadding` por defecto); las cifras están
@@ -158,6 +148,42 @@ el `CellPadding`/`BorderInner` sumando donde dicen las cifras de arriba. Cabecer
 tamaño (stretch, auto-fit), reordenar, congelar y el scroll propio de la tabla vienen después.
 
 ## Lo cerrado, con su detalle medido
+
+### Curvas AA (peso 1): círculos
+
+Medido con una sonda **antes** de escribir código (`AddCircleFilled` con `num_segments = 0`, radios
+1..40, sobre la lista de una ventana): el número de segmentos sale de la tabla cacheada
+`CircleSegmentCounts` (64 entradas, radios 0..63) y el paso de muestreo de
+`CalcCornerArcStepAndCount`. La tabla de arco rápido tiene **48 muestras**, no 22
+(`IM_DRAWLIST_ARCFAST_TABLE_SIZE`), y el camino de puntos la recorre entera:
+
+| radios | segmentos | paso | puntos del camino | vértices del relleno |
+| --- | --- | --- | --- | --- |
+| 1 | 4 | 12 | 4 | 8 |
+| 2 | 6 | 12 | 4 | 8 |
+| 3 | 8 | 6 | 8 | 16 |
+| 4–6 | 10 | 4 | 12 | 24 |
+| 7–8 | 12 | 4 | 12 | 24 |
+| 9–11 | 14 | 3 | 16 | 32 |
+| 12–15 | 16 | 3 | 16 | 32 |
+| 16–19 | 18 | 2 | 24 | 48 |
+| 20–24 | 20 | 2 | 24 | 48 |
+| 25–29 | 22 | 2 | 24 | 48 |
+| 30–35 | 24 | 2 | 24 | 48 |
+| 36–40 | 26 | 1 | 48 | 96 |
+
+El relleno AA emite dos vértices por punto del camino: el anillo interior y uno exterior por
+vértice.
+
+Datos fijados en el port, no calculados, porque usan `acos`/`cos` y sus últimos bits no son
+portables: la tabla `CircleSegmentCounts[64]` y `ArcFastRadiusCutoff` = `0x430c1e1c` = **140.1176**,
+que es hasta donde el círculo se muestrea con la tabla en vez de con trigonometría.
+
+El golden `aa_circles` cubre rellenos y trazos por debajo de ese corte (radios 0.6, 2, 5, 10, 12,
+20, 30, 45, 60 y 63), incluido el radio mínimo con su alfa escalada y el trazo más grueso que el
+radio, que colapsa en un disco. **No** cubre radios por encima del corte ni `num_segments`
+explícito: esos pasan por `_PathArcToN` (`ImCos`/`ImSin`), y hace falta paridad de trigonometría
+entre plataformas antes de fijarlos, igual que se hizo con las tablas de arco y de líneas.
 
 ### Entrada de texto (peso 4): cerrada
 
@@ -250,7 +276,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 68 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 69 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```

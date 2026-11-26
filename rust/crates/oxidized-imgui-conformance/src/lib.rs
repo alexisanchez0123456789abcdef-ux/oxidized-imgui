@@ -37,6 +37,7 @@ pub const SCENARIOS: &[&str] = &[
     "font_metrics",
     "clip_stack",
     "cmd_split",
+    "aa_circles",
     "text_draw",
     "button",
     "widgets_basic",
@@ -1224,6 +1225,66 @@ pub fn cmd_split_dump() -> String {
     rect(list, 70.0, 170.0, 110.0, 190.0);
 
     let out = dump("cmd_split", ctx.draw_list());
+    ctx.end_window();
+    ctx.end_frame();
+    out
+}
+
+/// The `aa_circles` scenario: filled discs and stroked circles below the fast arc cutoff radius
+/// (140.11), the range that samples the pinned arc table instead of calling `cos`/`sin`.
+///
+/// Every automatic segment step the table can ask for is covered, plus the alpha-multiplied minimum
+/// radius and the stroke that swallows its circle.
+pub fn aa_circles_dump() -> String {
+    use oxidized_imgui::{Context, Vec2, WindowFlags};
+
+    // The stroke table is a pinned input: the atlas packer decides where the rows land, so the
+    // fixture is written by the same reference run that produced the golden.
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/aa_circles.lineuvs.txt"
+    );
+    let text = std::fs::read_to_string(path).expect("line uv fixture");
+
+    let mut ctx = Context::new();
+    ctx.set_line_uv_lines(parse_line_uvs(&text));
+    ctx.io_mut().delta_time = 0.1;
+    ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+    ctx.io_mut().mouse_down[0] = false;
+    ctx.begin_frame();
+    ctx.set_next_window_flags(
+        WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+    );
+    ctx.begin_window_ex(
+        "W",
+        Some(Vec2 { x: 40.0, y: 40.0 }),
+        Some(Vec2 { x: 520.0, y: 400.0 }),
+        false,
+    );
+
+    let list = ctx.draw_list_mut();
+    let center = |x: f32, y: f32| Vec2 { x, y };
+    // Filled discs: radii 2, 5, 12, 20, 30, 45 and 63 take the table steps 12, 4, 3, 2, 2, 1 and 1.
+    list.add_circle_filled(center(100.0, 100.0), 2.0, COL, 0);
+    list.add_circle_filled(center(140.0, 100.0), 5.0, COL, 0);
+    list.add_circle_filled(center(190.0, 100.0), 12.0, COL, 0);
+    list.add_circle_filled(center(250.0, 100.0), 20.0, COL, 0);
+    list.add_circle_filled(center(320.0, 100.0), 30.0, COL, 0);
+    list.add_circle_filled(center(400.0, 100.0), 45.0, COL, 0);
+    list.add_circle_filled(center(490.0, 100.0), 63.0, COL, 0);
+    // Below the minimum radius the reference scales the alpha and draws at the minimum instead.
+    list.add_circle_filled(center(100.0, 230.0), 0.6, COL, 0);
+
+    // Stroked circles, inside stroke by default.
+    list.add_circle(center(140.0, 230.0), 5.0, COL, 0, 1.0);
+    list.add_circle(center(190.0, 230.0), 10.0, COL, 0, 1.0);
+    list.add_circle(center(250.0, 230.0), 20.0, COL, 0, 3.0);
+    list.add_circle(center(320.0, 230.0), 30.0, COL, 0, 1.0);
+    list.add_circle(center(430.0, 230.0), 60.0, COL, 0, 2.0);
+    // A stroke thicker than the radius collapses into a filled disc of the outer radius.
+    list.add_circle(center(490.0, 330.0), 2.0, COL, 0, 3.0);
+
+    let out = dump("aa_circles", ctx.draw_list());
     ctx.end_window();
     ctx.end_frame();
     out
@@ -4268,6 +4329,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "font_metrics" => Some(font_metrics_dump()),
         "clip_stack" => Some(clip_stack_dump()),
         "cmd_split" => Some(cmd_split_dump()),
+        "aa_circles" => Some(aa_circles_dump()),
         "text_draw" => Some(text_draw_dump()),
         "button" => Some(button_dump()),
         "widgets_basic" => Some(widgets_basic_dump()),

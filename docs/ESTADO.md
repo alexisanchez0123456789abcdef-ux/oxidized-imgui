@@ -2,9 +2,9 @@
 
 _Actualizado: 2026-11-26. Generado desde `docs/progress.json`: no editar a mano._
 
-## Reescritura a Rust: **66.7 %**
+## Reescritura a Rust: **67.4 %**
 
-Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 68.9 %.
+Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 69.6 %.
 
 Qué cuenta como hecho: solo lo que tiene una prueba que lo compara con el código C++ original.
 Un cambio de estado sin evidencia no sube el porcentaje.
@@ -12,7 +12,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 | Área | Peso | Avance |
 | --- | ---: | ---: |
 | Núcleo: contexto, IO, ventanas, identificadores, layout | 59 | 76 % |
-| Listas de dibujo y primitivas | 18 | 94 % |
+| Listas de dibujo y primitivas | 18 | 100 % |
 | Widgets | 30 | 93 % |
 | Fuentes y texto | 13 | 15 % |
 | Docking y viewports | 10 | 0 % |
@@ -70,6 +70,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **AA: puntos de bézier por subdivisión** — golden bezier_points
 - **AA: trazado de polilínea (miters, extremos abiertos)** — golden aa_polyline
 - **AA: trazo cerrado con trazo interior (bordes)** — golden aa_border
+- **AA: círculos** — golden aa_circles (14 círculos rellenos y contorneados bajo el corte arc-fast, con la tabla de segmentos cacheada y el radio mínimo con alfa)
 - **Estilo: colores, redondeos y bordes por defecto** — golden style_defaults
 - **Texto dibujado en la lista (geometría, sin UVs)** — golden text_draw (geometría; UVs omitidos por no ser reproducibles)
 - **Texto con CpuFineClip: glifos descartados fuera del recorte y quads y UVs recortados en el borde** — golden text_clip (5 recortes, 4279 bytes, con UVs)
