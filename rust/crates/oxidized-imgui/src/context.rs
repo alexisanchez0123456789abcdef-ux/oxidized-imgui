@@ -302,6 +302,9 @@ pub struct Context {
     next_flags: Option<WindowFlags>,
     /// `SetNextWindowFocus` for the window about to start, which `Begin` applies as `FocusWindow`.
     next_focus: bool,
+    /// How many `BeginDisabled` are open, and the `Style::Alpha` the outermost one found.
+    disabled_depth: u32,
+    disabled_alpha_backup: Option<f32>,
     /// `SetNextWindowCollapsed`: the state `Begin` applies to the window it starts.
     next_collapsed: Option<bool>,
     /// `g.Windows`, back to front: the order the lists are rendered in. It survives frames.
@@ -421,6 +424,8 @@ impl Default for Context {
             next_scroll: None,
             next_flags: None,
             next_focus: false,
+            disabled_depth: 0,
+            disabled_alpha_backup: None,
             next_collapsed: None,
             wheeling_window: None,
             wheeling_ref_mouse: Vec2::default(),
@@ -686,6 +691,30 @@ impl Context {
     /// `ImGui::SetNextWindowFocus`: the next window `Begin` raises to the front and focuses.
     pub fn set_next_window_focus(&mut self) {
         self.next_focus = true;
+    }
+
+    /// `ImGui::BeginDisabled`: every colour packed from here on gets `Style::Alpha` multiplied by
+    /// `Style::DisabledAlpha` (0.6), and the items inside neither hover nor take a press. Nested calls
+    /// only count.
+    pub fn begin_disabled(&mut self) {
+        if self.disabled_depth == 0 {
+            self.disabled_alpha_backup = Some(self.style.alpha);
+            self.style.alpha *= self.style.disabled_alpha;
+        }
+        self.disabled_depth += 1;
+    }
+
+    /// `ImGui::EndDisabled`: back to the alpha saved by the outermost [`Context::begin_disabled`].
+    pub fn end_disabled(&mut self) {
+        if self.disabled_depth == 0 {
+            return;
+        }
+        self.disabled_depth -= 1;
+        if self.disabled_depth == 0 {
+            if let Some(alpha) = self.disabled_alpha_backup.take() {
+                self.style.alpha = alpha;
+            }
+        }
     }
 
     /// `ImGui::SetNextWindowCollapsed`: the next window `Begin` starts collapsed or expanded.
@@ -4292,6 +4321,12 @@ impl Context {
         self.font.size + self.style.frame_padding.y * 2.0
     }
 
+    /// `ImGuiItemFlags_Disabled`: `ItemHoverable` returns false, so the item neither hovers, nor
+    /// becomes active, nor reports a press.
+    fn is_disabled(&self) -> bool {
+        self.disabled_depth > 0
+    }
+
     /// The hover/active/press logic shared by framed widgets (`ButtonBehavior`).
     fn interact(&mut self, id: ImGuiID, size: Vec2) -> bool {
         let min = self.window().cursor;
@@ -4314,6 +4349,9 @@ impl Context {
         max: Vec2,
         press_on_click: bool,
     ) -> (bool, bool, bool) {
+        if self.is_disabled() {
+            return (false, false, false);
+        }
         let (window_pos, window_size) = {
             let window = self.window();
             (window.pos, window.size)

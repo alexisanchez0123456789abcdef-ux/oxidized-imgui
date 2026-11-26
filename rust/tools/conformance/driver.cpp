@@ -4279,6 +4279,75 @@ static void DumpMenuBarSeparator()
     }
 }
 
+// disabled: `BeginDisabled`/`EndDisabled`. Everything inside is drawn with `Style::Alpha` scaled by
+// `Style::DisabledAlpha` and does not hover nor press; the button after `EndDisabled` is back to normal.
+static void FrameDisabled(float mx, float my, bool down, int frame)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = down;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("W", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar);
+    ImGui::Text("A");
+    const bool b = ImGui::Button("B");
+    ImGui::BeginDisabled();
+    ImGui::Text("C");
+    const bool d = ImGui::Button("D");
+    ImGui::EndDisabled();
+    const bool e = ImGui::Button("E");
+    printf("frame %d pressed b %d d %d e %d\n", frame, b ? 1 : 0, d ? 1 : 0, e ? 1 : 0);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpDisabled()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario disabled\n");
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[5] = { 'A', 'B', 'C', 'D', 'E' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    WriteGlyphFixture(font, bake_order, 5);
+
+    // Idle, press and release over the disabled button, then over the enabled one.
+    const float steps[4][3] = {
+        { 0.0f, 0.0f, 0.0f },
+        { 70.0f, 130.0f, 1.0f },
+        { 70.0f, 130.0f, 0.0f },
+        { 70.0f, 150.0f, 0.0f },
+    };
+    for (int frame = 0; frame < 4; frame++)
+    {
+        FrameDisabled(steps[frame][0], steps[frame][1], steps[frame][2] != 0.0f, frame);
+        ImGui::Render();
+        ImDrawData* dd = ImGui::GetDrawData();
+        ImGuiContext& g = *GImGui;
+        printf("frame %d lists %d\n", frame, dd->CmdListsCount);
+        for (int i = 0; i < dd->CmdListsCount; i++)
+        {
+            const ImDrawList* list = dd->CmdLists[i];
+            const char* name = "?";
+            for (int w = 0; w < g.Windows.Size; w++)
+                if (g.Windows[w]->DrawList == list)
+                    name = g.Windows[w]->Name;
+            printf("list %d %s\n", i, name);
+            DumpDrawListBody(*list);
+        }
+    }
+}
+
 // windows_move: dragging a window by its title bar and by its body, and the clamp that keeps it
 // reachable when it is dragged off the display. Only the positions are dumped: the geometry of a
 // window is what windows_order already covers.
@@ -6167,6 +6236,13 @@ int main(int argc, char** argv)
         return 0;
     }
 
+
+    if (strcmp(name, "disabled") == 0)
+    {
+        DumpDisabled();
+        ImGui::DestroyContext();
+        return 0;
+    }
 
     if (strcmp(name, "menu_bar_separator") == 0)
     {

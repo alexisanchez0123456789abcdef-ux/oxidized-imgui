@@ -103,6 +103,7 @@ pub const SCENARIOS: &[&str] = &[
     "separator",
     "separator_text",
     "menu_bar_separator",
+    "disabled",
     "window_scroll",
     "window_scrollbar",
     "window_scrollbar_drag",
@@ -5786,6 +5787,76 @@ pub fn menu_bar_separator_dump() -> String {
     out
 }
 
+/// The `disabled` scenario: `BeginDisabled`/`EndDisabled`. Everything inside is drawn with
+/// `Style::Alpha` scaled by `Style::DisabledAlpha` and does not hover nor press; the button after
+/// `EndDisabled` is back to normal.
+pub fn disabled_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2, WindowFlags};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/disabled.glyphs.txt"
+    );
+    let glyphs = std::fs::read_to_string(path).expect("disabled fixture");
+    let font = Font::from_pinned(&glyphs).expect("font fixture");
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario disabled\n");
+
+    let steps = [
+        (0.0f32, 0.0f32, false),
+        (70.0, 130.0, true),
+        (70.0, 130.0, false),
+        (70.0, 150.0, false),
+    ];
+    for (frame, (mx, my, down)) in steps.iter().enumerate() {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: *mx, y: *my });
+        ctx.io_mut().mouse_down[0] = *down;
+        ctx.begin_frame();
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+        );
+        ctx.begin_window(
+            "W",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        ctx.text("A");
+        let b = ctx.button("B");
+        ctx.begin_disabled();
+        ctx.text("C");
+        let d = ctx.button("D");
+        ctx.end_disabled();
+        let e = ctx.button("E");
+        out.push_str(&format!(
+            "frame {frame} pressed b {} d {} e {}\n",
+            u8::from(b),
+            u8::from(d),
+            u8::from(e)
+        ));
+        ctx.end_window();
+        ctx.end_frame();
+        let lists = ctx.render_lists();
+        out.push_str(&format!("frame {frame} lists {}\n", lists.len()));
+        for (i, (name, list)) in lists.iter().enumerate() {
+            out.push_str(&format!("list {i} {name}\n"));
+            let body = dump("disabled", list);
+            for line in body.lines().skip(2) {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
+    }
+    out
+}
+
 /// The `windows_move` scenario: dragging one window by its title bar and by its body, and the clamp
 /// that keeps it reachable when it is dragged off the display.
 ///
@@ -7728,6 +7799,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "separator" => Some(separator_dump()),
         "separator_text" => Some(separator_text_dump()),
         "menu_bar_separator" => Some(menu_bar_separator_dump()),
+        "disabled" => Some(disabled_dump()),
         "window_scroll" => Some(window_scroll_dump()),
         "window_scrollbar" => Some(window_scrollbar_dump()),
         "window_scrollbar_drag" => Some(window_scrollbar_drag_dump()),

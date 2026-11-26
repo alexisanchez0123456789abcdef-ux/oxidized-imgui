@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **112 escenarios** más la **prueba negativa**.
+   que ejecuta **113 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,9 +46,9 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **121 PRs** fusionados.
-- **112 escenarios** con golden propio, todos en verde, más la prueba negativa.
-- **Reescritura: 68.3 %.** Proyecto (contando el arnés): **70.5 %**.
+- `master` limpio, **122 PRs** fusionados.
+- **113 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- **Reescritura: 68.6 %.** Proyecto (contando el arnés): **70.7 %**.
 - 39 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
@@ -113,6 +113,7 @@ cambia sí, y el push/pop sin geometría se fusiona con el comando anterior).
 Widgets: botón (geometría, dibujo, estados, borde), label y checkbox, slider,
 **separador horizontal** (`separator`: ancho de la región de trabajo, grosor `SeparatorSize` y avance
 de ítem) y **`SeparatorText`** (`separator_text`: etiqueta entre dos líneas con centro sesgado),
+**`BeginDisabled`/`EndDisabled`** (`disabled`),
 **cabecera colapsable**, **nodos de árbol**, **región hija** (lista propia, recorte,
 borde en la lista del padre, scroll con rueda y arrastre), **Selectable**, **popup**,
 **clic en fila de popup**, **combo**, **tooltip**, **barra de menús**, **submenús
@@ -246,6 +247,23 @@ Golden `separator`: tres etiquetas con un separador entre ellas en una ventana d
 - El rectángulo del ítem es la línea (`(8,25)-(292,26)`), no la caja del texto: el golden lo imprime
   tras cada `Separator`.
 - La forma **vertical** (la barra de menús) tiene su propia sección más abajo.
+
+### BeginDisabled / EndDisabled (peso 1): cerrada
+
+Golden `disabled`: "A" y un botón normales, "C" y otro botón dentro de `BeginDisabled`/`EndDisabled`, y
+un tercer botón después; cuatro frames (reposo, pulsación y suelta sobre el botón deshabilitado, y hover
+sobre el siguiente).
+
+- `BeginDisabled` multiplica **`Style::Alpha`** por `Style::DisabledAlpha` (0.6). Todos los colores
+  empaquetados pasan por `GetColorU32`, así que el texto sale con alfa `0x99` en vez de `0xFF` y el
+  relleno del botón con su alfa escalada: el efecto es global y no hay que tocar cada widget.
+- Los ítems dentro **no hoveran ni pulsan**: `ItemHoverable` devuelve `false` con el flag `Disabled`, y
+  en el port `behaviour_at` sale antes de mirar el ratón. Medido: pulsar y soltar sobre el botón
+  deshabilitado deja `pressed d 0` y no cambia su relleno (sigue en `ImGuiCol_Button`, sin `Hovered`).
+- Anidar sólo cuenta, y `EndDisabled` restaura el alfa guardado por el `BeginDisabled` más externo; el
+  botón de después vuelve a alfa `0xFF`.
+- El escenario también comprueba que el hover del botón siguiente sigue funcionando (`pressed e 0` pero
+  con `ImGuiCol_ButtonHovered`).
 
 ### Separador vertical en la barra de menús (peso 1): cerrada
 
@@ -621,7 +639,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 112 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 113 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
