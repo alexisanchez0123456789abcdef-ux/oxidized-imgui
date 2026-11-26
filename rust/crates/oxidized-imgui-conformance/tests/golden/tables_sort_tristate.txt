@@ -1,0 +1,9 @@
+header imgui 1.93.1 WIP 19303
+scenario tables_sort_tristate
+table begin 1
+specs 1 count 1 dirty 1
+white_uv 3a800000 3b800000
+cmd_count 1
+cmd 0 clip 42740000 42740000 43b38000 43818000 elems 0 vtxoff 0 idxoff 0
+vtx_count 0
+idx_count 0

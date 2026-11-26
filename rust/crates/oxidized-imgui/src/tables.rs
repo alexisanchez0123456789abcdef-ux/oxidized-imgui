@@ -29,6 +29,8 @@ pub mod table_flags {
     pub const RESIZABLE: u32 = 1 << 0;
     /// `ImGuiTableFlags_Sortable`: the table exposes sort specs.
     pub const SORTABLE: u32 = 1 << 3;
+    /// `ImGuiTableFlags_SortTristate`: the specs may end up empty.
+    pub const SORT_TRISTATE: u32 = 1 << 27;
     /// `ImGuiTableFlags_RowBg`: every other row gets `TableRowBgAlt`.
     pub const ROW_BG: u32 = 1 << 6;
     /// `ImGuiTableFlags_SizingMask_`: the bits that pick the table sizing policy.
@@ -331,6 +333,17 @@ impl Table {
             for (n, column) in self.columns.iter().enumerate() {
                 if column.flags & column_flags::DEFAULT_SORT != 0
                     && column.flags & column_flags::NO_SORT == 0
+                {
+                    self.sort_specs.push((n, 1));
+                }
+            }
+            // `TableSortSpecsSanitize`: with no `DefaultSort` the first sortable column takes over, so
+            // a sortable table always starts with exactly one spec.
+            if self.sort_specs.is_empty() {
+                if let Some(n) = self
+                    .columns
+                    .iter()
+                    .position(|column| column.flags & column_flags::NO_SORT == 0)
                 {
                     self.sort_specs.push((n, 1));
                 }
