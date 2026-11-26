@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **137 escenarios** más la **prueba negativa**.
+   que ejecuta **138 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -47,7 +47,7 @@ comparar.
 ## Estado al escribir esto
 
 - `master` limpio, **154 PRs** fusionados (el número sale de la búsqueda de la API: `is:pr is:merged`).
-- **137 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- **138 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 69.9 %.** Proyecto (contando el arnés): **71.8 %**.
 - 42 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
@@ -457,6 +457,17 @@ redondeo no pase desapercibido hasta el CI:
 - `color_u32_alpha(Text, 0.70)` da `0xB3FFFFFF` y no `0xB2`: es el redondeo por floats del reference.
 
 Los tests subieron de 39 a **42**.
+### SmallButton (peso 1): cerrada, con la regla medida
+
+Golden `small_button`: un `Button("A")` y un `SmallButton("A")` en la misma ventana. Medido: el boton
+normal mide **15x19** y el pequeno **15x13**.
+
+- La regla **no** es "sin relleno": es **relleno horizontal conservado y vertical a cero**. Mi primera
+  version empujaba `FramePadding = (0, 0)` y el ancho habria caido de 15 a 7; el golden de la
+  referencia lo cazo antes de commitear. Ahora el port empuja `(FramePadding.x, 0)`, que reproduce
+  las dos medidas a la vez.
+- Se apoya en la pila de `PushStyleVar`, asi que no hay una segunda formula de tamano de boton que
+  pueda divergir.
 ### CloseCurrentPopup (peso 1): cerrada, con un limite medido
 
 Golden `close_current_popup`: `OpenPopup("P")` en el primer frame, el popup dibujado con un texto, y
@@ -951,7 +962,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 137 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 138 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
