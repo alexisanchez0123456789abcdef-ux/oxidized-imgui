@@ -387,6 +387,8 @@ pub struct Context {
     input_text_state: Option<crate::input_text::InputTextState>,
     /// `SetNextItemWidth`: the width the next item asks for, consumed by the item that reads it.
     next_item_width: Option<f32>,
+    /// `ImGui::SetNextItemOpen`: the state the next tree node starts with.
+    next_item_open: Option<bool>,
     /// `ImGui::PushItemWidth` stack: the widths later items take, zero meaning the default.
     /// ImGui::PushStyleColor stack: the colours to restore on each pop.
     color_stack: Vec<(crate::style::Col, u32)>,
@@ -491,6 +493,7 @@ impl Default for Context {
             menu_bar_clip_max_y: None,
             input_text_state: None,
             next_item_width: None,
+            next_item_open: None,
             color_stack: Vec::new(),
             style_var_stack: Vec::new(),
             scalar_style_var_stack: Vec::new(),
@@ -3088,6 +3091,11 @@ impl Context {
             && mouse.y < max.y
     }
 
+    /// `ImGui::SetNextItemOpen`: forces the state of the next tree node or collapsing header before
+    /// its own press handling runs.
+    pub fn set_next_item_open(&mut self, open: bool) {
+        self.next_item_open = Some(open);
+    }
     /// `ImGui::PushStyleColor`: overrides one entry of the style colours until the matching pop.
     pub fn push_style_color(&mut self, col: crate::style::Col, colour: u32) {
         self.color_stack.push((col, self.style.colors[col.index()]));
@@ -5136,6 +5144,12 @@ impl Context {
             .unwrap_or(false);
         let pressed = self.interact_rect(id, frame_min, frame_max, item, over_arrow);
         let mut open = self.item_open(id);
+        // `SetNextItemOpen`: the reference applies the override before the press, so a press in the
+        // same frame still toggles it afterwards.
+        if let Some(forced) = self.next_item_open.take() {
+            open = forced;
+            self.set_item_open(id, open);
+        }
         if pressed {
             open = !open;
             self.set_item_open(id, open);
@@ -5274,6 +5288,12 @@ impl Context {
             over_arrow,
         );
         let mut open = self.item_open(id);
+        // `SetNextItemOpen`: the reference applies the override before the press, so a press in the
+        // same frame still toggles it afterwards.
+        if let Some(forced) = self.next_item_open.take() {
+            open = forced;
+            self.set_item_open(id, open);
+        }
         if pressed {
             open = !open;
             self.set_item_open(id, open);

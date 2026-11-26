@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **135 escenarios** más la **prueba negativa**.
+   que ejecuta **136 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **152 PRs** fusionados (el número sale de la búsqueda de la API: `is:pr is:merged`).
-- **135 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **153 PRs** fusionados (el número sale de la búsqueda de la API: `is:pr is:merged`).
+- **136 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 69.9 %.** Proyecto (contando el arnés): **71.8 %**.
 - 42 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
@@ -457,6 +457,22 @@ redondeo no pase desapercibido hasta el CI:
 - `color_u32_alpha(Text, 0.70)` da `0xB3FFFFFF` y no `0xB2`: es el redondeo por floats del reference.
 
 Los tests subieron de 39 a **42**.
+### SetNextItemOpen (peso 1): cerrada
+
+Golden `set_next_item_open`: un `CollapsingHeader` cerrado, forzado a abierto en el segundo frame con
+`SetNextItemOpen(true)` y dejado quieto en el tercero. Medido: **open 0**, **open 1**, **open 1** -- el
+estado forzado queda guardado en el almacen del item, y la lista del tercer frame se compara entera
+(flecha hacia abajo y texto hijo incluidos).
+
+- El reference aplica la peticion **antes** de su propio manejo del clic, asi que un clic en el mismo
+  frame todavia alterna despues; el port hace lo mismo (`next_item_open.take()` justo tras leer
+  `item_open`, antes del `if pressed`).
+- Se aplica a las **dos** funciones que leen `item_open` (`collapsing_header` y `tree_node`), no solo a
+  la que tenia el golden: media API aplicada es peor que ninguna.
+- **Trampa del driver**: `WriteWindowIconsFixture` **exige un frame previo** (`NewFrame`/`EndFrame`)
+  para que el atlas tenga las filas de linea; sin el, el driver del reference revienta con 0xC0000005.
+  Y en el port el fixture de iconos hay que pasarlo tambien a `ctx.set_line_uv_lines(parse_line_uvs(...))`,
+  o el panel de la flecha falla con "the atlas line-texture table is not pinned".
 ### CalcTextSize (peso 1): cerrada
 
 Golden `calc_text_size`: `CalcTextSize` de "A", "ABC" y "A C" con la fuente del fixture. Medido:
@@ -915,7 +931,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 135 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 136 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
