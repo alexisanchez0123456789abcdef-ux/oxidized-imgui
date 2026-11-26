@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **99 escenarios** más la **prueba negativa**.
+   que ejecuta **100 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **106 PRs** fusionados.
-- **99 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **107 PRs** fusionados.
+- **100 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 68.1 %.** Proyecto (contando el arnés): **70.3 %**.
 - 32 tests unitarios en 6 binarios.
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
@@ -151,7 +151,7 @@ comandos por columna (`tables_clip`). El resto del sistema, por orden de coste:
 - Abierto: con `RowBg` y **dos** columnas, la banda alterna del volcado de referencia sólo cubre
   `68..132` (la primera columna) en vez de `68..220`; hace falta medir de dónde sale ese recorte antes
   de portarlo. Con una columna el golden `tables_rowbg_headers` cuadra.
-- Ordenar por clic en la cabecera (la maquinaria de `SortSpecs`), arrastrar para reordenar, y
+- El **clic** de cabecera que cambia las specs (el estado ya está: `TableGetSortSpecs`,\n  `tables_sort_tristate` y `IsSorted`), arrastrar para reordenar, y
   `TableGetHoveredColumn`/`Row`. Hover (`tables_header_hover`) y pulsado (`tables_header_active`) ya
   están: las cabeceras usan `AllowOverlap`, así que sólo reportan hover si ya lo tenían el frame
   anterior y por eso el resalte aparece en el **tercer** frame.
@@ -332,7 +332,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 99 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 100 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
