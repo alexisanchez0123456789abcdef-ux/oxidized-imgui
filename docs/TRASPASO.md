@@ -379,6 +379,35 @@ hija interior** que crean `ScrollY`/`ScrollX`, con golden `tables_scroll_child`:
 - Medición: con 2 filas el contenido de la hija mide 51 px (17 de cabecera + 2×17). Con 10 filas y
   100 px de alto, `ScrollMax.y = 87` (187 de contenido − 100) y la barra aparece en el segundo frame.
 
+### Tablas, scroll: la barra, medido y pendiente (peso 1)
+
+Sonda `tables_scroll_bar` (tabla `ScrollY | RowBg`, 3 columnas fijas, 10 filas, `outer_size.y = 100`,
+2 frames; el escenario definitivo no está hecho todavía). La barra aparece en el **segundo** frame y
+cambia el reparto de comandos de la lista de la hija:
+
+- **Frame 0** (sin barra): `cmd 0` con el clip del **host** (18 elems: los fondos de fila) y `cmd 1`
+  con el clip de la tabla `(68,68)-(352,259)` (78 elems: etiquetas, textos y los huecos de las celdas).
+- **Frame 1** (con barra): el `InnerClipRect` de la tabla pasa a `(68,68)-(338,259)` (352 − 14 de
+  barra) y la lista de la hija trae **tres** comandos: `cmd 0` clip del host con **144 elems** (la
+  barra **y** los fondos de fila, fusionados por el splitter porque comparten clip), `cmd 1` clip del
+  host con **18 elems** (tres quads, aún por identificar) y `cmd 2` clip de la tabla con 78 elems (el
+  contenido).
+
+Lo que eso fija para el port:
+
+- **La barra se dibuja en la lista de la hija con el clip del host**, o sea *antes* del push del
+  `InnerClipRect` de la tabla; el port hoy empuja el clip de la hija nada más abrirla, así que la barra
+  tiene que ir antes de ese push (o sobre un clip equivalente) para caer en el mismo comando que los
+  fondos de fila.
+- `draw_scrollbar` sirve, pero hay que **parametrizar el padding**: su `contents` suma
+  `style.window_padding * 2` y la ventana hija de la tabla tiene padding 0. También hay que pasarle el
+  `outer`/`inner_rect` de la hija (con el `inner_rect` ya encogido por la barra).
+- El `InnerClipRect` de la tabla (y con él el clip de las columnas y de sus celdas) se encoge el ancho
+  de la barra: `(68,68)-(338,259)`.
+- Queda por identificar el `cmd 1` de tres quads antes de poder cerrar la unidad; después, la rueda y
+  el arrastre de la barra, y con eso `TableSetupScrollFreeze` (que sólo cuenta si
+  `InnerWindow->Scroll` no es 0).
+
 ### Entrada de texto (peso 4): cerrada
 
 La pieza grande que quedó cerrada entre los PRs 71 y 76: estado de edición, cursor, selección,
