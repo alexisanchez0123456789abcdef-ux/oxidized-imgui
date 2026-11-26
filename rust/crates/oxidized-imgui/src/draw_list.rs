@@ -2287,8 +2287,27 @@ impl DrawList {
     /// Only the pixel-aligned path is implemented: the reference reduces `AddRectFilled` to
     /// `PrimRect` when rounding is zero and the coordinates need no anti-aliasing. Rounded,
     /// anti-aliased and sub-pixel rectangles are not implemented yet.
+    /// `AddRectFilled` with `rounding = 0`. Whole-pixel coordinates take the `PrimRect` shortcut, which
+    /// is the only path the goldens used to cover before `rect_filled_aa`. A fractional coordinate
+    /// makes the reference fall through to `AddConvexPolyFilled(points, 4, col, JoinMiter)`: 8 vertices
+    /// (4 opaque inner, 4 alpha-free outer half a fringe away) and 30 indices.
     pub fn add_rect_filled(&mut self, min: Vec2, max: Vec2, col: ImU32) {
-        self.prim_rect(min, max, col);
+        const A_MASK: u32 = 0xFF00_0000;
+        if (col & A_MASK) == 0 {
+            return;
+        }
+        let whole = |value: f32| value == value.trunc();
+        if whole(min.x) && whole(min.y) && whole(max.x) && whole(max.y) {
+            self.prim_rect(min, max, col);
+            return;
+        }
+        let points = [
+            min,
+            Vec2 { x: max.x, y: min.y },
+            max,
+            Vec2 { x: min.x, y: max.y },
+        ];
+        self.add_convex_poly_filled(&points, col, draw_flags::JOIN_MITER);
     }
 
     /// `AddLineH` with `StrokeCenterBiased`, on the pixel-aligned path the reference takes when the
