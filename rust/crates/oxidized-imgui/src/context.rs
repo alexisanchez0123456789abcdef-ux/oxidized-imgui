@@ -3445,6 +3445,11 @@ impl Context {
         self.popup_open = Some(self.get_id(id));
     }
 
+    /// `ImGui::CloseCurrentPopup`: the popup stops being open, and the frame that asked for it still
+    /// draws it, the way the reference hides the popup window only on the next frame.
+    pub fn close_current_popup(&mut self) {
+        self.popup_pending_close = true;
+    }
     /// `ImGui::BeginPopup`: the popup's window, anchored where the caller asks for.
     ///
     /// A popup owns a draw list of its own, which is why the window hosting it keeps its list aside

@@ -1,0 +1,53 @@
+header imgui 1.93.1 WIP 19303
+scenario close_current_popup
+frame 0 open 1
+frame 1 open 1
+frame 2 open 1
+frame 3 open 0
+white_uv 3a800000 3b800000
+cmd_count 1
+cmd 0 clip 00000000 00000000 44a00000 44340000 elems 30 vtxoff 0 idxoff 0
+vtx_count 12
+vtx 0 pos 42700000 42700000 uv 3a800000 3b800000 col ff262626
+vtx 1 pos 43b40000 42700000 uv 3a800000 3b800000 col ff262626
+vtx 2 pos 43b40000 43820000 uv 3a800000 3b800000 col ff262626
+vtx 3 pos 42700000 43820000 uv 3a800000 3b800000 col ff262626
+vtx 4 pos 42700000 42700000 uv 3a800000 3b800000 col 80806e6e
+vtx 5 pos 42740000 42740000 uv 3a800000 3b800000 col 80806e6e
+vtx 6 pos 43b40000 42700000 uv 3a800000 3b800000 col 80806e6e
+vtx 7 pos 43b38000 42740000 uv 3a800000 3b800000 col 80806e6e
+vtx 8 pos 43b40000 43820000 uv 3a800000 3b800000 col 80806e6e
+vtx 9 pos 43b38000 43818000 uv 3a800000 3b800000 col 80806e6e
+vtx 10 pos 42700000 43820000 uv 3a800000 3b800000 col 80806e6e
+vtx 11 pos 42740000 43818000 uv 3a800000 3b800000 col 80806e6e
+idx_count 30
+idx 0
+idx 1
+idx 2
+idx 0
+idx 2
+idx 3
+idx 4
+idx 7
+idx 5
+idx 4
+idx 6
+idx 7
+idx 6
+idx 9
+idx 7
+idx 6
+idx 8
+idx 9
+idx 8
+idx 11
+idx 9
+idx 8
+idx 10
+idx 11
+idx 10
+idx 5
+idx 11
+idx 10
+idx 4
+idx 5

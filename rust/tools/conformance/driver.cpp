@@ -5516,6 +5516,57 @@ static void DumpSetNextItemOpen()
     }
 }
 
+// close_current_popup: CloseCurrentPopup inside the popup closes it, and the frame that asked for it
+// still draws the popup.
+static void DumpCloseCurrentPopup()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario close_current_popup\n");
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[1] = { 'A' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    WriteGlyphFixture(font, bake_order, 1);
+
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
+    for (int frame = 0; frame < 4; frame++)
+    {
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+        ImGui::Begin("W", NULL, flags);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        if (frame == 0)
+            ImGui::OpenPopup("P");
+        int open = 0;
+        if (ImGui::BeginPopup("P"))
+        {
+            open = 1;
+            ImGui::Text("A");
+            if (frame == 2)
+                ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
+        printf("frame %d open %d\n", frame, open);
+
+        ImGui::End();
+        if (frame == 3)
+            DumpDrawListBody(*dl);
+        ImGui::EndFrame();
+    }
+}
+
 // windows_move: dragging a window by its title bar and by its body, and the clamp that keeps it
 // reachable when it is dragged off the display. Only the positions are dumped: the geometry of a
 // window is what windows_order already covers.
@@ -7404,6 +7455,13 @@ int main(int argc, char** argv)
         return 0;
     }
 
+
+    if (strcmp(name, "close_current_popup") == 0)
+    {
+        DumpCloseCurrentPopup();
+        ImGui::DestroyContext();
+        return 0;
+    }
 
     if (strcmp(name, "set_next_item_open") == 0)
     {
