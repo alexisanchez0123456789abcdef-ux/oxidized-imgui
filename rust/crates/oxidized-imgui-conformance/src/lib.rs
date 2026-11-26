@@ -67,6 +67,7 @@ pub const SCENARIOS: &[&str] = &[
     "tables_sort_specs",
     "tables_sort_tristate",
     "tables_reorder",
+    "tables_scroll_child",
     "tables_sort_multi",
     "tables_sort_arrow",
     "tables_sort_click",
@@ -3341,6 +3342,78 @@ pub fn tables_column_hovered_flag_dump() -> String {
         }
         ctx.end_window();
         ctx.end_frame();
+    }
+    out
+}
+
+/// The `tables_scroll_child` scenario: a `ScrollY` table builds its rows in an inner child window (no
+/// padding, no border) with a draw list of its own, so the frame's draw data carries two lists: the
+/// host's empty one and the child's with the whole table. The content fits, so no scrollbar shows.
+pub fn tables_scroll_child_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2, WindowFlags, column_flags, table_flags};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/tables_scroll_child.glyphs.txt"
+    );
+    let text = std::fs::read_to_string(path).expect("tables scroll child fixture");
+    let font = Font::from_pinned(&text).expect("font fixture");
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario tables_scroll_child\n");
+
+    for frame in 0..2 {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+        ctx.io_mut().mouse_down[0] = false;
+        ctx.begin_frame();
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+        );
+        ctx.begin_window_ex(
+            "S",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+            false,
+        );
+        let began = ctx.begin_table(
+            "SCROLL",
+            3,
+            table_flags::SCROLL_Y | table_flags::ROW_BG,
+            Vec2 { x: 0.0, y: 400.0 },
+        );
+        out.push_str(&format!("frame {frame} table begin {}\n", i32::from(began)));
+        ctx.table_setup_column("A", column_flags::WIDTH_FIXED, 60.0);
+        ctx.table_setup_column("B", column_flags::WIDTH_FIXED, 80.0);
+        ctx.table_setup_column("C", column_flags::WIDTH_FIXED, 100.0);
+        ctx.table_headers_row();
+        for row in 0..2 {
+            ctx.table_next_row();
+            ctx.table_next_column();
+            ctx.text(&format!("R{row}"));
+            ctx.table_next_column();
+            ctx.dummy(Vec2 { x: 10.0, y: 10.0 });
+            ctx.table_next_column();
+            ctx.dummy(Vec2 { x: 10.0, y: 10.0 });
+        }
+        ctx.end_table();
+        ctx.end_window();
+        ctx.end_frame();
+        let lists = ctx.render_lists();
+        out.push_str(&format!("frame {frame} lists {}\n", lists.len()));
+        for (i, (name, list)) in lists.iter().enumerate() {
+            out.push_str(&format!("list {i} {name}\n"));
+            let body = dump("tables_scroll_child", list);
+            for line in body.lines().skip(2) {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
     }
     out
 }
@@ -7041,6 +7114,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "tables_sort_specs" => Some(tables_sort_specs_dump()),
         "tables_sort_tristate" => Some(tables_sort_tristate_dump()),
         "tables_reorder" => Some(tables_reorder_dump()),
+        "tables_scroll_child" => Some(tables_scroll_child_dump()),
         "tables_sort_multi" => Some(tables_sort_multi_dump()),
         "tables_sort_arrow" => Some(tables_sort_arrow_dump()),
         "tables_sort_click" => Some(tables_sort_click_dump()),

@@ -37,6 +37,10 @@ pub mod table_flags {
     pub const SORT_TRISTATE: u32 = 1 << 27;
     /// `ImGuiTableFlags_RowBg`: every other row gets `TableRowBgAlt`.
     pub const ROW_BG: u32 = 1 << 6;
+    /// `ImGuiTableFlags_ScrollX`: the table builds its rows in an inner scrolling window.
+    pub const SCROLL_X: u32 = 1 << 24;
+    /// `ImGuiTableFlags_ScrollY`: the table builds its rows in an inner scrolling window.
+    pub const SCROLL_Y: u32 = 1 << 25;
     /// `ImGuiTableFlags_SizingMask_`: the bits that pick the table sizing policy.
     pub const SIZING_MASK: u32 = 7 << 13;
     /// `ImGuiTableFlags_SizingFixedFit`: the default policy.

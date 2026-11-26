@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **104 escenarios** más la **prueba negativa**.
+   que ejecuta **105 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **111 PRs** fusionados.
-- **104 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **112 PRs** fusionados.
+- **105 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 68.1 %.** Proyecto (contando el arnés): **70.3 %**.
 - 32 tests unitarios en 6 binarios.
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
@@ -141,7 +141,9 @@ y el siguiente (flecha nueva);
 `tables_reorder`: el arrastre de una cabecera que reordena las columnas, aplicado en el `BeginTable`
 siguiente (dos movimientos, con la columna bajo el ratón como prueba de texto);
 `tables_sort_multi`: el Shift+clic que añade una segunda columna al orden (`SortMulti`), con su número
-de orden "2".
+de orden "2";
+`tables_scroll_child`: la ventana hija interior de una tabla con `ScrollY` (lista de dibujo propia, dos
+listas en el frame, recorte contra el host y el fondo de fila con el clip del host).
 
 La tabla completa, con el nombre del golden de cada fila, está en `rust/README.md`.
 El detalle por pieza y su peso, en `docs/progress.json`.
@@ -160,16 +162,18 @@ de columnas (`tables_set_column`, `tables_names` y `tables_header_id`), el recor
 comandos por columna (`tables_clip`), las specs de orden (`tables_sort_specs`, `tables_sort_tristate`
 y `tables_column_sorted_flag`), la **flecha de orden** (`tables_sort_arrow`, con el número del
 segundo criterio y la dirección descendente), el **clic** que alterna la dirección
-(`tables_sort_click`), el **reordenado por arrastre** (`tables_reorder`) y el **Shift+clic multi-columna**
-(`tables_sort_multi`). El resto del sistema, por
-orden de coste:
+(`tables_sort_click`), el **reordenado por arrastre** (`tables_reorder`), el **Shift+clic multi-columna**
+(`tables_sort_multi`) y la **ventana hija interior de la tabla con scroll** (`tables_scroll_child`). El
+resto del sistema, por orden de coste:
 
 - **Políticas de tamaño**: `SizingStretchSame`, los pesos explícitos y el ancho automático por
   contenido ya están; falta el peso de `SizingStretchProp` derivado del contenido (no el declarado).
 
-- **Congelar** filas/columnas y el **scroll propio de la tabla** (la tabla con `ScrollX`/`ScrollY` crea
-  una ventana hija, con todo lo que eso arrastra). Medido: `TableSetupScrollFreeze(0, 1)` en una tabla
-  sin scroll deja el volcado **idéntico** al de no usarlo, así que su golden necesita recorte o scroll.
+- **El scroll de la tabla**: la ventana hija interior ya está (`tables_scroll_child`); faltan **su barra**,
+  la rueda y el arrastre sobre ella, y con eso **congelar** filas/columnas, porque
+  `TableSetupScrollFreeze` sólo cuenta si `InnerWindow->Scroll` no es 0 (`TableSetupScrollFreeze` pone
+  `FreezeRowsCount = 0` mientras no haya scroll). Medido: `TableSetupScrollFreeze(0, 1)` en una tabla sin
+  scroll deja el volcado **idéntico** al de no usarlo.
 - Abierto: con `RowBg` y **dos** columnas, la banda alterna del volcado de referencia sólo cubre
   `68..132` (la primera columna) en vez de `68..220`; hace falta medir de dónde sale ese recorte antes
   de portarlo. Con una columna el golden `tables_rowbg_headers` cuadra.
@@ -353,6 +357,28 @@ Golden `tables_reorder`: 17 frames con dos movimientos (B antes de A y C antes d
 - Geometría: con columnas de 60/80/100 el paso es 68/88/108; tras el primer movimiento el orden B, A, C
   ocupa en pantalla `64..152`, `152..220` y `220..328`.
 
+### Tablas, ventana hija del scroll (peso 1): cerrada
+
+`TableSetupScrollFreeze` no hace nada sin scroll, así que el primer corte del scroll es la **ventana
+hija interior** que crean `ScrollY`/`ScrollX`, con golden `tables_scroll_child`:
+
+- `BeginTableEx` crea la hija con `BeginChildEx` y **padding 0, borde 0**: su rectángulo es el de la
+  tabla y el contenido arranca en su esquina.
+- La hija tiene **lista de dibujo propia**: el `ImDrawData` del frame trae **una sola lista** (la de la
+  hija, `S/SCROLL_<id:08X>`), porque la del host queda vacía y `AddDrawListToDrawData` descarta las
+  listas sin vértices.
+- Su clip es su rectángulo **intersecado con el clip del host** y redondeado: `(68,68)-(352,259)` en el
+  golden, porque la tabla mide 400 de alto y la ventana 200, así que se recorta.
+- **El fondo de fila no usa ese clip**: `TableEndRow` sobreescribe el clip del comando con
+  `Bg0ClipRectForDrawCmd` = `OuterWindow->ClipRect` (el del **host**). Por eso el golden tiene **dos
+  comandos**: el fondo (2 quads con clip `(61,61)-(359,259)`) y el resto (clip de la tabla
+  `(68,68)-(352,259)`), con todos los vértices en un solo buffer. En una tabla sin scroll los dos clips
+  coinciden y el merge los deja en **un** comando; por eso ningún golden anterior lo había visto.
+- El layout de la tabla usa `WorkRect`/`InnerRect` de la hija, y `EndTable` cierra la hija (`EndChild`
+  avanza el host por el tamaño de la tabla) sin estirar `OuterRect.Max.y` al contenido.
+- Medición: con 2 filas el contenido de la hija mide 51 px (17 de cabecera + 2×17). Con 10 filas y
+  100 px de alto, `ScrollMax.y = 87` (187 de contenido − 100) y la barra aparece en el segundo frame.
+
 ### Entrada de texto (peso 4): cerrada
 
 La pieza grande que quedó cerrada entre los PRs 71 y 76: estado de edición, cursor, selección,
@@ -444,7 +470,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 104 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 105 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
