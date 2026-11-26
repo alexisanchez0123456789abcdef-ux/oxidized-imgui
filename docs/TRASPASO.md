@@ -489,6 +489,8 @@ Golden `same_line_offset`: cuatro textos en la misma linea con `SameLine(50)`, `
 - Con **offset cero** la x es `ultimo_max.x + spacing`, y un **spacing negativo significa
   `ItemSpacing.x`** (8): de 74 a 82 es lo que separa los dos ultimos.
 - La `y` siempre es la de la linea anterior, que es lo que hace que `SameLine` sea "misma linea".
+- `same_line()` sin argumentos es `same_line_with(0, -1)`: el port la reescribe asi y el cuerpo duplicado
+  desaparece, con los 139 goldens como prueba de que no cambia nada.
 ### SmallButton (peso 1): cerrada, con la regla medida
 
 Golden `small_button`: un `Button("A")` y un `SmallButton("A")` en la misma ventana. Medido: el boton
