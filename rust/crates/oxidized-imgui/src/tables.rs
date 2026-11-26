@@ -55,6 +55,18 @@ pub mod column_flags {
     pub const WIDTH_MASK: u32 = 1 << 3 | 1 << 4;
     /// `ImGuiTableColumnFlags_NoResize`.
     pub const NO_RESIZE: u32 = 1 << 5;
+    /// `ImGuiTableColumnFlags_IndentEnable`: column 0 keeps the current indent.
+    pub const INDENT_ENABLE: u32 = 1 << 16;
+    /// `ImGuiTableColumnFlags_IndentDisable`: the other columns ignore it.
+    pub const INDENT_DISABLE: u32 = 1 << 17;
+    /// `ImGuiTableColumnFlags_IndentMask_`.
+    pub const INDENT_MASK: u32 = 1 << 16 | 1 << 17;
+    /// `ImGuiTableColumnFlags_IsEnabled`: a status bit the layout sets on the columns it processes.
+    pub const IS_ENABLED: u32 = 1 << 24;
+    /// `ImGuiTableColumnFlags_IsVisible`.
+    pub const IS_VISIBLE: u32 = 1 << 25;
+    /// `ImGuiTableColumnFlags_StatusMask_`, as far as this port sets it.
+    pub const STATUS_MASK: u32 = 1 << 24 | 1 << 25;
 }
 
 /// `TABLE_BORDER_SIZE`.
@@ -169,6 +181,29 @@ impl Table {
         let index = self.decl_columns;
         if index >= self.columns.len() {
             return;
+        }
+        // `TableSetupColumnFlags`: the policy fills in a width kind, a table that cannot be resized
+        // disables resizing, and the first column keeps the indent while the rest ignore it.
+        let policy = self.flags & table_flags::SIZING_MASK;
+        let mut flags = flags;
+        if flags & column_flags::WIDTH_MASK == 0 {
+            flags |= if policy == table_flags::SIZING_FIXED_FIT
+                || policy == table_flags::SIZING_FIXED_SAME
+            {
+                column_flags::WIDTH_FIXED
+            } else {
+                column_flags::WIDTH_STRETCH
+            };
+        }
+        if self.flags & table_flags::RESIZABLE == 0 {
+            flags |= column_flags::NO_RESIZE;
+        }
+        if flags & column_flags::INDENT_MASK == 0 {
+            flags |= if index == 0 {
+                column_flags::INDENT_ENABLE
+            } else {
+                column_flags::INDENT_DISABLE
+            };
         }
         self.columns[index] = TableColumn {
             name: label.to_string(),
@@ -323,6 +358,9 @@ impl Table {
         let mut min_x = self.outer_rect.0.x + self.outer_padding_x - self.cell_spacing_x1;
         let columns_count = self.columns.len() as i32;
         for (n, column) in self.columns.iter_mut().enumerate() {
+            // `TableUpdateLayout` clears the status bits and marks the column it lays out.
+            column.flags &= !column_flags::STATUS_MASK;
+            column.flags |= column_flags::IS_ENABLED | column_flags::IS_VISIBLE;
             column.next_enabled_column = if (n as i32) + 1 < columns_count {
                 n as i32 + 1
             } else {

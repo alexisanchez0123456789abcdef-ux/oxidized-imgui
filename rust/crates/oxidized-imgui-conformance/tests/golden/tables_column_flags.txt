@@ -1,0 +1,18 @@
+header imgui 1.93.1 WIP 19303
+scenario tables_column_flags
+table begin 1 count 3
+fixed column 0 flags 00010030
+fixed column 1 flags 00020030
+fixed column 2 flags 00020030
+fixed inside 0 flags 03010030
+fixed inside 1 flags 03020030
+fixed inside 2 flags 03020030
+after flags 00000000
+table2 begin 1
+stretch column 0 flags 00010028
+stretch column 1 flags 00020030
+white_uv 3a800000 3b800000
+cmd_count 1
+cmd 0 clip 42740000 42740000 43b38000 43818000 elems 0 vtxoff 0 idxoff 0
+vtx_count 0
+idx_count 0

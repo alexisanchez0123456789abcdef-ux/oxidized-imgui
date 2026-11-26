@@ -3338,6 +3338,16 @@ impl Context {
         self.table.as_ref().map(|t| t.columns.len()).unwrap_or(0)
     }
 
+    /// `ImGui::TableGetColumnFlags`: the flags the column ended up with, after the table policy
+    /// filled in the width kind, the resize and indentation bits.
+    pub fn table_get_column_flags(&self, column: usize) -> u32 {
+        self.table
+            .as_ref()
+            .and_then(|table| table.columns.get(column))
+            .map(|c| c.flags)
+            .unwrap_or(0)
+    }
+
     /// `ImGui::TableGetColumnName`: the label a column was declared with. It is empty before the
     /// declaration, and `None` once the table is closed (the reference returns NULL there).
     pub fn table_get_column_name(&self, column: usize) -> Option<&str> {

@@ -53,6 +53,7 @@ pub const SCENARIOS: &[&str] = &[
     "tables_clip",
     "tables_auto_width",
     "tables_header_inrow",
+    "tables_column_flags",
     "text_draw",
     "button",
     "widgets_basic",
@@ -2640,6 +2641,87 @@ pub fn tables_header_inrow_dump() -> String {
     ));
 
     let full = dump("tables_header_inrow", ctx.draw_list());
+    for line in full.lines().skip(2) {
+        out.push_str(line);
+        out.push('\n');
+    }
+    ctx.end_window();
+    ctx.end_frame();
+    out
+}
+
+/// The `tables_column_flags` scenario: `TableGetColumnFlags` after the table policy filled in the
+/// width kind, the resize bit and the indentation bit, for a fixed table and for a stretch one.
+pub fn tables_column_flags_dump() -> String {
+    use oxidized_imgui::{Context, Vec2, WindowFlags, column_flags, table_flags};
+
+    let mut ctx = Context::new();
+    ctx.io_mut().delta_time = 0.1;
+    ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+    ctx.io_mut().mouse_down[0] = false;
+    ctx.begin_frame();
+    ctx.set_next_window_flags(
+        WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+    );
+    ctx.begin_window_ex(
+        "W",
+        Some(Vec2 { x: 60.0, y: 60.0 }),
+        Some(Vec2 { x: 300.0, y: 200.0 }),
+        false,
+    );
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario tables_column_flags\n");
+
+    let began = ctx.begin_table("T", 3, table_flags::SIZING_FIXED_FIT, Vec2::default());
+    out.push_str(&format!(
+        "table begin {} count {}\n",
+        i32::from(began),
+        ctx.table_get_column_count()
+    ));
+    ctx.table_setup_column("A", column_flags::WIDTH_FIXED, 60.0);
+    ctx.table_setup_column("B", 0, 0.0);
+    ctx.table_setup_column(
+        "C",
+        column_flags::WIDTH_FIXED | column_flags::NO_RESIZE,
+        80.0,
+    );
+    for n in 0..3 {
+        out.push_str(&format!(
+            "fixed column {n} flags {:08x}\n",
+            ctx.table_get_column_flags(n)
+        ));
+    }
+    ctx.table_next_row_min(20.0);
+    ctx.table_next_column();
+    for n in 0..3 {
+        out.push_str(&format!(
+            "fixed inside {n} flags {:08x}\n",
+            ctx.table_get_column_flags(n)
+        ));
+    }
+    ctx.end_table();
+    out.push_str(&format!(
+        "after flags {:08x}\n",
+        ctx.table_get_column_flags(0)
+    ));
+
+    let began2 = ctx.begin_table("T2", 2, table_flags::SIZING_STRETCH_SAME, Vec2::default());
+    out.push_str(&format!("table2 begin {}\n", i32::from(began2)));
+    ctx.table_setup_column("A", 0, 0.0);
+    ctx.table_setup_column("B", column_flags::WIDTH_FIXED, 40.0);
+    for n in 0..2 {
+        out.push_str(&format!(
+            "stretch column {n} flags {:08x}\n",
+            ctx.table_get_column_flags(n)
+        ));
+    }
+    ctx.end_table();
+
+    let full = dump("tables_column_flags", ctx.draw_list());
     for line in full.lines().skip(2) {
         out.push_str(line);
         out.push('\n');
@@ -5704,6 +5786,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "tables_clip" => Some(tables_clip_dump()),
         "tables_auto_width" => Some(tables_auto_width_dump()),
         "tables_header_inrow" => Some(tables_header_inrow_dump()),
+        "tables_column_flags" => Some(tables_column_flags_dump()),
         "text_draw" => Some(text_draw_dump()),
         "button" => Some(button_dump()),
         "widgets_basic" => Some(widgets_basic_dump()),
