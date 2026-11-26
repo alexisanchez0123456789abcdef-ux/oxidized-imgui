@@ -221,6 +221,16 @@ pub struct Window {
     clip_rect: Option<[f32; 4]>,
 }
 
+/// The ImGuiStyleVar_* entries whose value is a single float.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ScalarStyleVar {
+    Alpha,
+    DisabledAlpha,
+    FrameBorderSize,
+    IndentSpacing,
+    SeparatorSize,
+}
+
 /// The ImGuiStyleVar_* entries whose value is a two-item vector.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum StyleVar {
@@ -382,6 +392,8 @@ pub struct Context {
     color_stack: Vec<(crate::style::Col, u32)>,
     /// `ImGui::PushStyleVar` stack: the values to restore on each pop.
     style_var_stack: Vec<(StyleVar, Vec2)>,
+    /// The same for the entries that are a single float.
+    scalar_style_var_stack: Vec<(ScalarStyleVar, f32)>,
     item_width_stack: Vec<f32>,
     /// `g.HoveredIdTimer`: how long the border under the mouse has been hovered. The reference
     /// waits WINDOWS_RESIZE_FROM_EDGES_FEEDBACK_TIMER before it reports a border, so brushing past
@@ -481,6 +493,7 @@ impl Default for Context {
             next_item_width: None,
             color_stack: Vec::new(),
             style_var_stack: Vec::new(),
+            scalar_style_var_stack: Vec::new(),
             item_width_stack: Vec::new(),
             last_popup_name: None,
             resize_grip_cols: [0; 2],
@@ -3110,6 +3123,34 @@ impl Context {
                 StyleVar::FramePadding => &mut self.style.frame_padding,
                 StyleVar::WindowPadding => &mut self.style.window_padding,
                 StyleVar::ItemInnerSpacing => &mut self.style.item_inner_spacing,
+            };
+            *slot = previous;
+        }
+    }
+
+    /// `ImGui::PushStyleVar` for the entries that are a single float (`ImGuiStyleVar_Alpha` and
+    /// friends), which the port keeps on their own stack.
+    pub fn push_style_var_f32(&mut self, var: ScalarStyleVar, value: f32) {
+        let slot = match var {
+            ScalarStyleVar::Alpha => &mut self.style.alpha,
+            ScalarStyleVar::DisabledAlpha => &mut self.style.disabled_alpha,
+            ScalarStyleVar::FrameBorderSize => &mut self.style.frame_border_size,
+            ScalarStyleVar::IndentSpacing => &mut self.style.indent_spacing,
+            ScalarStyleVar::SeparatorSize => &mut self.style.separator_size,
+        };
+        self.scalar_style_var_stack.push((var, *slot));
+        *slot = value;
+    }
+
+    /// `ImGui::PopStyleVar` for the float entries.
+    pub fn pop_style_var_f32(&mut self) {
+        if let Some((var, previous)) = self.scalar_style_var_stack.pop() {
+            let slot = match var {
+                ScalarStyleVar::Alpha => &mut self.style.alpha,
+                ScalarStyleVar::DisabledAlpha => &mut self.style.disabled_alpha,
+                ScalarStyleVar::FrameBorderSize => &mut self.style.frame_border_size,
+                ScalarStyleVar::IndentSpacing => &mut self.style.indent_spacing,
+                ScalarStyleVar::SeparatorSize => &mut self.style.separator_size,
             };
             *slot = previous;
         }
