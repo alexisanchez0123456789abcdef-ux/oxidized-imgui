@@ -73,6 +73,8 @@ impl WindowFlags {
     pub const ALWAYS_AUTO_RESIZE: Self = Self(1 << 3);
     /// `ImGuiWindowFlags_NoResize`: no resize grips and no resize borders.
     pub const NO_RESIZE: Self = Self(1 << 4);
+    /// `ImGuiWindowFlags_Tooltip`: a tooltip window, which takes no mouse and no keyboard focus.
+    pub const TOOLTIP: Self = Self(1 << 6);
     /// `ImGuiWindowFlags_Popup`: draws with the popup background.
     pub const POPUP: Self = Self(1 << 5);
 
@@ -3458,6 +3460,59 @@ impl Context {
     pub fn label(&mut self, text: &str) {
         let size = self.font.calc_text_size(text, self.font.size);
         self.dummy(size);
+    }
+
+    /// `ImGui::Text` with the text actually painted, which is what a tooltip shows.
+    pub fn text(&mut self, text: &str) {
+        let font = self.font.clone();
+        let pos = self.window().cursor;
+        let size = font.calc_text_size(text, font.size);
+        let colour = self.style.color_u32(crate::style::Col::Text);
+        self.draw_list.add_text(&font, font.size, pos, colour, text);
+        self.dummy(size);
+    }
+
+    /// `ImGui::BeginTooltip`: a tooltip is a window at the mouse that takes neither the mouse nor the
+    /// keyboard, so nothing under it stops hovering.
+    pub fn begin_tooltip(&mut self) {
+        // `ImFormatString("##Tooltip_%02d")`: tooltips are recycled by depth.
+        let name = "##Tooltip_00";
+        // On its first frame a tooltip only measures its content, like a popup: the list it produced
+        // is empty and never reaches the draw data.
+        let measured = WindowMemory::find(&self.memory, name).map(|memory| memory.size_full);
+        self.popup_first_frame = measured.is_none();
+        // `TOOLTIP_DEFAULT_OFFSET_MOUSE`: down and to the right of the mouse.
+        let pos = {
+            let mouse = self.io.mouse_pos.unwrap_or_default();
+            Vec2 {
+                x: mouse.x + 25.0,
+                y: mouse.y + 10.0,
+            }
+        };
+        let flags = WindowFlags::ALWAYS_AUTO_RESIZE
+            | WindowFlags::NO_RESIZE
+            | WindowFlags::NO_MOVE
+            | WindowFlags::NO_SCROLLBAR
+            | WindowFlags::POPUP
+            | WindowFlags::TOOLTIP;
+        self.set_next_window_flags(flags);
+        let host = core::mem::take(&mut self.draw_list);
+        self.list_stack.push(host);
+        self.begin_window(name, Some(pos), None);
+    }
+
+    /// `ImGui::EndTooltip`: close the tooltip window and hand the host its list back.
+    pub fn end_tooltip(&mut self) {
+        self.end_window();
+        if self.popup_first_frame {
+            self.frame_lists.pop();
+            self.list_parents.pop();
+            self.popup_first_frame = false;
+        }
+        self.draw_list = self
+            .list_stack
+            .pop()
+            .unwrap_or_else(|| self.new_window_draw_list());
     }
 
     /// `ImGui::Checkbox`: a square box plus a label. Returns true on the frame it is toggled.

@@ -36,6 +36,7 @@ instead of against our own expectations:
 | Mouse wheel | over a window it scrolls by five font sizes (capped at two thirds of the interior), symmetric up and down, and leaves the scroll alone when the wheel is silent | `window_wheel` golden |
 | Child region scroll | a region whose content is taller than it shows **its own** scrollbar, drawn in the host's list like its border, and its content is offset by its own scroll; the wheel over the region scrolls the region and its bar can be dragged, because a region is a window of its own for the hover search | `child_region` golden (four lists across four frames) |
 | Child region | `BeginChild` gives a region its own layout, padding, border and **own draw list**, submitted right after its host's; the host's list keeps the border and the child's list carries its own clip | `child_region` golden (two lists per frame) |
+| Tooltip | a tooltip is a window at the mouse that takes neither the mouse nor the keyboard, and it measures itself on its first frame like a popup | `tooltip` golden |
 | Popup row click | a row of a popup reports the press, and choosing one closes the popup and hands the focus back to its host, which is drawn on top that frame | `popup_click` golden |
 | Popup | a popup owns a draw list of its own, paints `PopupBg`, measures itself on its first frame and sits above every window for the mouse | `popup` golden |
 | Combo | the box shows its preview and its arrow, pressing it opens a popup as wide as the box, laid out under it and falling back to the other three sides | `combo` golden |
