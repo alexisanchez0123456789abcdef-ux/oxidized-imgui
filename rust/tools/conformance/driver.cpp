@@ -4968,6 +4968,55 @@ static void DumpWindowsSetFocus()
     DumpWindowOrderFrame(frame++, "idle_b_on_top");
 }
 
+// cursor_pos: GetCursorPos reports the cursor in window coordinates and SetCursorPos places it
+// there, so a text after it starts at the given point.
+static void DumpCursorPos()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario cursor_pos\n");
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[2] = { 'A', 'B' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    WriteGlyphFixture(font, bake_order, 2);
+
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
+    for (int frame = 0; frame < 2; frame++)
+    {
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+        ImGui::Begin("W", NULL, flags);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 p = ImGui::GetCursorPos();
+        printf("frame %d start %08x %08x\n", frame, Bits(p.x), Bits(p.y));
+        ImGui::Text("A");
+        p = ImGui::GetCursorPos();
+        printf("frame %d after a %08x %08x\n", frame, Bits(p.x), Bits(p.y));
+        ImGui::SetCursorPos(ImVec2(10.0f, 5.0f));
+        p = ImGui::GetCursorPos();
+        printf("frame %d set %08x %08x\n", frame, Bits(p.x), Bits(p.y));
+        ImGui::Text("B");
+        p = ImGui::GetCursorPos();
+        printf("frame %d after b %08x %08x\n", frame, Bits(p.x), Bits(p.y));
+        ImGui::End();
+        if (frame == 1)
+            DumpDrawListBody(*dl);
+        ImGui::EndFrame();
+    }
+}
+
 // windows_move: dragging a window by its title bar and by its body, and the clamp that keeps it
 // reachable when it is dragged off the display. Only the positions are dumped: the geometry of a
 // window is what windows_order already covers.
@@ -6856,6 +6905,13 @@ int main(int argc, char** argv)
         return 0;
     }
 
+
+    if (strcmp(name, "cursor_pos") == 0)
+    {
+        DumpCursorPos();
+        ImGui::DestroyContext();
+        return 0;
+    }
 
     if (strcmp(name, "windows_set_focus") == 0)
     {

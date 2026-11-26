@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **125 escenarios** más la **prueba negativa**.
+   que ejecuta **126 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **134 PRs** fusionados.
-- **125 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **135 PRs** fusionados.
+- **126 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 69.9 %.** Proyecto (contando el arnés): **71.8 %**.
 - 39 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
@@ -420,6 +420,16 @@ Golden `separator_text`: "A", `SeparatorText("S")` y "B" en la misma ventana de 
   dibuja **una sola línea** de extremo a extremo, con su propio golden (`separator_text_empty`):
   el ítem sigue midiendo `max(label + padding, border)` de alto, así que el cursor avanza igual.
 
+### Cursor en coordenadas de ventana (peso 1): cerrada
+
+Golden `cursor_pos`: "A", `SetCursorPos((10, 5))` y "B" en una ventana de 300x200.
+
+- `GetCursorPos` devuelve el cursor **relativo a la ventana** (resta `Pos`), no la posicion de
+  pantalla de `GetCursorScreenPos`. Medido: `(8,8)` al empezar, `(8,25)` tras "A", `(10,5)` tras el
+  `SetCursorPos` y `(8,22)` tras "B".
+- `SetCursorPos` mueve **solo el cursor**, no el borde de la linea: por eso despues de "B" (que se
+  dibuja en (10,5) y mide 13 de alto) el cursor vuelve a `x 8` y baja a `y 5+13+4 = 22`. El port lo
+  modela sin tocar el borde de la linea, y el golden lo fija.
 ### Foco de ventana por nombre (peso 1): cerrada
 
 Golden `windows_set_focus`: las mismas dos ventanas solapadas de `windows_focus`, ahora con
@@ -776,7 +786,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 125 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 126 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```

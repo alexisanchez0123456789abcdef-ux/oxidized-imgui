@@ -3022,6 +3022,25 @@ impl Context {
         self.window().content_size
     }
 
+    /// `GetCursorPos`: the cursor in window coordinates, which is what the layout functions use.
+    pub fn cursor_pos(&self) -> Vec2 {
+        let window = self.window();
+        Vec2 {
+            x: window.cursor.x - window.pos.x,
+            y: window.cursor.y - window.pos.y,
+        }
+    }
+
+    /// `SetCursorPos`: place the cursor at a window-relative position.
+    pub fn set_cursor_pos(&mut self, pos: Vec2) {
+        let Some(window) = self.windows.last_mut() else {
+            return;
+        };
+        window.cursor = Vec2 {
+            x: window.pos.x + pos.x,
+            y: window.pos.y + pos.y,
+        };
+    }
     /// `GetCursorScreenPos`.
     pub fn cursor_screen_pos(&self) -> Vec2 {
         self.window().cursor

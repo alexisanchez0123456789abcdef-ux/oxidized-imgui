@@ -76,6 +76,7 @@ instead of against our own expectations:
 | Window close | clip starts below the title band; the empty command from the clip push is dropped and the pop adds one only after geometry | `window_bg`, `window_title` goldens |
 | Full scene | titled window with a button: background, band, border, title, fill, label and the three commands | `scene_window_button` golden |
 | Label, checkbox | text item rect; checkbox box from frame height plus inner spacing, toggling on release | `widgets_basic` golden |
+| Cursor position | `GetCursorPos` reports the cursor relative to the window and `SetCursorPos` places it there without moving the line left edge, so the next item returns to the line start | `cursor_pos` golden |
 | Indent / Unindent | `Indent` and `Unindent` move the line's left edge by `IndentSpacing` (21) or the width given and put the cursor back at that edge, so the next items start further in (or out) | `indent` golden |
 | NewLine | `NewLine` reserves one font height (`ItemSize((0, FontSize))`), so the cursor moves below the line; the reference branches on `CurrLineSize.y`, which every `ItemSize` resets, so both cases amount to the same advance | `new_line` golden |
 | Spacing | `Spacing` is an empty item (`ItemSize((0, 0))`): it closes the line and advances by `ItemSpacing.y` only, because `ItemSize` already reset the line height | `spacing` golden |
