@@ -33,6 +33,7 @@ pub const SCENARIOS: &[&str] = &[
     "input_text",
     "input_text_edit",
     "input_text_clipboard",
+    "input_text_mouse_undo",
     "font_metrics",
     "clip_stack",
     "text_draw",
@@ -916,6 +917,117 @@ pub fn input_text_clipboard_dump() -> String {
         }
         out.push_str(&format!(" buf \"{buffer}\"\n"));
         let body = dump("input_text_clipboard", ctx.draw_list());
+        for line in body.lines().skip(2) {
+            out.push_str(line);
+            out.push('\n');
+        }
+        ctx.end_window();
+        ctx.end_frame();
+    }
+    out
+}
+
+/// The `input_text_mouse_undo` scenario: the drag selection, the double-click word selection and
+/// Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z.
+pub fn input_text_mouse_undo_dump() -> String {
+    use oxidized_imgui::{Context, Font, Key, Vec2, WindowFlags};
+
+    pub const CTRL_Z_DOWN: &[(Key, bool)] = &[(Key::ModCtrl, true), (Key::Z, true)];
+    pub const CTRL_Z_UP: &[(Key, bool)] = &[(Key::ModCtrl, false), (Key::Z, false)];
+    pub const CTRL_Y_DOWN: &[(Key, bool)] = &[(Key::ModCtrl, true), (Key::Y, true)];
+    pub const CTRL_Y_UP: &[(Key, bool)] = &[(Key::ModCtrl, false), (Key::Y, false)];
+    pub const CTRL_SHIFT_Z_DOWN: &[(Key, bool)] =
+        &[(Key::ModCtrl, true), (Key::ModShift, true), (Key::Z, true)];
+    pub const CTRL_SHIFT_Z_UP: &[(Key, bool)] = &[
+        (Key::ModCtrl, false),
+        (Key::ModShift, false),
+        (Key::Z, false),
+    ];
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/input_text_mouse_undo.glyphs.txt"
+    );
+    let text = std::fs::read_to_string(path).expect("input_text_mouse_undo fixture");
+    let font = Font::from_pinned(&text).expect("font fixture");
+    let line_uvs = parse_line_uvs(&text);
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    ctx.set_line_uv_lines(line_uvs);
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario input_text_mouse_undo\n");
+
+    // The same frames as the driver: activate, type two characters, click, drag, double-click a
+    // word, then undo twice and redo twice.
+    type MouseFrame<'a> = (f32, f32, bool, &'a [(Key, bool)], &'a str);
+    let steps: [MouseFrame; 22] = [
+        (0.0, 0.0, false, &[], ""),
+        (100.0, 75.0, true, &[], ""),
+        (100.0, 75.0, false, &[], ""),
+        (100.0, 75.0, false, &[], "AB"),
+        (85.0, 75.0, true, &[], ""),
+        (130.0, 75.0, true, &[], ""),
+        (160.0, 75.0, true, &[], ""),
+        (160.0, 75.0, false, &[], ""),
+        (110.0, 75.0, true, &[], ""),
+        (110.0, 75.0, false, &[], ""),
+        (110.0, 75.0, true, &[], ""),
+        (110.0, 75.0, false, &[], ""),
+        (110.0, 75.0, false, CTRL_Z_DOWN, ""),
+        (110.0, 75.0, false, CTRL_Z_UP, ""),
+        (110.0, 75.0, false, CTRL_Z_DOWN, ""),
+        (110.0, 75.0, false, CTRL_Z_UP, ""),
+        (110.0, 75.0, false, CTRL_Y_DOWN, ""),
+        (110.0, 75.0, false, CTRL_Y_UP, ""),
+        (110.0, 75.0, false, CTRL_SHIFT_Z_DOWN, ""),
+        (110.0, 75.0, false, CTRL_SHIFT_Z_UP, ""),
+        (300.0, 200.0, true, &[], ""),
+        (300.0, 200.0, false, &[], ""),
+    ];
+    let mut buffer = String::from("Hello world");
+    for (frame, (mx, my, down, keys, chars)) in steps.iter().enumerate() {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: *mx, y: *my });
+        ctx.io_mut().mouse_down[0] = *down;
+        for (key, down) in keys.iter() {
+            ctx.io_mut().add_key_event(*key, *down);
+        }
+        if !chars.is_empty() {
+            ctx.io_mut().add_input_characters_utf8(chars);
+        }
+        ctx.begin_frame();
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+        );
+        ctx.begin_window_ex(
+            "W",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+            false,
+        );
+        let id = ctx.get_id("##field");
+        ctx.set_next_item_width(150.0);
+        ctx.input_text("##field", &mut buffer);
+        out.push_str(&format!(
+            "frame {frame} active {}",
+            (ctx.active_id() == Some(id)) as u8
+        ));
+        if let Some(state) = ctx.input_text_state().filter(|state| state.id == id) {
+            out.push_str(&format!(
+                " len {} sel {} cursor {} scroll {:08x} anim {:08x}",
+                state.text.len(),
+                state.has_selection() as u8,
+                state.cursor,
+                bits(state.scroll_x),
+                bits(state.cursor_anim)
+            ));
+        }
+        out.push_str(&format!(" buf \"{buffer}\"\n"));
+        let body = dump("input_text_mouse_undo", ctx.draw_list());
         for line in body.lines().skip(2) {
             out.push_str(line);
             out.push('\n');
@@ -4059,6 +4171,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "input_text" => Some(input_text_dump()),
         "input_text_edit" => Some(input_text_edit_dump()),
         "input_text_clipboard" => Some(input_text_clipboard_dump()),
+        "input_text_mouse_undo" => Some(input_text_mouse_undo_dump()),
         "font_metrics" => Some(font_metrics_dump()),
         "clip_stack" => Some(clip_stack_dump()),
         "text_draw" => Some(text_draw_dump()),

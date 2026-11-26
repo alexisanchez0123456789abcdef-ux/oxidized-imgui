@@ -1184,6 +1184,111 @@ static void DumpInputTextClipboard()
             key_counts[f], chars[f]);
 }
 
+// input_text_mouse_undo: the drag selection, the double-click word selection and Ctrl+Z/Y/Shift+Z.
+static void FrameInputTextMouseUndo(int frame, float mx, float my, bool down, const float* key_events,
+    int key_count, const char* chars)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    // The reference derives MouseDelta from these two, so moving the mouse is enough to drag.
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = down;
+    for (int i = 0; i < key_count; i++)
+        io.AddKeyEvent((ImGuiKey)(int)key_events[i * 2], key_events[i * 2 + 1] != 0.0f);
+    if (chars != NULL && chars[0] != 0)
+        io.AddInputCharactersUTF8(chars);
+
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground;
+    ImGui::Begin("W", NULL, flags);
+    static char buf[128] = "Hello world";
+    ImGui::SetNextItemWidth(150.0f);
+    ImGui::InputText("##field", buf, IM_ARRAYSIZE(buf));
+    ImGuiWindow* w = ImGui::GetCurrentWindow();
+    ImGuiContext& g = *GImGui;
+    const ImGuiID id = w->GetID("##field");
+    ImGuiInputTextState* state = ImGui::GetInputTextState(id);
+    printf("frame %d active %d", frame, (int)(g.ActiveId == id));
+    if (state != NULL)
+        printf(" len %d sel %d cursor %d scroll %08x anim %08x", state->TextLen,
+            state->HasSelection() ? 1 : 0, state->GetCursorPos(), Bits(state->Scroll.x),
+            Bits(state->CursorAnim));
+    printf(" buf \"%s\"\n", buf);
+    DumpDrawListBody(*w->DrawList);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpInputTextMouseUndo()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario input_text_mouse_undo\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[10] = { 'H', 'e', 'l', 'o', ' ', 'w', 'r', 'd', 'A', 'B' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    WriteGlyphFixture(font, bake_order, 10);
+
+    const float ctrl_z_down[4] = { (float)ImGuiMod_Ctrl, 1.0f, (float)ImGuiKey_Z, 1.0f };
+    const float ctrl_z_up[4] = { (float)ImGuiMod_Ctrl, 0.0f, (float)ImGuiKey_Z, 0.0f };
+    const float ctrl_y_down[4] = { (float)ImGuiMod_Ctrl, 1.0f, (float)ImGuiKey_Y, 1.0f };
+    const float ctrl_y_up[4] = { (float)ImGuiMod_Ctrl, 0.0f, (float)ImGuiKey_Y, 0.0f };
+    const float ctrl_shift_z_down[6] = { (float)ImGuiMod_Ctrl, 1.0f, (float)ImGuiMod_Shift, 1.0f, (float)ImGuiKey_Z, 1.0f };
+    const float ctrl_shift_z_up[6] = { (float)ImGuiMod_Ctrl, 0.0f, (float)ImGuiMod_Shift, 0.0f, (float)ImGuiKey_Z, 0.0f };
+
+    // 1: activate. 3: type two characters, so there are two edits to undo. 4: a click at x=85.
+    // 5-6: the button is held while the mouse moves right, which drags the selection. 8-10: two
+    // clicks in the same place, the second one selecting the word under the mouse. 12-14: two undos,
+    // one per typed character. 16: redo. 18: redo with Ctrl+Shift+Z. 20: release the field.
+    const float steps[22][3] = {
+        { 0.0f, 0.0f, 0.0f },      // 0
+        { 100.0f, 75.0f, 1.0f },   // 1 activate
+        { 100.0f, 75.0f, 0.0f },   // 2
+        { 100.0f, 75.0f, 0.0f },   // 3 type AB
+        { 85.0f, 75.0f, 1.0f },    // 4 click
+        { 130.0f, 75.0f, 1.0f },   // 5 drag
+        { 160.0f, 75.0f, 1.0f },   // 6 drag
+        { 160.0f, 75.0f, 0.0f },   // 7 up
+        { 110.0f, 75.0f, 1.0f },   // 8 click 1
+        { 110.0f, 75.0f, 0.0f },   // 9
+        { 110.0f, 75.0f, 1.0f },   // 10 click 2
+        { 110.0f, 75.0f, 0.0f },   // 11
+        { 110.0f, 75.0f, 0.0f },   // 12 Ctrl+Z
+        { 110.0f, 75.0f, 0.0f },   // 13
+        { 110.0f, 75.0f, 0.0f },   // 14 Ctrl+Z
+        { 110.0f, 75.0f, 0.0f },   // 15
+        { 110.0f, 75.0f, 0.0f },   // 16 Ctrl+Y
+        { 110.0f, 75.0f, 0.0f },   // 17
+        { 110.0f, 75.0f, 0.0f },   // 18 Ctrl+Shift+Z
+        { 110.0f, 75.0f, 0.0f },   // 19
+        { 300.0f, 200.0f, 1.0f },  // 20 click elsewhere
+        { 300.0f, 200.0f, 0.0f },  // 21
+    };
+    const int key_counts[22] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 3, 3, 0, 0 };
+    const float* keys[22] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+        ctrl_z_down, ctrl_z_up, ctrl_z_down, ctrl_z_up, ctrl_y_down, ctrl_y_up, ctrl_shift_z_down,
+        ctrl_shift_z_up, NULL, NULL };
+    const char* chars[22] = { NULL, NULL, NULL, "AB", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
+
+    for (int f = 0; f < 22; f++)
+        FrameInputTextMouseUndo(f, steps[f][0], steps[f][1], steps[f][2] != 0.0f, keys[f],
+            key_counts[f], chars[f]);
+}
+
 // window_bg: a window background with no border.
 static void DumpWindowBg()
 {
@@ -3488,6 +3593,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "scene_window_button") == 0)
     {
         DumpSceneWindowButtonScenario();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "input_text_mouse_undo") == 0)
+    {
+        DumpInputTextMouseUndo();
         ImGui::DestroyContext();
         return 0;
     }

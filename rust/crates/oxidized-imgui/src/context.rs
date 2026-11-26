@@ -24,6 +24,8 @@ const ARROW_RIGHT_SIN: f32 = 0.0;
 enum Shortcut {
     None,
     SelectAll,
+    Undo,
+    Redo,
     Copy,
     Cut,
     Paste,
@@ -4198,6 +4200,8 @@ impl Context {
             state.revert_to = buffer.clone();
             // `state->Scroll = ImVec2(0, 0)`: a field that takes the keyboard starts unscrolled.
             state.scroll_x = 0.0;
+            // `stb_textedit_initialize_state`: a new keyboard session starts with empty undo stacks.
+            state.clear_undo();
             self.input_text_state = Some(state);
             self.active_id = Some(id);
             active = true;
@@ -4206,22 +4210,43 @@ impl Context {
         // `Release focus when we click outside`. The frame still draws as if active: the reference
         // clears the active id at the end of the function, after the render block.
         let mut release = active && self.io.mouse_clicked[0] && !user_clicked;
-        if active && user_clicked {
-            // `mouse_x = (MousePos.x - frame_bb.Min.x - FramePadding.x) + Scroll.x`, then
-            // `stb_textedit_click` drops the caret there and clears the selection.
+        // The mouse, in the reference's order: a double click selects the word, a click drops the
+        // caret or (with Shift) extends the selection, and holding the button drags it.
+        if active {
             let mouse = self.io.mouse_pos.unwrap_or_default();
-            let (text, scroll_x) = {
-                let state = self.input_text_state.as_ref().expect("active state");
-                (state.text.clone(), state.scroll_x)
-            };
+            let scroll_x = self
+                .input_text_state
+                .as_ref()
+                .map(|state| state.scroll_x)
+                .unwrap_or(0.0);
             let mouse_x = mouse.x - frame_min.x - pad.x + scroll_x;
-            let cursor =
-                crate::input_text::locate_coord_in(&text, mouse_x, &self.font, self.font.size);
+            let font = self.font.clone();
+            let size = font.size;
+            let double_clicked =
+                hovered && self.io.mouse_clicked_count[0] >= 2 && !self.io.key_shift;
+            let shift = self.io.key_shift;
+            let clicked = self.io.mouse_clicked[0];
+            let dragging = self.io.mouse_down[0]
+                && (self.io.mouse_delta.x != 0.0 || self.io.mouse_delta.y != 0.0);
             if let Some(state) = self.input_text_state.as_mut() {
-                state.cursor = cursor;
-                state.select_start = cursor;
-                state.select_end = cursor;
-                state.cursor_anim_reset();
+                if double_clicked {
+                    state.double_click(mouse_x, &font, size);
+                } else if clicked {
+                    // The click branch consumes the frame even when the mouse is outside the field:
+                    // `if (io.MouseClicked[0] && !SelectedAllMouseLock) { if (hovered) ... }`.
+                    if hovered {
+                        if shift {
+                            state.drag(mouse_x, &font, size);
+                        } else {
+                            state.click(mouse_x, &font, size);
+                        }
+                        state.cursor_anim_reset();
+                    }
+                } else if dragging {
+                    state.drag(mouse_x, &font, size);
+                    state.cursor_anim_reset();
+                    state.cursor_follow = true;
+                }
             }
         }
 
@@ -4265,7 +4290,8 @@ impl Context {
             let is_escape = io.is_key_pressed_repeat(Key::Escape);
             // `Shortcut(ImGuiMod_Ctrl | key)`: the key with Control as its only modifier.
             let ctrl_mods = io.key_ctrl && !io.key_shift && !io.key_alt && !io.key_super;
-            let shortcut = if !ctrl_mods {
+            let ctrl_shift_mods = io.key_ctrl && io.key_shift && !io.key_alt && !io.key_super;
+            let shortcut = if !ctrl_mods && !ctrl_shift_mods {
                 Shortcut::None
             } else if io.is_key_pressed(Key::A) {
                 Shortcut::SelectAll
@@ -4275,6 +4301,10 @@ impl Context {
                 Shortcut::Cut
             } else if io.is_key_pressed_repeat(Key::V) {
                 Shortcut::Paste
+            } else if !ctrl_shift_mods && io.is_key_pressed_repeat(Key::Z) {
+                Shortcut::Undo
+            } else if io.is_key_pressed_repeat(Key::Y) || io.is_key_pressed_repeat(Key::Z) {
+                Shortcut::Redo
             } else {
                 Shortcut::None
             };
@@ -4296,6 +4326,18 @@ impl Context {
                 }
                 release = true;
                 render_cursor = false;
+            } else if shortcut == Shortcut::Undo || shortcut == Shortcut::Redo {
+                // `state->ClearSelection(); state->CursorFollow = true;` then the stack operation.
+                if let Some(state) = self.input_text_state.as_mut() {
+                    state.select_start = state.cursor;
+                    state.select_end = state.cursor;
+                    state.cursor_follow = true;
+                    if shortcut == Shortcut::Undo {
+                        state.undo();
+                    } else {
+                        state.redo();
+                    }
+                }
             } else if shortcut == Shortcut::SelectAll {
                 // `state->SelectAll()` and let the view follow the caret.
                 if let Some(state) = self.input_text_state.as_mut() {

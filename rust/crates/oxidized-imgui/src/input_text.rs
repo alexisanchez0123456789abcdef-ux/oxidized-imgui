@@ -33,6 +33,10 @@ pub struct InputTextState {
     /// `state->TextToRevertTo`: the buffer as it was when the field took the keyboard, which is what
     /// Escape goes back to.
     pub revert_to: String,
+    /// `undostate`: the edits that can be undone, oldest first.
+    undo: Vec<UndoRecord>,
+    /// `undostate`: the edits that can be redone.
+    redo: Vec<UndoRecord>,
 }
 
 impl InputTextState {
@@ -48,6 +52,8 @@ impl InputTextState {
             cursor_anim: 0.0,
             cursor_follow: false,
             revert_to: text.to_string(),
+            undo: Vec::new(),
+            redo: Vec::new(),
         }
     }
 
@@ -89,6 +95,59 @@ impl InputTextState {
     pub fn locate_coord(&self, x: f32, font: &Font, size: f32) -> usize {
         locate_coord_in(&self.text, x, font, size)
     }
+}
+
+/// `IMSTB_TEXTEDIT_UNDOSTATECOUNT`: how many edits the undo stack remembers.
+const UNDO_COUNT: usize = 99;
+
+/// One entry of the undo stack, seen from the undo's point of view: remove `delete_length` bytes at
+/// `at`, then put `reinsert` back. The reference keeps the same record in a fixed array plus a
+/// shared character buffer; one `Vec` per record is the same model without the bookkeeping.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct UndoRecord {
+    at: usize,
+    delete_length: usize,
+    reinsert: Vec<u8>,
+}
+
+/// `ImCharIsBlankW`.
+fn is_blank(c: char) -> bool {
+    c == ' ' || c == '\t' || c == '\u{3000}'
+}
+
+/// `ImCharIsSeparatorW`, the reference's table verbatim.
+fn is_separator(c: char) -> bool {
+    matches!(
+        c,
+        ',' | '\u{3001}'
+            | '.'
+            | '\u{3002}'
+            | ';'
+            | '\u{FF1B}'
+            | '('
+            | '\u{FF08}'
+            | ')'
+            | '\u{FF09}'
+            | '{'
+            | '\u{FF5B}'
+            | '}'
+            | '\u{FF5D}'
+            | '['
+            | '\u{300C}'
+            | ']'
+            | '\u{300D}'
+            | '|'
+            | '\u{FF5C}'
+            | '!'
+            | '\u{FF01}'
+            | '\\'
+            | '\u{FFE5}'
+            | '/'
+            | '\u{30FB}'
+            | '\u{FF0F}'
+            | '\n'
+            | '\r'
+    )
 }
 
 /// The cursor movements and edits the field models, named after the fake keys `stb_textedit` uses.
@@ -142,6 +201,210 @@ impl InputTextState {
         self.text.replace_range(where_..where_ + len, "");
     }
 
+    /// `stb_textedit_delete`: the same, remembering the edit so it can be undone.
+    fn delete_and_record(&mut self, where_: usize, len: usize) {
+        self.make_undo_delete(where_, len);
+        self.delete(where_, len);
+    }
+
+    /// `stb_textedit_clear_state`: a new keyboard session starts with empty stacks.
+    pub fn clear_undo(&mut self) {
+        self.undo.clear();
+        self.redo.clear();
+    }
+
+    /// `stb_textedit_flush_redo`: a fresh edit drops the redo branch.
+    fn flush_redo(&mut self) {
+        self.redo.clear();
+    }
+
+    /// `stb_text_createundo`: push a record, keeping the stack bounded like the reference's array.
+    fn push_undo(&mut self, record: UndoRecord) {
+        self.flush_redo();
+        if self.undo.len() == UNDO_COUNT {
+            self.undo.remove(0);
+        }
+        self.undo.push(record);
+    }
+
+    /// `stb_text_makeundo_insert`: the undo has to remove what the edit inserted.
+    fn make_undo_insert(&mut self, at: usize, length: usize) {
+        self.push_undo(UndoRecord {
+            at,
+            delete_length: length,
+            reinsert: Vec::new(),
+        });
+    }
+
+    /// `stb_text_makeundo_delete`: the undo has to put back what the edit removed.
+    fn make_undo_delete(&mut self, at: usize, length: usize) {
+        let reinsert = self.text.as_bytes()[at..at + length].to_vec();
+        self.push_undo(UndoRecord {
+            at,
+            delete_length: 0,
+            reinsert,
+        });
+    }
+
+    /// `stb_text_undo`. True when there was something to undo.
+    pub fn undo(&mut self) -> bool {
+        let Some(record) = self.undo.pop() else {
+            return false;
+        };
+        let inverse = self.apply_record(record);
+        self.redo.push(inverse);
+        true
+    }
+
+    /// `stb_text_redo`. True when there was something to redo.
+    pub fn redo(&mut self) -> bool {
+        let Some(record) = self.redo.pop() else {
+            return false;
+        };
+        let inverse = self.apply_record(record);
+        self.undo.push(inverse);
+        true
+    }
+
+    /// Apply one record to the text and return its inverse, which is what the other stack needs.
+    fn apply_record(&mut self, record: UndoRecord) -> UndoRecord {
+        let at = record.at.min(self.text.len());
+        let remove = record.delete_length.min(self.text.len() - at);
+        let removed = self.text.as_bytes()[at..at + remove].to_vec();
+        self.text.replace_range(at..at + remove, "");
+        // The record only ever holds whole UTF-8 sequences.
+        let reinsert = String::from_utf8_lossy(&record.reinsert).into_owned();
+        self.text.insert_str(at, &reinsert);
+        self.cursor = at + record.reinsert.len();
+        while self.cursor > 0 && !self.text.is_char_boundary(self.cursor) {
+            self.cursor -= 1;
+        }
+        self.select_start = self.cursor;
+        self.select_end = self.cursor;
+        self.cursor_follow = true;
+        self.cursor_anim_reset();
+        UndoRecord {
+            at,
+            delete_length: record.reinsert.len(),
+            reinsert: removed,
+        }
+    }
+
+    /// The character at `index`, if there is one.
+    fn char_at(&self, index: usize) -> Option<char> {
+        self.text.get(index..).and_then(|rest| rest.chars().next())
+    }
+
+    /// The character before `index`, if there is one.
+    fn char_before(&self, index: usize) -> Option<char> {
+        self.text
+            .get(..index)
+            .and_then(|head| head.chars().next_back())
+    }
+
+    /// `is_word_boundary_from_right`: a word starts here when walking backwards.
+    fn is_word_boundary_from_right(&self, index: usize) -> bool {
+        if index == 0 {
+            return false;
+        }
+        let (Some(curr), Some(prev)) = (self.char_at(index), self.char_before(index)) else {
+            return false;
+        };
+        let (prev_white, prev_separ) = (is_blank(prev), is_separator(prev));
+        let (curr_white, curr_separ) = (is_blank(curr), is_separator(curr));
+        ((prev_white || prev_separ) && !(curr_separ || curr_white)) || (curr_separ && !prev_separ)
+    }
+
+    /// `is_word_boundary_from_left`. The reference reads the two characters with their names swapped
+    /// and compares them that way, which is reproduced here as written.
+    fn is_word_boundary_from_left(&self, index: usize) -> bool {
+        if index == 0 {
+            return false;
+        }
+        let (Some(at), Some(before)) = (self.char_at(index), self.char_before(index)) else {
+            return false;
+        };
+        // `prev_c` in the reference is the character at `idx`, `curr_c` the one before it.
+        let (prev_white, prev_separ) = (is_blank(at), is_separator(at));
+        let (curr_white, curr_separ) = (is_blank(before), is_separator(before));
+        (prev_white && !(curr_separ || curr_white)) || (curr_separ && !prev_separ)
+    }
+
+    /// `STB_TEXTEDIT_MOVEWORDLEFT_IMPL`.
+    fn move_word_left(&self, index: usize) -> usize {
+        let mut i = self.prev_index(index);
+        while i > 0 && !self.is_word_boundary_from_right(i) {
+            i = self.prev_index(i);
+        }
+        i
+    }
+
+    /// `STB_TEXTEDIT_MOVEWORDRIGHT_MAC`, the one the reference uses for double-click.
+    fn move_word_right_mac(&self, index: usize) -> usize {
+        let len = self.text.len();
+        let mut i = self.next_index(index);
+        while i < len && !self.is_word_boundary_from_left(i) {
+            let next = self.next_index(i);
+            if next == i {
+                break;
+            }
+            i = next;
+        }
+        i.min(len)
+    }
+
+    /// `stb_textedit_click`: the caret lands where the mouse is and the selection collapses.
+    pub fn click(&mut self, x: f32, font: &Font, size: f32) {
+        let p = self.locate_coord(x, font, size);
+        self.cursor = p;
+        self.select_start = p;
+        self.select_end = p;
+    }
+
+    /// `stb_textedit_drag`: the drag keeps the anchor and moves the other end.
+    pub fn drag(&mut self, x: f32, font: &Font, size: f32) {
+        if !self.has_selection() {
+            self.select_start = self.cursor;
+        }
+        let p = self.locate_coord(x, font, size);
+        self.cursor = p;
+        self.select_end = p;
+    }
+
+    /// A double click selects the word under the mouse: the reference clicks, walks to the word
+    /// start and then to the word end with the "Mac" advance.
+    pub fn double_click(&mut self, x: f32, font: &Font, size: f32) {
+        self.click(x, font, size);
+        let at_bol = self.cursor == 0 || self.char_before(self.cursor) == Some('\n');
+        if self.has_selection() || !at_bol {
+            // `OnKeyPressed(STB_TEXTEDIT_K_WORDLEFT)`: collapse a selection or walk back one word.
+            if self.has_selection() {
+                self.move_to_first_anchored();
+            } else {
+                self.cursor = self.move_word_left(self.cursor);
+                self.cursor_clamp();
+            }
+        }
+        if !self.has_selection() {
+            self.select_start = self.cursor;
+            self.select_end = self.cursor;
+        }
+        self.cursor = self.move_word_right_mac(self.cursor);
+        self.select_end = self.cursor;
+        self.cursor_clamp();
+        self.cursor_follow = true;
+        self.cursor_anim_reset();
+    }
+
+    /// The collapse half of `stb_textedit_move_to_first`, for the double-click path.
+    fn move_to_first_anchored(&mut self) {
+        if self.select_end < self.select_start {
+            core::mem::swap(&mut self.select_start, &mut self.select_end);
+        }
+        self.cursor = self.select_start;
+        self.select_end = self.select_start;
+    }
+
     /// `stb_textedit_delete_selection`: remove what is selected, leaving the caret where it was.
     pub fn delete_selection(&mut self) {
         self.cursor_clamp();
@@ -149,11 +412,11 @@ impl InputTextState {
             return;
         }
         if self.select_start < self.select_end {
-            self.delete(self.select_start, self.select_end - self.select_start);
+            self.delete_and_record(self.select_start, self.select_end - self.select_start);
             self.select_end = self.select_start;
             self.cursor = self.select_start;
         } else {
-            self.delete(self.select_end, self.select_start - self.select_end);
+            self.delete_and_record(self.select_end, self.select_start - self.select_end);
             self.select_start = self.select_end;
             self.cursor = self.select_end;
         }
@@ -200,6 +463,7 @@ impl InputTextState {
             return;
         }
         self.delete_selection();
+        self.make_undo_insert(self.cursor, c.len_utf8());
         self.text.insert(self.cursor, c);
         self.cursor += c.len_utf8();
         self.cursor_follow = true;
@@ -221,6 +485,7 @@ impl InputTextState {
     /// `stb_textedit_paste`: replace the selection with `text`.
     pub fn paste(&mut self, text: &str) {
         self.delete_selection();
+        self.make_undo_insert(self.cursor, text.len());
         self.text.insert_str(self.cursor, text);
         self.cursor += text.len();
         self.cursor_follow = true;
@@ -300,7 +565,7 @@ impl InputTextState {
                     self.cursor_clamp();
                     if self.cursor > 0 {
                         let prev = self.prev_index(self.cursor);
-                        self.delete(prev, self.cursor - prev);
+                        self.delete_and_record(prev, self.cursor - prev);
                         self.cursor = prev;
                     }
                 }
@@ -310,7 +575,7 @@ impl InputTextState {
                     self.delete_selection();
                 } else if self.cursor < self.text.len() {
                     let next = self.next_index(self.cursor);
-                    self.delete(self.cursor, next - self.cursor);
+                    self.delete_and_record(self.cursor, next - self.cursor);
                 }
             }
         }
