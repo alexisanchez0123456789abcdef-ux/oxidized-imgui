@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **114 escenarios** más la **prueba negativa**.
+   que ejecuta **115 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,9 +46,9 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **123 PRs** fusionados.
-- **114 escenarios** con golden propio, todos en verde, más la prueba negativa.
-- **Reescritura: 68.8 %.** Proyecto (contando el arnés): **70.9 %**.
+- `master` limpio, **124 PRs** fusionados.
+- **115 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- **Reescritura: 69.0 %.** Proyecto (contando el arnés): **71.1 %**.
 - 39 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
@@ -113,7 +113,8 @@ cambia sí, y el push/pop sin geometría se fusiona con el comando anterior).
 Widgets: botón (geometría, dibujo, estados, borde), label y checkbox, slider,
 **separador horizontal** (`separator`: ancho de la región de trabajo, grosor `SeparatorSize` y avance
 de ítem) y **`SeparatorText`** (`separator_text`: etiqueta entre dos líneas con centro sesgado),
-**`BeginDisabled`/`EndDisabled`** (`disabled`) y **`Bullet`** (`bullet`),
+**`BeginDisabled`/`EndDisabled`** (`disabled`), **`Bullet`** (`bullet`) y la **barra de progreso**
+(`progress_bar`),
 **cabecera colapsable**, **nodos de árbol**, **región hija** (lista propia, recorte,
 borde en la lista del padre, scroll con rueda y arrastre), **Selectable**, **popup**,
 **clic en fila de popup**, **combo**, **tooltip**, **barra de menús**, **submenús
@@ -247,6 +248,31 @@ Golden `separator`: tres etiquetas con un separador entre ellas en una ventana d
 - El rectángulo del ítem es la línea (`(8,25)-(292,26)`), no la caja del texto: el golden lo imprime
   tras cada `Separator`.
 - La forma **vertical** (la barra de menús) tiene su propia sección más abajo.
+
+### Barra de progreso (peso 1): cerrada, con un límite anotado
+
+Golden `progress_bar`: cuatro barras en una ventana de 300×200 (25 %, 75 %, una con overlay propio
+"half##bar" y otra con el ancho por defecto).
+
+- El tamaño sale de `CalcItemSize(size_arg, CalcItemWidth(), FontSize + FramePadding.y*2)`. El
+  **`size_arg` por defecto es `ImVec2(-FLT_MIN, 0)`**, así que la barra **llena el área de contenido**
+  (284 px): `CalcItemWidth` (195 = 65 % del ancho) sólo se usa cuando el eje vale **exactamente 0**.
+  Medido: la barra por defecto es `(8,77)-(292,96)`.
+- Marco: `ImGuiCol_FrameBg` (`0xFF1A1A1A`) como rectángulo plano (`FrameRounding` 0, sin borde).
+- Relleno: `ImGuiCol_PlotHistogram`, **pinnado a `0xFF00B3E6`** (r=0xE6, g=0xB3, b=0: la referencia
+  empaqueta en orden ABGR).
+- Overlay: por defecto `"%.0f%%"` de `fracción*100 + 0.01`, colocado **tras el relleno**
+  (`fill_x1 + ItemSpacing.x`), recortado a la barra y centrado en vertical con `align (0, 0.5)`; se
+  quita lo que va tras "##" (`FindRenderedTextEnd`), y una barra indeterminada (fracción negativa) no
+  lleva texto salvo overlay explícito.
+- **Límite anotado**: si el borde del relleno cae en una coordenada fraccionaria, la referencia no usa
+  el atajo `PrimRect` sino el camino AA de `AddRectFilled` (8 vértices: un anillo exterior con alfa 0
+  y el relleno interior desplazado medio píxel). El port sólo modela el camino alineado a píxel, así
+  que el golden usa fracciones que caen en entero (0.25/0.75/0.5 con 200 px y 0.5 con 284) y **la
+  barra indeterminada queda pendiente** de ese camino AA (sus bordes casi nunca caen en entero).
+- **Trampa del fixture**: el overlay "half" usa letras que el reference hornea al vuelo; el
+  `bake_order` tiene que incluir dígitos, `%` y las letras del overlay propio, o el port no dibuja
+  esas letras y `calc_text_size` da 0.
 
 ### Bullet (peso 1): cerrada
 
@@ -650,7 +676,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 114 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 115 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```

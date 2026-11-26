@@ -105,6 +105,7 @@ pub const SCENARIOS: &[&str] = &[
     "menu_bar_separator",
     "disabled",
     "bullet",
+    "progress_bar",
     "window_scroll",
     "window_scrollbar",
     "window_scrollbar_drag",
@@ -5930,6 +5931,85 @@ pub fn bullet_dump() -> String {
     out
 }
 
+/// The `progress_bar` scenario: the bar's frame, its filled part, the percentage overlay placed after
+/// the fill and clipped to the bar, the width the reference's default `size_arg` fills, and the
+/// indeterminate slice.
+pub fn progress_bar_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2, WindowFlags};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/progress_bar.glyphs.txt"
+    );
+    let glyphs = std::fs::read_to_string(path).expect("progress bar fixture");
+    let font = Font::from_pinned(&glyphs).expect("font fixture");
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario progress_bar\n");
+
+    for frame in 0..2 {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+        ctx.io_mut().mouse_down[0] = false;
+        ctx.begin_frame();
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+        );
+        ctx.begin_window_ex(
+            "W",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+            true,
+        );
+        let window_pos = ctx.window().pos;
+        // The fractions keep every filled edge on a whole pixel; a fractional one makes the reference
+        // take AddRectFilled's anti-aliased path, which the port does not model yet.
+        let bars = [
+            ("quarter", 0.25f32, Some(Vec2 { x: 200.0, y: 19.0 }), None),
+            (
+                "three_quarters",
+                0.75,
+                Some(Vec2 { x: 200.0, y: 19.0 }),
+                None,
+            ),
+            (
+                "custom_overlay",
+                0.5,
+                Some(Vec2 { x: 200.0, y: 19.0 }),
+                Some("half##bar"),
+            ),
+            ("default_width", 0.5, None, None),
+        ];
+        for (name, fraction, size, overlay) in bars {
+            ctx.progress_bar(fraction, size, overlay);
+            let (min, max) = (ctx.item_rect_min(), ctx.item_rect_max());
+            out.push_str(&format!(
+                "frame {frame} {name} item {:08x} {:08x} {:08x} {:08x}\n",
+                bits(min.x - window_pos.x),
+                bits(min.y - window_pos.y),
+                bits(max.x - window_pos.x),
+                bits(max.y - window_pos.y)
+            ));
+        }
+        ctx.end_window();
+        if frame == 1 {
+            let body = dump("progress_bar", ctx.draw_list());
+            for line in body.lines().skip(2) {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
+        ctx.end_frame();
+    }
+    out
+}
+
 /// The `windows_move` scenario: dragging one window by its title bar and by its body, and the clamp
 /// that keeps it reachable when it is dragged off the display.
 ///
@@ -7874,6 +7954,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "menu_bar_separator" => Some(menu_bar_separator_dump()),
         "disabled" => Some(disabled_dump()),
         "bullet" => Some(bullet_dump()),
+        "progress_bar" => Some(progress_bar_dump()),
         "window_scroll" => Some(window_scroll_dump()),
         "window_scrollbar" => Some(window_scrollbar_dump()),
         "window_scrollbar_drag" => Some(window_scrollbar_drag_dump()),

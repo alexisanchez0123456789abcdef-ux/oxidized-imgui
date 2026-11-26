@@ -4397,6 +4397,64 @@ static void DumpBullet()
     }
 }
 
+// progress_bar: the bar's frame, its filled part, the percentage overlay placed after the fill and
+// clipped to the bar, the default item width when no size is asked for, and the indeterminate slice.
+static void DumpProgressBar()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario progress_bar\n");
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    // Every letter of every string: the digits and the percent sign of the default overlay, plus the
+    // letters of the custom one, which the reference would otherwise bake on demand.
+    const char bake_order[15] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '%', 'h', 'a', 'l', 'f' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    WriteGlyphFixture(font, bake_order, 15);
+
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
+    for (int frame = 0; frame < 2; frame++)
+    {
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+        ImGui::Begin("W", NULL, flags);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        const ImVec2 wpos = ImGui::GetWindowPos();
+        // The fractions are chosen so every filled edge lands on a whole pixel: a fractional one makes
+        // the reference take AddRectFilled's anti-aliased path, which the port does not model yet.
+        const char* names[4] = { "quarter", "three_quarters", "custom_overlay", "default_width" };
+        const float fractions[4] = { 0.25f, 0.75f, 0.5f, 0.5f };
+        for (int i = 0; i < 4; i++)
+        {
+            if (i == 2)
+                ImGui::ProgressBar(fractions[i], ImVec2(200.0f, 19.0f), "half##bar");
+            else if (i == 3)
+                ImGui::ProgressBar(fractions[i]);
+            else
+                ImGui::ProgressBar(fractions[i], ImVec2(200.0f, 19.0f));
+            const ImVec2 mn = PSub(ImGui::GetItemRectMin(), wpos);
+            const ImVec2 mx = PSub(ImGui::GetItemRectMax(), wpos);
+            printf("frame %d %s item %08x %08x %08x %08x\n", frame, names[i], Bits(mn.x),
+                Bits(mn.y), Bits(mx.x), Bits(mx.y));
+        }
+        ImGui::End();
+        if (frame == 1)
+            DumpDrawListBody(*dl);
+        ImGui::EndFrame();
+    }
+}
+
 // windows_move: dragging a window by its title bar and by its body, and the clamp that keeps it
 // reachable when it is dragged off the display. Only the positions are dumped: the geometry of a
 // window is what windows_order already covers.
@@ -6285,6 +6343,13 @@ int main(int argc, char** argv)
         return 0;
     }
 
+
+    if (strcmp(name, "progress_bar") == 0)
+    {
+        DumpProgressBar();
+        ImGui::DestroyContext();
+        return 0;
+    }
 
     if (strcmp(name, "bullet") == 0)
     {
