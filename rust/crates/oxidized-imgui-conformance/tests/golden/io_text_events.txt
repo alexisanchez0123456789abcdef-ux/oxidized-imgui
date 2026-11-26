@@ -1,0 +1,29 @@
+header imgui 1.93.1 WIP 19303
+scenario io_text_events
+f0 t 3d4ccccd chars 0 la_down 0 la_press 0 la_rep 0 la_rel 0 la_dur bf800000 la_prev bf800000 mods 0000 down 000000
+f1 t 3dcccccd chars 2 la_down 0 la_press 0 la_rep 0 la_rel 0 la_dur bf800000 la_prev bf800000 mods 0000 down 000000
+c 0061
+c 0062
+f2 t 3e19999a chars 0 la_down 0 la_press 0 la_rep 0 la_rel 0 la_dur bf800000 la_prev bf800000 mods 0000 down 000000
+f3 t 3e4ccccd chars 2 la_down 0 la_press 0 la_rep 0 la_rel 0 la_dur bf800000 la_prev bf800000 mods 0000 down 000000
+c 00e9
+c fffd
+f4 t 3e800000 chars 0 la_down 1 la_press 1 la_rep 1 la_rel 0 la_dur 00000000 la_prev bf800000 mods 0000 down 000000
+f5 t 3e99999a chars 0 la_down 1 la_press 0 la_rep 0 la_rel 0 la_dur 3d4ccccd la_prev 00000000 mods 0000 down 000000
+f6 t 3eb33333 chars 0 la_down 1 la_press 0 la_rep 0 la_rel 0 la_dur 3dcccccd la_prev 3d4ccccd mods 0000 down 000000
+f7 t 3ecccccd chars 0 la_down 1 la_press 0 la_rep 0 la_rel 0 la_dur 3e19999a la_prev 3dcccccd mods 0000 down 000000
+f8 t 3ee66667 chars 0 la_down 1 la_press 0 la_rep 0 la_rel 0 la_dur 3e4ccccd la_prev 3e19999a mods 0000 down 000000
+f9 t 3f000000 chars 0 la_down 1 la_press 0 la_rep 0 la_rel 0 la_dur 3e800000 la_prev 3e4ccccd mods 0000 down 000000
+f10 t 3f0ccccd chars 0 la_down 1 la_press 0 la_rep 1 la_rel 0 la_dur 3e99999a la_prev 3e800000 mods 0000 down 000000
+f11 t 3f19999a chars 0 la_down 1 la_press 0 la_rep 1 la_rel 0 la_dur 3eb33334 la_prev 3e99999a mods 0000 down 000000
+f12 t 3f266667 chars 0 la_down 1 la_press 0 la_rep 1 la_rel 0 la_dur 3eccccce la_prev 3eb33334 mods 0000 down 000000
+f13 t 3f333333 chars 0 la_down 0 la_press 0 la_rep 0 la_rel 1 la_dur bf800000 la_prev 3eccccce mods 0000 down 000000
+f14 t 3f400000 chars 0 la_down 0 la_press 0 la_rep 0 la_rel 0 la_dur bf800000 la_prev bf800000 mods 0000 down 000000
+f15 t 3f4ccccd chars 0 la_down 0 la_press 0 la_rep 0 la_rel 0 la_dur bf800000 la_prev bf800000 mods 1000 down 100000
+f16 t 3f59999a chars 0 la_down 0 la_press 0 la_rep 0 la_rel 0 la_dur bf800000 la_prev bf800000 mods 0000 down 000000
+f17 t 3f666667 chars 0 la_down 0 la_press 0 la_rep 0 la_rel 0 la_dur bf800000 la_prev bf800000 mods 0000 down 000001
+f18 t 3f733333 chars 0 la_down 0 la_press 0 la_rep 0 la_rel 0 la_dur bf800000 la_prev bf800000 mods 0000 down 000000
+f19 t 3f800000 chars 0 la_down 0 la_press 0 la_rep 0 la_rel 0 la_dur bf800000 la_prev bf800000 mods 0000 down 010000
+f20 t 3f866667 chars 0 la_down 0 la_press 0 la_rep 0 la_rel 0 la_dur bf800000 la_prev bf800000 mods 0000 down 011000
+f21 t 3f8ccccd chars 0 la_down 0 la_press 0 la_rep 0 la_rel 0 la_dur bf800000 la_prev bf800000 mods 0000 down 011100
+f22 t 3f933333 chars 0 la_down 0 la_press 0 la_rep 0 la_rel 0 la_dur bf800000 la_prev bf800000 mods 0000 down 011110

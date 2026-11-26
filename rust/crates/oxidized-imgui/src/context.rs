@@ -641,6 +641,8 @@ impl Context {
 
         let delta_time = self.io.delta_time;
         for data in &mut self.io.keys {
+            // `DownDurationPrev` first: `IsKeyReleased` reads it on the frame the key comes up.
+            data.down_duration_prev = data.down_duration;
             data.down_duration = if data.down {
                 if data.down_duration < 0.0 {
                     0.0
@@ -1918,6 +1920,10 @@ impl Context {
     /// A left click on a window's empty space raises it. The raise happens here, before the frame
     /// is rendered, which is why the click's own frame already draws the window on top.
     pub fn end_frame(&mut self) {
+        // `ImGuiIO::InputQueueCharacters.resize(0)` in `EndFramePost`: the characters were consumed
+        // by the widgets of this frame, so the next one starts empty. Done first because the rest
+        // of this function returns early.
+        self.io.input_queue_characters.clear();
         // `WasActive` for the next frame's hover search.
         self.last_frame_windows = self
             .frame_lists

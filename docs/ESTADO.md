@@ -1,17 +1,17 @@
 # Estado del proyecto
 
-_Actualizado: 2026-11-25. Generado desde `docs/progress.json`: no editar a mano._
+_Actualizado: 2026-11-26. Generado desde `docs/progress.json`: no editar a mano._
 
-## Reescritura a Rust: **62.2 %**
+## Reescritura a Rust: **62.5 %**
 
-Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 64.8 %.
+Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 65.1 %.
 
 Qué cuenta como hecho: solo lo que tiene una prueba que lo compara con el código C++ original.
 Un cambio de estado sin evidencia no sube el porcentaje.
 
 | Área | Peso | Avance |
 | --- | ---: | ---: |
-| Núcleo: contexto, IO, ventanas, identificadores, layout | 58 | 76 % |
+| Núcleo: contexto, IO, ventanas, identificadores, layout | 59 | 76 % |
 | Listas de dibujo y primitivas | 17 | 88 % |
 | Widgets | 29 | 79 % |
 | Fuentes y texto | 13 | 15 % |
@@ -28,6 +28,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Ratón: posición redondeada, delta, clic, release, doble clic** — golden io_mouse_events
 - **Tiempo: DeltaTime y reloj interno (float, como la referencia)** — golden io_mouse_events (doble clic depende del reloj)
 - **Teclado: cola de eventos, duplicados, duraciones y modificadores** — golden io_keyboard_events
+- **Teclado de texto: juego completo de ImGuiKey, cola de caracteres y repetición (delay/rate, DownDurationPrev)** — golden io_text_events (23 frames: cola, pulsación, repetición y suelta) + io::tests (5 casos)
 - **Fondo de ventana y orden del recorte** — golden window_bg
 - **Borde de ventana (marco alineado de dos anillos)** — golden window_border
 - **Barra de título: banda, texto y orden de dibujo** — golden window_title
