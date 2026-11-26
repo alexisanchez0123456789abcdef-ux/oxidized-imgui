@@ -129,6 +129,11 @@ pub struct Style {
     pub separator_text_border_size: f32,
     /// `Style::SeparatorTextAlign`: where the label sits inside the item.
     pub separator_text_align: Vec2,
+    /// `Style::Alpha`: the global alpha every packed colour is multiplied by, 1 by default.
+    pub alpha: f32,
+    /// `Style::DisabledAlpha`: the factor `BeginDisabled` applies to `Style::Alpha`, 0.6 as in the
+    /// reference.
+    pub disabled_alpha: f32,
     /// `Style::ScrollbarPadding`: the gap between the scrollbar frame and its grab.
     pub scrollbar_padding: f32,
 
@@ -165,18 +170,26 @@ pub struct Style {
 }
 
 impl Style {
-    /// `GetColorU32(col)`: the packed colour of a style entry.
+    /// `GetColorU32(col)`: the packed colour of a style entry, with `Style::Alpha` folded into its
+    /// alpha channel the way `GetColorU32` does when no explicit multiplier is given.
     pub fn color_u32(&self, col: Col) -> u32 {
-        self.colors[col.index()]
+        let packed = self.colors[col.index()];
+        if self.alpha == 1.0 {
+            return packed;
+        }
+        let alpha = (packed >> 24) & 0xFF;
+        let scaled = ((alpha as f32 / 255.0) * self.alpha * 255.0 + 0.5).clamp(0.0, 255.0) as u32;
+        (packed & 0x00FF_FFFF) | (scaled << 24)
     }
 
     /// `GetColorU32(col, alpha_mul)`: the packed colour with its alpha scaled, computed the way the
     /// reference does it — through floats and `ColorConvertFloat4ToU32`, which rounds with `+ 0.5`, so
-    /// `Text` at `0.70` gives `0xB3`, not `0xB2`. `ImGuiStyle::Alpha` is not modelled and counts as 1.
+    /// `Text` at `0.70` gives `0xB3`, not `0xB2`. `Style::Alpha` multiplies on top of `alpha_mul`.
     pub fn color_u32_alpha(&self, col: Col, alpha_mul: f32) -> u32 {
         let packed = self.colors[col.index()];
         let alpha = (packed >> 24) & 0xFF;
-        let scaled = ((alpha as f32 / 255.0) * alpha_mul * 255.0 + 0.5).clamp(0.0, 255.0) as u32;
+        let scaled = ((alpha as f32 / 255.0) * alpha_mul * self.alpha * 255.0 + 0.5)
+            .clamp(0.0, 255.0) as u32;
         (packed & 0x00FF_FFFF) | (scaled << 24)
     }
 }
@@ -208,6 +221,8 @@ impl Default for Style {
             separator_text_padding: Vec2 { x: 20.0, y: 3.0 },
             separator_text_border_size: 3.0,
             separator_text_align: Vec2 { x: 0.0, y: 0.5 },
+            alpha: 1.0,
+            disabled_alpha: 0.6,
             scrollbar_padding: 2.0,
             frame_rounding: 0.0,
             window_rounding: 0.0,
