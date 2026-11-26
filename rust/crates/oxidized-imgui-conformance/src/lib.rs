@@ -66,6 +66,7 @@ pub const SCENARIOS: &[&str] = &[
     "tables_column_hovered_flag",
     "tables_sort_specs",
     "tables_sort_tristate",
+    "tables_sort_arrow",
     "tables_column_sorted_flag",
     "tables_after_end",
     "text_draw",
@@ -3468,6 +3469,116 @@ pub fn tables_sort_tristate_dump() -> String {
     out
 }
 
+/// The `tables_sort_arrow` scenario: the sort arrow a sortable header draws for the columns the specs
+/// point at, with the sort order number when the spec is not the first one. `SortMulti` lets two
+/// columns keep orders 0 and 1, `PreferSortDescending` turns the second arrow down, and the `NoSort`
+/// column draws no arrow at all.
+///
+/// The atlas line rows travel in the fixture because the arrows are anti-aliased strokes, and every
+/// glyph the scenario draws is in the glyph table beside them.
+pub fn tables_sort_arrow_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2, WindowFlags, column_flags, table_flags};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/tables_sort_arrow.fixture.txt"
+    );
+    let text = std::fs::read_to_string(path).expect("tables sort arrow fixture");
+    let font = Font::from_pinned(&text).expect("font fixture");
+    let line_uvs = parse_line_uvs(&text);
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    ctx.set_line_uv_lines(line_uvs);
+    ctx.io_mut().delta_time = 0.1;
+    ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+    ctx.io_mut().mouse_down[0] = false;
+    ctx.begin_frame();
+    ctx.set_next_window_flags(
+        WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+    );
+    ctx.begin_window_ex(
+        "S",
+        Some(Vec2 { x: 60.0, y: 60.0 }),
+        Some(Vec2 { x: 300.0, y: 200.0 }),
+        false,
+    );
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario tables_sort_arrow\n");
+
+    let window_pos = ctx.window().pos;
+    let local = |p: Vec2| Vec2 {
+        x: p.x - window_pos.x,
+        y: p.y - window_pos.y,
+    };
+    let began = ctx.begin_table(
+        "SORT",
+        3,
+        table_flags::SORTABLE | table_flags::SORT_MULTI,
+        Vec2::default(),
+    );
+    out.push_str(&format!("table begin {}\n", i32::from(began)));
+    ctx.table_setup_column(
+        "A",
+        column_flags::WIDTH_FIXED | column_flags::DEFAULT_SORT,
+        60.0,
+    );
+    ctx.table_setup_column(
+        "B",
+        column_flags::WIDTH_FIXED
+            | column_flags::DEFAULT_SORT
+            | column_flags::PREFER_SORT_DESCENDING,
+        80.0,
+    );
+    ctx.table_setup_column(
+        "C",
+        column_flags::WIDTH_FIXED | column_flags::NO_SORT,
+        100.0,
+    );
+
+    // The reference builds the specs here, which is what linearizes the two default sort orders.
+    match ctx.table_get_sort_specs() {
+        Some((specs, dirty)) => {
+            out.push_str(&format!(
+                "specs 1 count {} dirty {}\n",
+                specs.len(),
+                i32::from(dirty)
+            ));
+            for (n, (column, direction)) in specs.iter().enumerate() {
+                out.push_str(&format!("spec {n} column {column} direction {direction}\n"));
+            }
+        }
+        None => out.push_str("specs 0 count -1 dirty -1\n"),
+    }
+
+    ctx.table_headers_row();
+    out.push_str(&format!(
+        "after headers rowindex {}\n",
+        ctx.table_get_row_index()
+    ));
+
+    ctx.end_table();
+    let end_cursor = local(ctx.cursor_screen_pos());
+    out.push_str(&format!(
+        "after cursor {:08x} {:08x}\n",
+        bits(end_cursor.x),
+        bits(end_cursor.y)
+    ));
+
+    let full = dump("tables_sort_arrow", ctx.draw_list());
+    for line in full.lines().skip(2) {
+        out.push_str(line);
+        out.push('\n');
+    }
+    ctx.end_window();
+    ctx.end_frame();
+    out
+}
+
 /// The `tables_column_sorted_flag` scenario: the `IsSorted` bit of `TableGetColumnFlags`, which marks
 /// the columns the sort specs point at.
 pub fn tables_column_sorted_flag_dump() -> String {
@@ -6649,6 +6760,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "tables_column_hovered_flag" => Some(tables_column_hovered_flag_dump()),
         "tables_sort_specs" => Some(tables_sort_specs_dump()),
         "tables_sort_tristate" => Some(tables_sort_tristate_dump()),
+        "tables_sort_arrow" => Some(tables_sort_arrow_dump()),
         "tables_column_sorted_flag" => Some(tables_column_sorted_flag_dump()),
         "tables_after_end" => Some(tables_after_end_dump()),
         "text_draw" => Some(text_draw_dump()),

@@ -161,6 +161,16 @@ impl Style {
     pub fn color_u32(&self, col: Col) -> u32 {
         self.colors[col.index()]
     }
+
+    /// `GetColorU32(col, alpha_mul)`: the packed colour with its alpha scaled, computed the way the
+    /// reference does it — through floats and `ColorConvertFloat4ToU32`, which rounds with `+ 0.5`, so
+    /// `Text` at `0.70` gives `0xB3`, not `0xB2`. `ImGuiStyle::Alpha` is not modelled and counts as 1.
+    pub fn color_u32_alpha(&self, col: Col, alpha_mul: f32) -> u32 {
+        let packed = self.colors[col.index()];
+        let alpha = (packed >> 24) & 0xFF;
+        let scaled = ((alpha as f32 / 255.0) * alpha_mul * 255.0 + 0.5).clamp(0.0, 255.0) as u32;
+        (packed & 0x00FF_FFFF) | (scaled << 24)
+    }
 }
 
 impl Default for Style {

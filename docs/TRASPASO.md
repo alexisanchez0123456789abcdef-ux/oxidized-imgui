@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **100 escenarios** más la **prueba negativa**.
+   que ejecuta **101 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **107 PRs** fusionados.
-- **100 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **108 PRs** fusionados.
+- **101 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 68.1 %.** Proyecto (contando el arnés): **70.3 %**.
 - 32 tests unitarios en 6 binarios.
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
@@ -76,6 +76,15 @@ Esto está aprendido a base de fallar, y ahorra sesiones enteras:
   horneada, **la referencia la hornea bajo demanda y el port la pierde**: el dibujo
   cambia en silencio. Hay que hornear **todas** las letras de **todas** las cadenas del
   escenario. Esto ya ha mordido tres veces.
+- **El driver lee y escribe `imgui.ini` en el directorio actual**, y una tabla guarda su orden en
+  `[Table][...]`: un escenario de tablas que se ejecute donde quedó un ini de otra corrida arranca
+  con ese estado. `tables_sort_tristate` es la prueba viva —la referencia en un directorio **limpio**
+  devuelve `count 0`, y su golden dice `count 1` porque al generarse el ini ya tenía un `Sort`
+  guardado—. Los escenarios nuevos se generan en un **directorio temporal sin `imgui.ini`** y con
+  nombre de tabla propio, nunca desde la raíz del repo.
+- **El golden se captura con la redirección de `cmd`, no con `>` de PowerShell**: `>` de PowerShell
+  convierte los saltos a CRLF y el golden deja de coincidir byte a byte (el `cargo test` lo dice). Por
+  eso `gen-golden.ps1` lanza el driver con `cmd /c`.
 - Los escenarios con **trazo de flecha** necesitan las filas de línea: usar
   `WriteWindowIconsFixture` en vez de `WriteGlyphFixture`. Cualquier escenario con un **trazo AA**
   (los círculos, por ejemplo) necesita la tabla de líneas entera: `WriteLineUvFixture`, escrita tras
@@ -124,7 +133,9 @@ contenido; `tables_headers`: la fila de cabecera con su banda y sus nombres, con
 `tables_header_hover`: el resalte `HeaderHovered` de una cabecera, que llega al tercer frame;
 `tables_header_active`: el `HeaderActive` de una cabecera pulsada;
 `tables_hovered`: `TableGetHoveredColumn` (inmediato) y `TableGetHoveredRow` (un frame de retraso);
-`tables_row_height`: la altura mínima de fila de `TableNextRow`, que gana al contenido).
+`tables_row_height`: la altura mínima de fila de `TableNextRow`, que gana al contenido;
+`tables_sort_arrow`: la flecha de orden que dibuja la cabecera de una tabla ordenable (trazo AA con la
+tabla de líneas en el fixture), con ascendente/descendente y el número de orden del segundo criterio.
 
 La tabla completa, con el nombre del golden de cada fila, está en `rust/README.md`.
 El detalle por pieza y su peso, en `docs/progress.json`.
@@ -139,8 +150,10 @@ cerradas y su sección queda más abajo como referencia de lo ya medido. Lo que 
 Están hechos el primer corte (`tables_basic`), las cabeceras (`tables_headers`), las bandas de fila
 (`tables_rowbg`), el fondo de celda (`tables_cellbg`), los bordes (`tables_borders` y
 `tables_borders_outer`), las columnas stretch (`tables_stretch` y `tables_stretch_weights`), la API
-de columnas (`tables_set_column`, `tables_names` y `tables_header_id`) y el recorte de celda con sus
-comandos por columna (`tables_clip`). El resto del sistema, por orden de coste:
+de columnas (`tables_set_column`, `tables_names` y `tables_header_id`), el recorte de celda con sus
+comandos por columna (`tables_clip`), las specs de orden (`tables_sort_specs`, `tables_sort_tristate`
+y `tables_column_sorted_flag`) y la **flecha de orden** (`tables_sort_arrow`, con el número del
+segundo criterio y la dirección descendente). El resto del sistema, por orden de coste:
 
 - **Políticas de tamaño**: `SizingStretchSame`, los pesos explícitos y el ancho automático por
   contenido ya están; falta el peso de `SizingStretchProp` derivado del contenido (no el declarado).
@@ -151,7 +164,8 @@ comandos por columna (`tables_clip`). El resto del sistema, por orden de coste:
 - Abierto: con `RowBg` y **dos** columnas, la banda alterna del volcado de referencia sólo cubre
   `68..132` (la primera columna) en vez de `68..220`; hace falta medir de dónde sale ese recorte antes
   de portarlo. Con una columna el golden `tables_rowbg_headers` cuadra.
-- El **clic** de cabecera que cambia las specs (el estado ya está: `TableGetSortSpecs`,\n  `tables_sort_tristate` y `IsSorted`), arrastrar para reordenar, y
+- El **clic** de cabecera que cambia las specs (el estado y la flecha ya están: `TableGetSortSpecs`,
+  `tables_sort_tristate`, `IsSorted` y `tables_sort_arrow`), arrastrar para reordenar, y
   `TableGetHoveredColumn`/`Row`. Hover (`tables_header_hover`) y pulsado (`tables_header_active`) ya
   están: las cabeceras usan `AllowOverlap`, así que sólo reportan hover si ya lo tenían el frame
   anterior y por eso el resalte aparece en el **tercer** frame.
@@ -240,6 +254,38 @@ Lo que costó, para no repetirlo:
 - **`RowBg` salta las filas de cabecera**: `RowBgColorCounter` sólo sube en las filas que no son de
   cabecera, así que con cabecera + cuatro filas de datos las bandas caen en la segunda y la cuarta,
   y `TableRowBg` es transparente (`0x00000000`), o sea que esas filas no dibujan nada.
+
+### Tablas, flecha de orden (peso 1): cerrada
+
+`TableHeader` reserva el extremo derecho de **toda** columna ordenable y dibuja ahí la flecha, con el
+número de orden del segundo criterio. Medido con el golden `tables_sort_arrow` (ventana `S` de 300×200
+en (60,60), tabla `SORT` de 3 columnas de 60/80/100, `Sortable | SortMulti`, A ascendente y B
+descendente):
+
+- `w_arrow = ImTrunc(FontSize * 0.65 + FramePadding.x)` = `trunc(8.45 + 4)` = **12**.
+- `x = max(cell.Min.x, cell.Max.x - w_arrow - w_sort_text)`; el número va en
+  `x + ItemInnerSpacing.x` (4) y `w_sort_text = 4 + CalcTextSize("2").x` = **11** con 7 px por avance.
+- La flecha va en `x + FontSize * (1 - 0.65) * 0.5` = `x + 2.275`, con `scale = 0.65`.
+- **La flecha es un TRAZO, no un relleno**: `SymbolArrowThicknessFactor` vale 0.30, así que
+  `r = 13·0.5·0.65 = 4.225`, `thickness = round(clamp(1.2675, 1, 2.1125)) = 1` y se emite como
+  `_AddPolyline` de 3 puntos con `StrokeInside | AALineEnds` (**5 quads = 10 vértices por flecha**).
+  Por eso el escenario necesita la **tabla de líneas** en el fixture: `WriteWindowIconsFixture` sirve
+  (glifos + filas de línea en el mismo fichero).
+- Dirección: `ImGuiDir_Up` = `(0, -1)` para ascendente, `ImGuiDir_Down` = `(0, +1)` para descendente.
+  El centro es `pos + r + bias·cos/sin`, con `bias = thickness·0.8·0.7071`.
+- **El número de orden se pinta al 70 % de alfa y da `0xB3FFFFFF`, no `0xB2`**: el reference pasa por
+  `ColorConvertFloat4ToU32`, que hace `saturate(w)·255 + 0.5`; en float32 `0.7f·255` redondea a
+  `178.5` y el `+0.5` lo lleva a `179`. En el port está en `Style::color_u32_alpha`.
+- **Orden de dibujo**: banda de cabecera (canal de fondo), luego número y flecha, luego la etiqueta.
+- `SortMulti` es **`1 << 26`** (no un bit junto a `Sortable`); `PreferSortDescending` es `1 << 15`.
+- Con dos columnas `DefaultSort` las dos nacen con `SortOrder = 0`: es `TableSortSpecsSanitize` quien
+  las linealiza a 0 y 1, y sólo corre desde `TableSortSpecsBuild`, o sea al llamar a
+  **`TableGetSortSpecs`** (que además bloquea el layout antes). Sin esa llamada, las dos dibujan
+  flecha sin número.
+- El estado de orden (`SortOrder`/`SortDirection`) **sobrevive entre frames** por identificador de
+  tabla (`Context::table_sort_state`), igual que los anchos de contenido: los flags `DefaultSort` sólo
+  eligen el estado inicial de una tabla que no tiene ninguno. Sin eso, el clic del siguiente corte se
+  perdería al re-declarar las columnas.
 
 ### Entrada de texto (peso 4): cerrada
 
@@ -332,7 +378,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 100 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 101 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```

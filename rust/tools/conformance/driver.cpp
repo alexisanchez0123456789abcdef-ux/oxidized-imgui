@@ -437,6 +437,7 @@ static void DumpCmdSplit()
 // that samples the pinned arc table instead of calling cos/sin. Every automatic segment step the
 // table can ask for is covered, plus the alpha-multiplied minimum radius and the collapsed stroke.
 static void WriteLineUvFixture();
+static void WriteWindowIconsFixture(ImFont* font, const char* bake_order, int bake_count);
 
 static void DumpAaCircles()
 {
@@ -1895,6 +1896,71 @@ static void DumpTablesColumnHoveredFlag()
         ImGui::End();
         ImGui::EndFrame();
     }
+}
+// tables_sort_arrow: the sort arrow a sortable header draws for the columns the specs point at.
+// `SortMulti` lets two columns keep sort orders 0 and 1, so the second one also draws its order
+// number, and `PreferSortDescending` makes its arrow point down. The third column is `NoSort`, so it
+// draws no arrow at all. `TableGetSortSpecs` runs before the header row because it is what linearizes
+// the two orders the `DefaultSort` columns start with.
+static void DumpTablesSortArrow()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario tables_sort_arrow\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[4] = { 'A', 'B', 'C', '2' };
+    for (int i = 0; i < 4; i++)
+        baked->FindGlyph((ImWchar)bake_order[i]);
+    // A throwaway frame wires the atlas line textures: the arrows are strokes that sample them.
+    ImGui::NewFrame();
+    ImGui::EndFrame();
+    WriteWindowIconsFixture(font, bake_order, 4);
+
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground;
+    ImGui::Begin("S", NULL, flags);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+
+    const bool began = ImGui::BeginTable("SORT", 3,
+        ImGuiTableFlags_Sortable | ImGuiTableFlags_SortMulti, ImVec2(0.0f, 0.0f), 0.0f);
+    printf("table begin %d\n", (int)began);
+    ImGui::TableSetupColumn("A", ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_DefaultSort, 60.0f);
+    ImGui::TableSetupColumn("B", ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_DefaultSort |
+        ImGuiTableColumnFlags_PreferSortDescending, 80.0f);
+    ImGui::TableSetupColumn("C", ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_NoSort, 100.0f);
+
+    const ImGuiTableSortSpecs* specs = ImGui::TableGetSortSpecs();
+    printf("specs %d count %d dirty %d\n", specs != NULL, specs ? specs->SpecsCount : -1,
+        specs ? (int)specs->SpecsDirty : -1);
+    if (specs != NULL)
+        for (int n = 0; n < specs->SpecsCount; n++)
+            printf("spec %d column %d direction %d\n", n, specs->Specs[n].ColumnIndex,
+                (int)specs->Specs[n].SortDirection);
+
+    ImGui::TableHeadersRow();
+    printf("after headers rowindex %d\n", ImGui::TableGetRowIndex());
+
+    ImGui::EndTable();
+    const ImVec2 end_cursor = PSub(ImGui::GetCursorScreenPos(), ImGui::GetWindowPos());
+    printf("after cursor %08x %08x\n", Bits(end_cursor.x), Bits(end_cursor.y));
+
+    DumpDrawListBody(*dl);
+    ImGui::End();
+    ImGui::EndFrame();
 }
 // tables_sort_specs: `TableGetSortSpecs` right after the first row, on a sortable table whose second
 // column asked for the default sort.
@@ -5815,6 +5881,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "tables_sort_tristate") == 0)
     {
         DumpTablesSortTristate();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "tables_sort_arrow") == 0)
+    {
+        DumpTablesSortArrow();
         ImGui::DestroyContext();
         return 0;
     }
