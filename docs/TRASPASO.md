@@ -533,7 +533,15 @@ La causa esta localizada en el reference (`imgui_draw.cpp:2622-2626`): con `roun
 decide `PathArcTo` con `num_segments = 0` (calculo automatico), no `arc_step_for_radius`, que es lo que usa
 hoy `add_rect_filled_aa_rounded` (escrito para el *stroke* redondeado, no para el relleno).
 
-Siguiente paso concreto: leer `PathArcTo`/`CalcArcSegmentCount` del reference, alinear el conteo de
+Siguiente paso concreto, ya con las piezas localizadas en **los dos lados**: el reference resuelve el conteo
+automatico con `_CalcCircleAutoSegmentCount(radius)` y dibuja los puntos con la tabla de arcos rapidos
+(`_PathArcToFastEx`, que reparte el resto y anade el ultimo sample). El port **ya tiene** las dos piezas:
+`calc_circle_auto_segment_count` y `push_arc_samples` en `draw_list.rs`. Lo que usa hoy
+`add_rect_filled_aa_rounded` es `arc_step_for_radius` (un paso, no un conteo de segmentos). Por tanto la
+correccion es **construir la ruta del relleno con esas dos funciones** y volver a medir: el objetivo es
+**72** elementos.
+
+Ruta anterior (superada por la de arriba): leer ``PathArcTo``/``CalcArcSegmentCount`` del reference, alinear el conteo de
 segmentos del relleno y volver a medir: el objetivo es **72** elementos. Mientras tanto el marco redondeado
 queda verificado solo por el test de enrutado (`frame_rounding_switches_the_button_frame_to_the_aa_path`),
 no por un golden, y asi esta escrito en la seccion de `FrameRounding`.
