@@ -73,6 +73,9 @@ impl WindowFlags {
     pub const ALWAYS_AUTO_RESIZE: Self = Self(1 << 3);
     /// `ImGuiWindowFlags_NoResize`: no resize grips and no resize borders.
     pub const NO_RESIZE: Self = Self(1 << 4);
+    /// `ImGuiWindowFlags_MenuBar`: a bar along the top of the window, which takes its height out of
+    /// the content area.
+    pub const MENU_BAR: Self = Self(1 << 7);
     /// `ImGuiWindowFlags_Tooltip`: a tooltip window, which takes no mouse and no keyboard focus.
     pub const TOOLTIP: Self = Self(1 << 6);
     /// `ImGuiWindowFlags_Popup`: draws with the popup background.
@@ -162,6 +165,10 @@ pub struct Window {
     pub scrollbar_x: bool,
     /// `window->InnerRect`: the window rectangle without its decorations.
     pub inner_rect: (Vec2, Vec2),
+    /// `window->MenuBarHeight`: zero without the flag, the frame height with it.
+    pub menu_bar_height: f32,
+    /// `window->DC.LayoutType == Horizontal`: a menu bar lays its items out in a row.
+    pub layout_horizontal: bool,
     /// `ImGuiWindowFlags_ChildWindow`: a region inside another window. A child has its own draw
     /// list and keeps no state between frames.
     pub is_child: bool,
@@ -1158,6 +1165,28 @@ impl Context {
             );
         }
 
+        // `RenderWindowDecorations`: a menu bar paints its own background over the top of the window,
+        // before the border goes around everything, and takes its height out of the content area.
+        let menu_bar_height = if flags.contains(WindowFlags::MENU_BAR) {
+            self.frame_height()
+        } else {
+            0.0
+        };
+        if menu_bar_height > 0.0 {
+            self.draw_list.prim_rect(
+                Vec2 {
+                    x: pos.x,
+                    y: pos.y + title_height,
+                },
+                Vec2 {
+                    x: pos.x + size_full.x,
+                    y: pos.y + title_height + menu_bar_height,
+                },
+                self.style.menu_bar_bg,
+            );
+            content_origin.y += menu_bar_height;
+        }
+
         if !collapsed {
             // The title band, between the background and the border.
             if title.is_some() {
@@ -1263,7 +1292,12 @@ impl Context {
         // The window's draw list is clipped to its rectangle, inset by the window border.
         // The clip starts below the title band when there is one. A collapsed window gets an
         // empty clip here, which is what the reference gets too.
-        let clip_top = self.style.window_border_size.max(title_height);
+        // The content clip starts at the bar's bottom when there is one: the bar itself already sits
+        // inside the border.
+        let clip_top = self
+            .style
+            .window_border_size
+            .max(title_height + menu_bar_height);
         self.draw_list.push_clip_rect(
             Vec2 {
                 x: pos.x + self.style.window_border_size,
@@ -1277,7 +1311,7 @@ impl Context {
         );
         let content_size = Vec2 {
             x: size.x - pad.x * 2.0,
-            y: size.y - pad.y * 2.0,
+            y: size.y - pad.y * 2.0 - menu_bar_height,
         };
         // window->ID = ImHashStr(name) and the id stack starts from it, which is what makes an
         // item's id depend on its window and a child's name carry the host's hash.
@@ -1296,6 +1330,8 @@ impl Context {
             scrollbar_y,
             scrollbar_x,
             inner_rect,
+            menu_bar_height,
+            layout_horizontal: false,
             is_child: false,
             content_origin,
             content_size,
@@ -1707,6 +1743,8 @@ impl Context {
             scrollbar_y,
             scrollbar_x: false,
             inner_rect,
+            menu_bar_height: 0.0,
+            layout_horizontal: false,
             is_child: true,
             content_origin,
             content_size,
@@ -2817,6 +2855,15 @@ impl Context {
             x: window.cursor_max.x.max(max.x),
             y: window.cursor_max.y.max(max.y),
         };
+        // `window->DC.LayoutType == Horizontal`: a menu bar lays its items out in a row, so the cursor
+        // moves to the right of the item instead of below the line.
+        if window.layout_horizontal {
+            window.cursor = Vec2 {
+                x: max.x + spacing.x,
+                y: min.y,
+            };
+            return;
+        }
         // The line ends here: the cursor moves below it and back to the line start.
         window.cursor = Vec2 {
             x: window.line_start_x,
@@ -3470,6 +3517,124 @@ impl Context {
         let colour = self.style.color_u32(crate::style::Col::Text);
         self.draw_list.add_text(&font, font.size, pos, colour, text);
         self.dummy(size);
+    }
+
+    /// `ImGui::BeginMenuBar`: the bar along the top of the window, with its items laid out in a row.
+    ///
+    /// The bar's background is part of the window's decorations, so this only clips to the bar, moves
+    /// the cursor to its start and switches the layout to horizontal.
+    pub fn begin_menu_bar(&mut self) {
+        let (bar_min, bar_max, pad) = {
+            let window = self.window();
+            (
+                Vec2 {
+                    x: window.inner_rect.0.x,
+                    y: window.inner_rect.0.y,
+                },
+                Vec2 {
+                    x: window.inner_rect.0.x + window.size_full.x,
+                    y: window.inner_rect.0.y + window.menu_bar_height,
+                },
+                self.style.window_padding,
+            )
+        };
+        // `clip_rect(IM_ROUND(bar.Min + border * 0.5), IM_ROUND(bar.Max - max(rounding, border * 0.5)))`:
+        // the bar is clipped inside the window border, with the right edge pulled in by the rounding.
+        let border = self.style.window_border_size;
+        let rounding = self.style.window_rounding;
+        let clip = (
+            Vec2 {
+                x: (bar_min.x + border * 0.5).round(),
+                y: (bar_min.y + border * 0.5).round(),
+            },
+            Vec2 {
+                x: (bar_max.x - rounding.max(border * 0.5)).round(),
+                y: bar_max.y.round(),
+            },
+        );
+        self.draw_list.push_clip_rect(clip.0, clip.1, false);
+        let Some(window) = self.windows.last_mut() else {
+            return;
+        };
+        window.layout_horizontal = true;
+        window.cursor = Vec2 {
+            x: bar_min.x + pad.x,
+            y: bar_min.y,
+        };
+        window.line_start_x = window.cursor.x;
+        window.line_height = 0.0;
+    }
+
+    /// `ImGui::EndMenuBar`: back to a vertical layout, with the content starting below the bar.
+    pub fn end_menu_bar(&mut self) {
+        self.draw_list.pop_clip_rect();
+        let pad = self.style.window_padding;
+        let Some(window) = self.windows.last_mut() else {
+            return;
+        };
+        window.layout_horizontal = false;
+        window.cursor = Vec2 {
+            x: window.inner_rect.0.x + pad.x - window.scroll.x,
+            y: window.inner_rect.0.y + pad.y + window.menu_bar_height - window.scroll.y,
+        };
+        window.line_start_x = window.cursor.x;
+        window.line_height = 0.0;
+    }
+
+    /// `ImGui::MenuItem` inside a menu bar: a framed label that reports the click.
+    ///
+    /// The box is wider than the item's layout size by the frame padding on each side and starts that
+    /// much to the left of the cursor, so consecutive entries butt up against each other and the box
+    /// covers the spacing between them.
+    pub fn menu_item(&mut self, label: &str) -> bool {
+        let id = self.get_id(label);
+        let pad = self.style.frame_padding;
+        let border = self.style.window_border_size;
+        let text = self.font.calc_text_size(label, self.font.size);
+        let (cursor, bar_top) = {
+            let window = self.window();
+            (window.cursor, window.inner_rect.0.y)
+        };
+        let min = Vec2 {
+            x: cursor.x - pad.x,
+            y: bar_top + border,
+        };
+        // The layout item is the label plus two paddings, and the box adds two more: with the
+        // horizontal layout's item spacing the next box starts where this one ends.
+        let item = Vec2 {
+            x: text.x + pad.x * 2.0,
+            y: self.frame_height(),
+        };
+        let max = Vec2 {
+            x: min.x + item.x + pad.x * 2.0,
+            y: bar_top + self.frame_height() - border,
+        };
+        let pressed = self.interact_rect(id, min, max, item, false);
+        let hovered = self.last_item_hovered;
+        let held = self.last_item_active;
+        if hovered || held {
+            let colour = if held {
+                self.style.color_u32(crate::style::Col::HeaderActive)
+            } else {
+                self.style.color_u32(crate::style::Col::HeaderHovered)
+            };
+            self.draw_list.prim_rect(min, max, colour);
+        }
+        let font = self.font.clone();
+        let text_col = self.style.color_u32(crate::style::Col::Text);
+        // `RenderText(bb.Min + FramePadding, ...)` where the box already starts a padding to the left:
+        // the pen ends up two paddings in, and at the bar's top plus one padding down.
+        self.draw_list.add_text(
+            &font,
+            font.size,
+            Vec2 {
+                x: min.x + pad.x * 2.0,
+                y: bar_top + pad.y,
+            },
+            text_col,
+            label,
+        );
+        pressed
     }
 
     /// `ImGui::BeginTooltip`: a tooltip is a window at the mouse that takes neither the mouse nor the

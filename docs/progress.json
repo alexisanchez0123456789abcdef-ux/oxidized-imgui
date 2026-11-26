@@ -97,7 +97,7 @@
         { "id": "w_scroll", "label": "Scroll de la región hija completo: barra en la lista del padre, rueda sobre la región y arrastre de su barra", "weight": 1, "done": true, "evidence": "golden child_region (13 frames, dos listas, 122487 bytes)" },
         { "id": "w_popup", "label": "Popup como ventana: lista propia, fondo de popup, medida en el primer frame y z-orden", "weight": 1, "done": true, "evidence": "golden popup (10 frames, 48770 bytes)" },
         { "id": "w_tooltip", "label": "Tooltip: ventana al ratón, sin ratón ni teclado, medida en el primer frame", "weight": 1, "done": true, "evidence": "golden tooltip (6 frames, 19705 bytes)" },
-        { "id": "w_menu_bar", "label": "Barra de menús con sus entradas", "weight": 1, "done": false, "evidence": "" },
+        { "id": "w_menu_bar", "label": "Barra de menús: franja, recorte propio, layout horizontal y entradas", "weight": 1, "done": true, "evidence": "golden menu_bar (5 frames, 23068 bytes)" },
         { "id": "w_tables", "label": "Tablas", "weight": 2, "done": false, "evidence": "" }
       ]
     },

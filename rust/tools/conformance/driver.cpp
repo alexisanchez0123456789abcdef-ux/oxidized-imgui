@@ -2679,6 +2679,77 @@ static void DumpTooltip()
         }
     }
 }
+// menu_bar: a window with a menu bar, whose two entries are laid out in a row and take their height
+// out of the content area below.
+static void FrameMenuBar(float mx, float my, bool down)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = down;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("W", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar |
+        ImGuiWindowFlags_MenuBar);
+    if (ImGui::BeginMenuBar())
+    {
+        ImGui::MenuItem("File");
+        ImGui::MenuItem("Edit");
+        ImGui::EndMenuBar();
+    }
+    ImGui::Button("x");
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpMenuBar()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario menu_bar\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    // Every letter of every string, since the reference bakes on demand.
+    const char bake_order[8] = { 'F', 'i', 'l', 'e', 'E', 'd', 't', 'x' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    WriteGlyphFixture(font, bake_order, 8);
+
+    // The bar runs across the top: idle, hover the first entry, hover the second, come back.
+    const float steps[5][3] = {
+        { 0.0f, 0.0f, 0.0f },
+        { 0.0f, 0.0f, 0.0f },
+        { 75.0f, 68.0f, 0.0f },
+        { 130.0f, 68.0f, 0.0f },
+        { 0.0f, 0.0f, 0.0f },
+    };
+    for (int f = 0; f < 5; f++)
+    {
+        FrameMenuBar(steps[f][0], steps[f][1], steps[f][2] != 0.0f);
+        ImGui::Render();
+        ImDrawData* dd = ImGui::GetDrawData();
+        ImGuiContext& g = *GImGui;
+        printf("frame %d lists %d\n", f, dd->CmdListsCount);
+        for (int i = 0; i < dd->CmdListsCount; i++)
+        {
+            const ImDrawList* list = dd->CmdLists[i];
+            const char* name = "?";
+            for (int w = 0; w < g.Windows.Size; w++)
+                if (g.Windows[w]->DrawList == list)
+                    name = g.Windows[w]->Name;
+            printf("list %d %s\n", i, name);
+            DumpDrawListBody(*list);
+        }
+    }
+}
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 
 static void DumpCmdOffsets()
@@ -2932,6 +3003,13 @@ int main(int argc, char** argv)
         return 0;
     }
 
+
+    if (strcmp(name, "menu_bar") == 0)
+    {
+        DumpMenuBar();
+        ImGui::DestroyContext();
+        return 0;
+    }
 
     if (strcmp(name, "tooltip") == 0)
     {

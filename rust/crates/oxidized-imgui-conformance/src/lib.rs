@@ -76,6 +76,7 @@ pub const SCENARIOS: &[&str] = &[
     "popup_click",
     "combo",
     "tooltip",
+    "menu_bar",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -3399,6 +3400,71 @@ pub fn tooltip_dump() -> String {
     }
     out
 }
+/// The `menu_bar` scenario: a window with a menu bar whose entries are laid out in a row and take
+/// their height out of the content area below.
+pub fn menu_bar_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/menu_bar.glyphs.txt"
+    );
+    let text = std::fs::read_to_string(path).expect("menu_bar fixture");
+    let font = Font::from_pinned(&text).expect("font fixture");
+    let line_uvs = parse_line_uvs(&text);
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    ctx.set_line_uv_lines(line_uvs);
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario menu_bar\n");
+
+    let steps = [
+        (0.0f32, 0.0f32, false),
+        (0.0, 0.0, false),
+        (75.0, 68.0, false),
+        (130.0, 68.0, false),
+        (0.0, 0.0, false),
+    ];
+    for (n, (mx, my, down)) in steps.iter().enumerate() {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: *mx, y: *my });
+        ctx.io_mut().mouse_down[0] = *down;
+        ctx.begin_frame();
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE
+                | WindowFlags::NO_SCROLLBAR
+                | WindowFlags::NO_RESIZE
+                | WindowFlags::MENU_BAR,
+        );
+        ctx.begin_window(
+            "W",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        ctx.begin_menu_bar();
+        ctx.menu_item("File");
+        ctx.menu_item("Edit");
+        ctx.end_menu_bar();
+        ctx.button("x");
+        ctx.end_window();
+        ctx.end_frame();
+        let lists = ctx.render_lists();
+        out.push_str(&format!("frame {n} lists {}\n", lists.len()));
+        for (i, (name, list)) in lists.iter().enumerate() {
+            out.push_str(&format!("list {i} {name}\n"));
+            let body = dump("menu_bar", list);
+            for line in body.lines().skip(2) {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
+    }
+    out
+}
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -3445,6 +3511,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "popup_click" => Some(popup_click_dump()),
         "combo" => Some(combo_dump()),
         "tooltip" => Some(tooltip_dump()),
+        "menu_bar" => Some(menu_bar_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),
