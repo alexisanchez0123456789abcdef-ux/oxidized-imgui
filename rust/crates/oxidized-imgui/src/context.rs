@@ -229,6 +229,17 @@ pub struct Context {
     /// `g.Time`: the reference keeps it as a `double` and `GetTime()` returns it as such.
     time: f64,
     windows: Vec<Window>,
+    /// `g.CurrentTable`: the table being built, with the columns its layout already resolved.
+    table: Option<crate::tables::Table>,
+    /// What `BeginTable` changed on the host window and has to put back: the line start, so the
+    /// item after the table goes back to the window's content column.
+    table_host: Option<TableHost>,
+    /// `ImDrawListSplitter` for a table: one index channel per column. The reference draws each
+    /// cell into its column's channel and merges them in column order at `EndTable`, which is why
+    /// the index buffer of a table is *not* in drawing order while its vertices are.
+    table_indices: Vec<Vec<crate::draw_list::ImDrawIdx>>,
+    /// Where the current cell's indices start in the list, so they can be moved to their channel.
+    cell_index_start: usize,
     /// Per-window state between frames: position, size, scroll, content size and flags.
     memory: Vec<WindowMemory>,
     /// `SetNextWindowScroll` for the window about to start.
@@ -326,6 +337,13 @@ pub struct Context {
     last_item_active: bool,
 }
 
+/// What `BeginTable` has to put back when the table ends: the host window's line start, which the
+/// cells move to their own content column (`window->DC.ColumnsOffset` in the reference).
+#[derive(Clone, Copy, Debug)]
+struct TableHost {
+    line_start_x: f32,
+}
+
 impl Default for Context {
     fn default() -> Self {
         Self {
@@ -338,6 +356,10 @@ impl Default for Context {
             io: Io::default(),
             time: 0.0,
             windows: Vec::new(),
+            table: None,
+            table_host: None,
+            table_indices: Vec::new(),
+            cell_index_start: 0,
             memory: Vec::new(),
             next_scroll: None,
             next_flags: None,
@@ -3019,6 +3041,219 @@ impl Context {
     pub fn set_cursor_screen_pos(&mut self, pos: Vec2) {
         if let Some(window) = self.windows.last_mut() {
             window.cursor = pos;
+        }
+    }
+
+    /// `ImGui::BeginTable`: reserves the table's rectangle at the cursor, pushes its identifier and
+    /// reports whether the table can be used.
+    ///
+    /// `outer_size` of zero means "as wide as the content area and no height", the only shape this
+    /// first cut lays out; the columns are then sized by `table_setup_column`.
+    pub fn begin_table(&mut self, id: &str, columns: usize, flags: u32, outer_size: Vec2) -> bool {
+        let Some(window) = self.windows.last() else {
+            return false;
+        };
+        if window.collapsed || columns == 0 {
+            return false;
+        }
+        // `CalcItemSize(outer_size, max(avail.x, hard_min), 0)`, then truncated like the reference.
+        let avail = window.content_size;
+        let origin = window.cursor;
+        let line_start_x = window.line_start_x;
+        let width = if outer_size.x == 0.0 {
+            avail.x.max(1.0)
+        } else {
+            outer_size.x
+        };
+        let height = if outer_size.y == 0.0 {
+            0.0
+        } else {
+            outer_size.y
+        };
+        let outer_rect = (
+            origin,
+            Vec2 {
+                x: origin.x + width.trunc(),
+                y: origin.y + height.trunc(),
+            },
+        );
+        let host_clip = self.draw_list.current_clip_rect();
+        // `BeginTableEx` pushes the window's inner clip on the list. Inside a plain window that is
+        // the clip the list is already on, so this neither changes nor splits a command.
+        self.draw_list.push_clip_rect(
+            Vec2 {
+                x: host_clip[0],
+                y: host_clip[1],
+            },
+            Vec2 {
+                x: host_clip[2],
+                y: host_clip[3],
+            },
+            false,
+        );
+        self.push_id(id);
+        self.table_host = Some(TableHost { line_start_x });
+        self.table_indices = vec![Vec::new(); columns];
+        self.table = Some(crate::tables::Table::new(flags, columns, outer_rect));
+        true
+    }
+
+    /// `ImGui::TableSetupColumn`: declares the next column, in order, before the first row.
+    ///
+    /// The `label` is only read by the headers, which are not ported yet.
+    pub fn table_setup_column(&mut self, label: &str, flags: u32, width: f32) {
+        let _ = label;
+        if let Some(table) = self.table.as_mut() {
+            table.setup_column(flags, width);
+        }
+    }
+
+    /// `ImGui::TableNextRow`: starts a row whose height follows its contents.
+    pub fn table_next_row(&mut self) {
+        self.table_next_row_min(0.0);
+    }
+
+    /// `ImGui::TableNextRow` with an explicit minimum height.
+    pub fn table_next_row_min(&mut self, row_min_height: f32) {
+        let Some(mut table) = self.table.take() else {
+            return;
+        };
+        self.table_lock_layout(&mut table);
+        if table.is_inside_row {
+            self.table_end_row(&mut table);
+        }
+        table.row_cell_padding_y = self.style.cell_padding.y;
+        table.begin_row(row_min_height);
+        // `TableBeginRow` restarts the row's own extent at its top.
+        if let Some(window) = self.windows.last_mut() {
+            window.cursor_max.y = table.row_pos_y1;
+        }
+        self.table = Some(table);
+    }
+
+    /// `ImGui::TableNextColumn`: the next cell, wrapping into a new row after the last column.
+    pub fn table_next_column(&mut self) -> bool {
+        let Some(mut table) = self.table.take() else {
+            return false;
+        };
+        self.table_lock_layout(&mut table);
+        let next = table.current_column + 1;
+        if table.is_inside_row && next < table.columns.len() as i32 {
+            if table.current_column != -1 {
+                self.table_end_cell(&mut table);
+            }
+            self.table_begin_cell(&mut table, next as usize);
+        } else {
+            // `TableNextRow()` then the first cell of it.
+            if table.is_inside_row {
+                self.table_end_row(&mut table);
+            }
+            table.row_cell_padding_y = self.style.cell_padding.y;
+            table.begin_row(0.0);
+            if let Some(window) = self.windows.last_mut() {
+                window.cursor_max.y = table.row_pos_y1;
+            }
+            self.table_begin_cell(&mut table, 0);
+        }
+        self.table = Some(table);
+        true
+    }
+
+    /// `ImGui::EndTable`: closes the row, finishes the table's height and lays the whole table out
+    /// as one item, which leaves the cursor below it.
+    pub fn end_table(&mut self) {
+        let Some(mut table) = self.table.take() else {
+            return;
+        };
+        self.table_lock_layout(&mut table);
+        if table.is_inside_row {
+            self.table_end_row(&mut table);
+        }
+        // `ImCeil(RowPosY2)`: the table is as tall as the bottom of its last row.
+        let inner_content_max_y = table.row_pos_y2.ceil();
+        table.outer_rect.1.y = table.outer_rect.1.y.max(inner_content_max_y);
+        // `ImDrawListSplitter::Merge`: the column channels go back to the list in column order, so
+        // the vertices stay where they were drawn and only the indices are regrouped.
+        for channel in core::mem::take(&mut self.table_indices) {
+            self.draw_list.idx_buffer.extend_from_slice(&channel);
+            if let Some(cmd) = self.draw_list.cmd_buffer.last_mut() {
+                cmd.elem_count += channel.len() as u32;
+            }
+        }
+        self.draw_list.pop_clip_rect();
+        self.pop_id();
+        // Back at the table's top-left and at the host's line start, then laid out as one item.
+        if let Some(window) = self.windows.last_mut() {
+            window.cursor = table.outer_rect.0;
+            if let Some(host) = self.table_host.take() {
+                window.line_start_x = host.line_start_x;
+            }
+        }
+        let size = Vec2 {
+            x: table.outer_rect.1.x - table.outer_rect.0.x,
+            y: table.outer_rect.1.y - table.outer_rect.0.y,
+        };
+        self.dummy(size);
+        self.table = None;
+    }
+
+    /// `ImGui::TableGetRowIndex`, and 0 when no table is open.
+    pub fn table_get_row_index(&self) -> i32 {
+        self.table.as_ref().map(|t| t.current_row).unwrap_or(0)
+    }
+
+    /// `ImGui::TableGetColumnIndex`, and 0 when no table is open.
+    pub fn table_get_column_index(&self) -> i32 {
+        self.table.as_ref().map(|t| t.current_column).unwrap_or(0)
+    }
+
+    /// The columns are resolved on the first row or cell, as `TableNextRow` does in the reference.
+    fn table_lock_layout(&mut self, table: &mut crate::tables::Table) {
+        if table.layout_locked {
+            return;
+        }
+        let host_clip = self.draw_list.current_clip_rect();
+        table.update_layout(self.style.cell_padding, host_clip);
+    }
+
+    /// `TableEndRow`: closes the open cell and leaves the cursor at the row's bottom.
+    fn table_end_row(&mut self, table: &mut crate::tables::Table) {
+        if table.current_column != -1 {
+            self.table_end_cell(table);
+            table.current_column = -1;
+        }
+        if let Some(window) = self.windows.last_mut() {
+            window.cursor.y = table.row_pos_y2;
+        }
+        table.is_inside_row = false;
+    }
+
+    /// `TableBeginCell`: the content of a cell starts at its column's work edge, one row padding
+    /// down, and the line start moves there so the items of the cell stay inside the column.
+    fn table_begin_cell(&mut self, table: &mut crate::tables::Table, column: usize) {
+        table.current_column = column as i32;
+        let start = table.cell_min(column);
+        self.cell_index_start = self.draw_list.idx_buffer.len();
+        if let Some(window) = self.windows.last_mut() {
+            window.cursor = start;
+            window.line_start_x = start.x;
+            window.line_height = 0.0;
+            window.cursor_max.x = start.x;
+        }
+    }
+
+    /// `TableEndCell`: the furthest content of the cell grows the row by one cell padding, and the
+    /// indices the cell drew move to their column's draw channel.
+    fn table_end_cell(&mut self, table: &mut crate::tables::Table) {
+        let max_y = self.window().cursor_max.y;
+        table.end_cell(max_y);
+        let column = table.current_column.max(0) as usize;
+        let tail = self.draw_list.idx_buffer.split_off(self.cell_index_start);
+        if let Some(cmd) = self.draw_list.cmd_buffer.last_mut() {
+            cmd.elem_count -= tail.len() as u32;
+        }
+        if let Some(channel) = self.table_indices.get_mut(column) {
+            channel.extend_from_slice(&tail);
         }
     }
 

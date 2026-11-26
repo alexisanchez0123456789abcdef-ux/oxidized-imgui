@@ -56,6 +56,7 @@ $fixture_names = @{
     'button_border'       = 'button_border.glyphs.txt'
     'aa_strokes'          = 'aa_strokes.lineuvs.txt'
     'aa_circles'          = 'aa_circles.lineuvs.txt'
+    'tables_basic'        = 'tables_basic.glyphs.txt'
     'window_resize_edges' = 'window_resize_edges.lineuvs.txt'
     'window_resize_cursor' = 'window_resize_cursor.lineuvs.txt'
     'collapsing_header'   = 'collapsing_header.fixture.txt'
