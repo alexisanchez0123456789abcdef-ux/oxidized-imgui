@@ -100,6 +100,7 @@ instead of against our own expectations:
 | Table automatic column width | in a `SizingFixedFit` table that is not resizable, a column declared with no width tracks its contents: the first frame gives it `MinColumnWidth` and the width the contents reached is what sizes it from the second frame (kept across frames, as the reference keeps it in its reused table) | `tables_auto_width` golden |
 | Table header outside a header row | `TableHeader` submitted in a plain row still fills its cell with `TableHeaderBg`, which is the reference's `else` branch; the item rectangle is the whole cell | `tables_header_inrow` golden |
 | Table column flags | `TableGetColumnFlags` reports the flags the table derived at declaration: the width kind from the sizing policy, `NoResize` when the table is not resizable, `IndentEnable` for the first column against `IndentDisable` for the rest, and the `IsEnabled`/`IsVisible` status bits once the layout ran | `tables_column_flags` golden |
+| Table row bands after a header row | the header row does not advance the `RowBg` counter, so the first data row keeps `TableRowBg` and the second one takes `TableRowBgAlt` | `tables_rowbg_headers` golden |
 
 The conformance driver is compiled with `/DIMGUI_DISABLE_SSE`: the reference's default `ImRsqrtPrecise` uses the SSE reciprocal-square-root estimate, whose last bits depend on the CPU model, which would make every AA golden machine-specific. Both sides take the exact `1/sqrt` path instead.
 

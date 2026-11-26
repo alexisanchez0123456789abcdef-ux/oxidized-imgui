@@ -1445,6 +1445,54 @@ static void DumpTablesColumnFlags()
     ImGui::End();
     ImGui::EndFrame();
 }
+// tables_rowbg_headers: `ImGuiTableFlags_RowBg` with a header row first, so the bands of the data rows
+// start where the header leaves the counter.
+static void DumpTablesRowBgHeaders()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario tables_rowbg_headers\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[2] = { 'A', 'B' };
+    for (int i = 0; i < 2; i++)
+        baked->FindGlyph((ImWchar)bake_order[i]);
+    WriteGlyphFixture(font, bake_order, 2);
+
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground;
+    ImGui::Begin("W", NULL, flags);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+
+    const bool began = ImGui::BeginTable("T", 1, ImGuiTableFlags_RowBg, ImVec2(0.0f, 0.0f), 0.0f);
+    printf("table begin %d\n", (int)began);
+    ImGui::TableSetupColumn("A", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+    ImGui::TableHeadersRow();
+    for (int row = 0; row < 2; row++)
+    {
+        ImGui::TableNextRow(ImGuiTableRowFlags_None, 20.0f);
+        ImGui::TableNextColumn();
+        ImGui::Dummy(ImVec2(10.0f, 10.0f));
+    }
+
+    ImGui::EndTable();
+    DumpDrawListBody(*dl);
+    ImGui::End();
+    ImGui::EndFrame();
+}
 // tables_row_height: `TableNextRow(flags, min_height)` with a minimum taller than the cell contents.
 // Each row is 20 px instead of the 17 its text needs, and the rows below start lower.
 static void DumpTablesRowHeight()
@@ -5189,6 +5237,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "tables_set_column") == 0)
     {
         DumpTablesSetColumn();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "tables_rowbg_headers") == 0)
+    {
+        DumpTablesRowBgHeaders();
         ImGui::DestroyContext();
         return 0;
     }
