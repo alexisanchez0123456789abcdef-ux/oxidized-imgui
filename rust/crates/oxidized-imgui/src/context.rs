@@ -4854,6 +4854,40 @@ impl Context {
         self.dummy(size);
     }
 
+    /// `ImGui::Separator`: a line of `Style::SeparatorSize` pixels across the window's work width,
+    /// laid out as an item of its thickness. The vertical form only appears in a horizontal layout
+    /// (the menu bar), which no golden needs yet.
+    pub fn separator(&mut self) {
+        let thickness = self.style.separator_size.max(1.0);
+        let Some(window) = self.windows.last() else {
+            return;
+        };
+        // `SkipItems`: a collapsed window lays nothing out.
+        if window.collapsed {
+            return;
+        }
+        let bb = (
+            window.cursor,
+            Vec2 {
+                x: window.content_origin.x + window.content_size.x,
+                y: window.cursor.y + thickness,
+            },
+        );
+        let colour = self.style.color_u32(crate::style::Col::Separator);
+        self.draw_list.add_rect_filled(bb.0, bb.1, colour);
+        // `ItemSize(ImVec2(0, thickness))`: the line does not feed its width to the layout, and the
+        // item rect is the line itself.
+        self.dummy(Vec2 {
+            x: 0.0,
+            y: thickness,
+        });
+        if let Some(window) = self.windows.last_mut() {
+            window.last_min = bb.0;
+            window.last_max = bb.1;
+            window.has_item = true;
+        }
+    }
+
     /// `ImGui::BeginMenuBar`: the bar along the top of the window, with its items laid out in a row.
     ///
     /// The bar's background is part of the window's decorations, so this only clips to the bar, moves

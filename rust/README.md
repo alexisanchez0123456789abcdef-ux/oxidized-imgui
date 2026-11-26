@@ -74,6 +74,7 @@ instead of against our own expectations:
 | Window close | clip starts below the title band; the empty command from the clip push is dropped and the pop adds one only after geometry | `window_bg`, `window_title` goldens |
 | Full scene | titled window with a button: background, band, border, title, fill, label and the three commands | `scene_window_button` golden |
 | Label, checkbox | text item rect; checkbox box from frame height plus inner spacing, toggling on release | `widgets_basic` golden |
+| Separator | `Separator` spans the window's work width (`x1` at the cursor, `x2` at `WorkRect.Max.x`), is `max(SeparatorSize, 1)` thick, fills `ImGuiCol_Separator` as a plain rect, and is laid out as an item of `(0, thickness)`, so the next item starts `thickness + ItemSpacing.y` below | `separator` golden |
 | Slider (float) | grab region (`GrabMinSize`, 2 px padding), click offset, drag ratio, 3-decimal rounding | `slider_basic` golden |
 | Style values | default colours (`GetColorU32`), roundings and border sizes | `style_defaults` golden |
 | AA fill | rectangle fringe with miter joins; rounded rectangles from the pinned arc table | `aa_rect`, `aa_round_rect` goldens |
