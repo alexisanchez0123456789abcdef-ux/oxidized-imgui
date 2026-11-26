@@ -49,7 +49,7 @@ comparar.
 - `master` limpio, **135 PRs** fusionados.
 - **126 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 69.9 %.** Proyecto (contando el arnés): **71.8 %**.
-- 39 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
+- 42 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
 
@@ -420,6 +420,17 @@ Golden `separator_text`: "A", `SeparatorText("S")` y "B" en la misma ventana de 
   dibuja **una sola línea** de extremo a extremo, con su propio golden (`separator_text_empty`):
   el ítem sigue midiendo `max(label + padding, border)` de alto, así que el cursor avanza igual.
 
+### Contratos de color en tests unitarios: cerrada
+
+Tres tests nuevos en `style.rs` fijan lo que antes sólo sujetaban los goldens, para que un cambio de
+redondeo no pase desapercibido hasta el CI:
+
+- `color_u32_from` empaqueta en **ABGR** (rojo puro = `0xFF0000FF`) con redondeo `+ 0.5`.
+- `Style::Alpha` multiplica el canal alfa en **todos** los colores: `Text` pasa de `0xFFFFFFFF` a
+  `0x99FFFFFF` con `DisabledAlpha` = 0.6, tanto por `color_u32` como por `color_u32_from`.
+- `color_u32_alpha(Text, 0.70)` da `0xB3FFFFFF` y no `0xB2`: es el redondeo por floats del reference.
+
+Los tests subieron de 39 a **42**.
 ### Cursor en coordenadas de ventana (peso 1): cerrada
 
 Golden `cursor_pos`: "A", `SetCursorPos((10, 5))` y "B" en una ventana de 300x200.
