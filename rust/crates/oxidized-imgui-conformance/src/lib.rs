@@ -44,6 +44,7 @@ pub const SCENARIOS: &[&str] = &[
     "tables_cellbg",
     "tables_borders",
     "tables_row_height",
+    "tables_borders_outer",
     "text_draw",
     "button",
     "widgets_basic",
@@ -1888,6 +1889,93 @@ pub fn tables_row_height_dump() -> String {
     ));
 
     let full = dump("tables_row_height", ctx.draw_list());
+    for line in full.lines().skip(2) {
+        out.push_str(line);
+        out.push('\n');
+    }
+    ctx.end_window();
+    ctx.end_frame();
+    out
+}
+
+/// The `tables_borders_outer` scenario: `ImGuiTableFlags_Borders`, the outer rectangle included.
+///
+/// The cells hold a `Dummy` instead of text on purpose: with whole coordinates the outer border takes
+/// the pixel-aligned fast path of `AddRect` (white texture), so no atlas fixture is needed.
+pub fn tables_borders_outer_dump() -> String {
+    use oxidized_imgui::{Context, Vec2, WindowFlags, column_flags, table_flags};
+
+    let mut ctx = Context::new();
+    ctx.io_mut().delta_time = 0.1;
+    ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+    ctx.io_mut().mouse_down[0] = false;
+    ctx.begin_frame();
+    ctx.set_next_window_flags(
+        WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+    );
+    ctx.begin_window_ex(
+        "W",
+        Some(Vec2 { x: 60.0, y: 60.0 }),
+        Some(Vec2 { x: 300.0, y: 200.0 }),
+        false,
+    );
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario tables_borders_outer\n");
+
+    let window_pos = ctx.window().pos;
+    let local = |p: Vec2| Vec2 {
+        x: p.x - window_pos.x,
+        y: p.y - window_pos.y,
+    };
+    let flags = table_flags::BORDERS_INNER_H
+        | table_flags::BORDERS_INNER_V
+        | table_flags::BORDERS_OUTER_H
+        | table_flags::BORDERS_OUTER_V;
+    let began = ctx.begin_table("T", 3, flags, Vec2::default());
+    out.push_str(&format!("table begin {}\n", i32::from(began)));
+    ctx.table_setup_column("A", column_flags::WIDTH_FIXED, 60.0);
+    ctx.table_setup_column("B", column_flags::WIDTH_FIXED, 80.0);
+    ctx.table_setup_column("C", column_flags::WIDTH_FIXED, 100.0);
+
+    for row in 0..4 {
+        ctx.table_next_row_min(20.0);
+        for col in 0..3 {
+            let visible = ctx.table_next_column();
+            let cursor = local(ctx.cursor_screen_pos());
+            out.push_str(&format!(
+                "cell {row} {col} visible {} cursor {:08x} {:08x} rowindex {} colindex {}\n",
+                i32::from(visible),
+                bits(cursor.x),
+                bits(cursor.y),
+                ctx.table_get_row_index(),
+                ctx.table_get_column_index()
+            ));
+            ctx.dummy(Vec2 { x: 10.0, y: 10.0 });
+            let min = local(ctx.item_rect_min());
+            let max = local(ctx.item_rect_max());
+            out.push_str(&format!(
+                "cell {row} {col} item {:08x} {:08x} {:08x} {:08x}\n",
+                bits(min.x),
+                bits(min.y),
+                bits(max.x),
+                bits(max.y)
+            ));
+        }
+    }
+
+    ctx.end_table();
+    let end_cursor = local(ctx.cursor_screen_pos());
+    out.push_str(&format!(
+        "after cursor {:08x} {:08x}\n",
+        bits(end_cursor.x),
+        bits(end_cursor.y)
+    ));
+
+    let full = dump("tables_borders_outer", ctx.draw_list());
     for line in full.lines().skip(2) {
         out.push_str(line);
         out.push('\n');
@@ -4943,6 +5031,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "tables_cellbg" => Some(tables_cellbg_dump()),
         "tables_borders" => Some(tables_borders_dump()),
         "tables_row_height" => Some(tables_row_height_dump()),
+        "tables_borders_outer" => Some(tables_borders_outer_dump()),
         "text_draw" => Some(text_draw_dump()),
         "button" => Some(button_dump()),
         "widgets_basic" => Some(widgets_basic_dump()),

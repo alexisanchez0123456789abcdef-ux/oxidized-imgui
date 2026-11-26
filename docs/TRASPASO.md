@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **76 escenarios** más la **prueba negativa**.
+   que ejecuta **77 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **83 PRs** fusionados.
-- **76 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **84 PRs** fusionados.
+- **77 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 68.1 %.** Proyecto (contando el arnés): **70.3 %**.
 - 32 tests unitarios en 6 binarios.
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
@@ -108,7 +108,7 @@ desplegables** (ventana hija, columnas de menú, filas con etiqueta y atajo) y e
 contenido; `tables_headers`: la fila de cabecera con su banda y sus nombres, contada por
 `TableGetRowIndex`; `tables_rowbg`: las bandas alternas de `RowBg`, que saltan la cabecera;
 `tables_cellbg`: el fondo de celda de `TableSetBgColor`, pintado al cerrar la fila;
-`tables_borders`: la rejilla interior de `BordersInner`, con la línea fuerte bajo la cabecera;
+`tables_borders`: la rejilla interior de `BordersInner`, con la línea fuerte bajo la cabecera;\n`tables_borders_outer`: el rectángulo exterior con el atajo alineado de `AddRect`;
 `tables_row_height`: la altura mínima de fila de `TableNextRow`, que gana al contenido).
 
 La tabla completa, con el nombre del golden de cada fila, está en `rust/README.md`.
@@ -123,15 +123,8 @@ cerradas y su sección queda más abajo como referencia de lo ya medido. Lo que 
 
 Están hechos el primer corte (`tables_basic`), las cabeceras (`tables_headers`), las bandas de fila
 (`tables_rowbg`), el fondo de celda (`tables_cellbg`) y la rejilla interior de bordes
-(`tables_borders`). El resto del sistema, por orden de coste:
+(`tables_borders` y `tables_borders_outer`). El resto del sistema, por orden de coste:
 
-- **Borde exterior** (`BordersOuter`): es un `AddRect` de 1 px. Con coordenadas enteras y densidad
-  entera la referencia no muestrea la tabla de líneas: toma el **atajo alineado a píxel** (8 vértices,
-  24 índices, UV blanca), y sólo cae a la polilínea AA (que sí necesita el fixture de líneas) con
-  coordenadas fraccionarias. Ese atajo ya está portado y verificado en `rect_stroke`, así que este
-  corte sólo tiene que llamar a `add_rect_stroke` desde `EndTable`. Con borde exterior el contenido se
-  desplaza 5 px al principio y 6 entre columnas (medido en la ventana de 400×300 en (40,40)). Datos
-  del volcado: rect (68,68)-(352,119) en `TableBorderStrong`; verticales en x = 137 y 226 de 69 a 118.
 - **Políticas de tamaño**: sin `WidthFixed` la tabla reparte el ancho del contenido (en 384 px, dos
   columnas de 192, la segunda empieza en **204**); falta también stretch y auto-fit.
 - **Reordenar, congelar y el scroll propio de la tabla** (la tabla con `ScrollX`/`ScrollY` crea una
@@ -315,7 +308,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 76 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 77 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```

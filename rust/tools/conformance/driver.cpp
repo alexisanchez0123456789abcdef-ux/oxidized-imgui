@@ -850,6 +850,61 @@ static void DumpTablesBorders()
     ImGui::EndFrame();
 }
 
+// tables_borders_outer: `ImGuiTableFlags_Borders`, the outer rectangle included. Cells hold a
+// `Dummy` instead of text on purpose: with whole coordinates the outer border takes the
+// pixel-aligned fast path of `AddRect` (white texture), so no atlas fixture is needed at all.
+static void DumpTablesBordersOuter()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario tables_borders_outer\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground;
+    ImGui::Begin("W", NULL, flags);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const ImVec2 window_pos = ImGui::GetWindowPos();
+
+    const bool began = ImGui::BeginTable("T", 3, ImGuiTableFlags_Borders, ImVec2(0.0f, 0.0f), 0.0f);
+    printf("table begin %d\n", (int)began);
+    ImGui::TableSetupColumn("A", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+    ImGui::TableSetupColumn("B", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+    ImGui::TableSetupColumn("C", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+
+    for (int row = 0; row < 4; row++)
+    {
+        ImGui::TableNextRow(ImGuiTableRowFlags_None, 20.0f);
+        for (int col = 0; col < 3; col++)
+        {
+            const bool visible = ImGui::TableNextColumn();
+            const ImVec2 cursor = PSub(ImGui::GetCursorScreenPos(), window_pos);
+            printf("cell %d %d visible %d cursor %08x %08x rowindex %d colindex %d\n", row, col,
+                (int)visible, Bits(cursor.x), Bits(cursor.y), ImGui::TableGetRowIndex(),
+                ImGui::TableGetColumnIndex());
+            ImGui::Dummy(ImVec2(10.0f, 10.0f));
+            const ImVec2 imin = PSub(ImGui::GetItemRectMin(), window_pos);
+            const ImVec2 imax = PSub(ImGui::GetItemRectMax(), window_pos);
+            printf("cell %d %d item %08x %08x %08x %08x\n", row, col, Bits(imin.x),
+                Bits(imin.y), Bits(imax.x), Bits(imax.y));
+        }
+    }
+
+    ImGui::EndTable();
+    const ImVec2 end_cursor = PSub(ImGui::GetCursorScreenPos(), window_pos);
+    printf("after cursor %08x %08x\n", Bits(end_cursor.x), Bits(end_cursor.y));
+
+    DumpDrawListBody(*dl);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
 // tables_row_height: `TableNextRow(flags, min_height)` with a minimum taller than the cell contents.
 // Each row is 20 px instead of the 17 its text needs, and the rows below start lower.
 static void DumpTablesRowHeight()
@@ -4566,6 +4621,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "tables_borders") == 0)
     {
         DumpTablesBorders();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "tables_borders_outer") == 0)
+    {
+        DumpTablesBordersOuter();
         ImGui::DestroyContext();
         return 0;
     }
