@@ -4888,6 +4888,92 @@ impl Context {
         }
     }
 
+    /// `ImGui::SeparatorText`: the label between two lines, as wide as the window's work width and as
+    /// tall as the label plus `Style::SeparatorTextPadding`, with the lines at
+    /// `Style::SeparatorTextBorderSize` around the label.
+    pub fn separator_text(&mut self, label: &str) {
+        // `FindRenderedTextEnd`: everything after "##" identifies the item but is not drawn.
+        let shown = match label.find("##") {
+            Some(at) => &label[..at],
+            None => label,
+        };
+        let font = self.font.clone();
+        let label_size = font.calc_text_size(shown, font.size);
+        let Some(window) = self.windows.last() else {
+            return;
+        };
+        if window.collapsed {
+            return;
+        }
+        let pos = window.cursor;
+        let work_max_x = window.content_origin.x + window.content_size.x;
+        let padding = self.style.separator_text_padding;
+        let thickness = self.style.separator_text_border_size;
+        let align = self.style.separator_text_align;
+        let min_size = Vec2 {
+            x: label_size.x + padding.x * 2.0,
+            y: (label_size.y + padding.y * 2.0).max(thickness),
+        };
+        let bb_max = Vec2 {
+            x: work_max_x,
+            y: pos.y + min_size.y,
+        };
+        // `ImTrunc((bb.GetHeight() - label_size.y) * SeparatorTextAlign.y + 0.999f)`: the label sits
+        // half a pixel down so it lands centred inside the item.
+        let text_baseline_y = ((bb_max.y - pos.y - label_size.y) * align.y + 0.999).trunc();
+        // `ItemSize(min_size, text_baseline_y)` then `ItemAdd(bb, id)`: the item is as wide as the
+        // label, and its rectangle spans the whole work width.
+        self.dummy(min_size);
+        if let Some(window) = self.windows.last_mut() {
+            window.last_min = pos;
+            window.last_max = bb_max;
+            window.has_item = true;
+        }
+        let separator_x1 = pos.x;
+        let separator_x2 = bb_max.x;
+        let lines_y = ((pos.y + bb_max.y) * 0.5).trunc() + 1.0;
+        let label_avail_w = (separator_x2 - separator_x1 - padding.x * 2.0).max(0.0);
+        let label_pos = Vec2 {
+            x: pos.x + padding.x + ((label_avail_w - label_size.x).max(0.0) * align.x),
+            y: pos.y + text_baseline_y,
+        };
+        let line_colour = self.style.color_u32(crate::style::Col::Separator);
+        let text_colour = self.style.color_u32(crate::style::Col::Text);
+        if label_size.x > 0.0 {
+            let first_x2 = label_pos.x - self.style.item_spacing.x;
+            let second_x1 = label_pos.x + label_size.x + self.style.item_spacing.x;
+            if first_x2 > separator_x1 && thickness > 0.0 {
+                self.draw_list.add_line_h_center_biased(
+                    separator_x1,
+                    first_x2,
+                    lines_y,
+                    line_colour,
+                    thickness,
+                );
+            }
+            if separator_x2 > second_x1 && thickness > 0.0 {
+                self.draw_list.add_line_h_center_biased(
+                    second_x1,
+                    separator_x2,
+                    lines_y,
+                    line_colour,
+                    thickness,
+                );
+            }
+            let clip = self.window().clip_rect;
+            self.draw_list
+                .add_text_in(&font, font.size, label_pos, text_colour, shown, clip, None);
+        } else if thickness > 0.0 {
+            self.draw_list.add_line_h_center_biased(
+                separator_x1,
+                separator_x2,
+                lines_y,
+                line_colour,
+                thickness,
+            );
+        }
+    }
+
     /// `ImGui::BeginMenuBar`: the bar along the top of the window, with its items laid out in a row.
     ///
     /// The bar's background is part of the window's decorations, so this only clips to the bar, moves

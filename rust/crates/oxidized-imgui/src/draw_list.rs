@@ -2291,6 +2291,31 @@ impl DrawList {
         self.prim_rect(min, max, col);
     }
 
+    /// `AddLineH` with `StrokeCenterBiased`, on the pixel-aligned path the reference takes when the
+    /// coordinates and the thickness are whole pixels: a `PrimRect` whose top edge is shifted up by
+    /// `_CalculateCenterBiasedOffset`, so both sides of the line land on pixel boundaries.
+    pub fn add_line_h_center_biased(
+        &mut self,
+        min_x: f32,
+        max_x: f32,
+        y: f32,
+        col: ImU32,
+        thickness: f32,
+    ) {
+        let screen_thickness = thickness / self.fringe_scale;
+        let whole = screen_thickness as i32;
+        let offset = (whole / 2) as f32 + (whole & 1) as f32 * (screen_thickness - whole as f32);
+        let top_y = y - offset * self.fringe_scale;
+        self.prim_rect(
+            Vec2 { x: min_x, y: top_y },
+            Vec2 {
+                x: max_x,
+                y: top_y + thickness,
+            },
+            col,
+        );
+    }
+
     /// `AddLineH` with the default inside stroke: the reference's pixel-aligned fast path, which is
     /// a `PrimRect` from `(min_x, y)` to `(max_x, y + thickness)`.
     pub fn add_line_h(&mut self, min_x: f32, max_x: f32, y: f32, col: ImU32, thickness: f32) {

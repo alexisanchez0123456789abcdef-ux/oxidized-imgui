@@ -80,7 +80,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Botón: reposo, hover y activo comparados** — golden button_states
 - **Botón: borde de marco (FrameBorderSize)** — golden button_border
 - **Label y checkbox: rectángulo y alternancia** — golden widgets_basic
-- **Separador horizontal: ancho de la región de trabajo, grosor de SeparatorSize y avance de ítem** — golden separator (rectángulo del ítem, cursor tras dos separadores y lista completa)
+- **Separador horizontal y SeparatorText: ancho de la región de trabajo, grosor de SeparatorSize, etiqueta entre dos líneas con SeparatorTextPadding y avance de ítem** — goldens separator (rectángulo del ítem, cursor tras dos separadores y lista completa) y separator_text (ítem, cursor y las dos líneas con el centro sesgado al píxel)
 - **Slider: región de agarre, arrastre y redondeo** — golden slider_basic
 - **Campo de texto: marco, texto recortado al marco, cursor desde el clic y liberación al clicar fuera** — golden input_text (10 frames, 36202 bytes) + input_text::tests (4 casos)
 - **Edición por teclado: escribir, flechas, Home/End, Delete/Backspace, selección con Shift, resalte y scroll que sigue al cursor** — golden input_text_edit (21 frames, 123667 bytes)

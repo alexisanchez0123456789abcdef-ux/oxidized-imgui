@@ -123,6 +123,12 @@ pub struct Style {
     pub scrollbar_size: f32,
     /// `Style::SeparatorSize`: the thickness of a `Separator`, at least one pixel.
     pub separator_size: f32,
+    /// `Style::SeparatorTextPadding`: the gap between the label and the lines of `SeparatorText`.
+    pub separator_text_padding: Vec2,
+    /// `Style::SeparatorTextBorderSize`: the thickness of those lines.
+    pub separator_text_border_size: f32,
+    /// `Style::SeparatorTextAlign`: where the label sits inside the item.
+    pub separator_text_align: Vec2,
     /// `Style::ScrollbarPadding`: the gap between the scrollbar frame and its grab.
     pub scrollbar_padding: f32,
 
@@ -199,6 +205,9 @@ impl Default for Style {
             window_min_size: Vec2 { x: 32.0, y: 32.0 },
             scrollbar_size: 14.0,
             separator_size: 1.0,
+            separator_text_padding: Vec2 { x: 20.0, y: 3.0 },
+            separator_text_border_size: 3.0,
+            separator_text_align: Vec2 { x: 0.0, y: 0.5 },
             scrollbar_padding: 2.0,
             frame_rounding: 0.0,
             window_rounding: 0.0,

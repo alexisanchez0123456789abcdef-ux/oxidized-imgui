@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **110 escenarios** más la **prueba negativa**.
+   que ejecuta **111 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **119 PRs** fusionados.
-- **110 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **120 PRs** fusionados.
+- **111 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 68.3 %.** Proyecto (contando el arnés): **70.5 %**.
 - 39 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
@@ -112,7 +112,8 @@ cambia sí, y el push/pop sin geometría se fusiona con el comando anterior).
 
 Widgets: botón (geometría, dibujo, estados, borde), label y checkbox, slider,
 **separador horizontal** (`separator`: ancho de la región de trabajo, grosor `SeparatorSize` y avance
-de ítem), **cabecera colapsable**, **nodos de árbol**, **región hija** (lista propia, recorte,
+de ítem) y **`SeparatorText`** (`separator_text`: etiqueta entre dos líneas con centro sesgado),
+**cabecera colapsable**, **nodos de árbol**, **región hija** (lista propia, recorte,
 borde en la lista del padre, scroll con rueda y arrastre), **Selectable**, **popup**,
 **clic en fila de popup**, **combo**, **tooltip**, **barra de menús**, **submenús
 desplegables** (ventana hija, columnas de menú, filas con etiqueta y atajo) y el
@@ -244,7 +245,26 @@ Golden `separator`: tres etiquetas con un separador entre ellas en una ventana d
   separador en `47..48`, "C" en `52..65` y el cursor queda en `y 69`.
 - El rectángulo del ítem es la línea (`(8,25)-(292,26)`), no la caja del texto: el golden lo imprime
   tras cada `Separator`.
-- La forma **vertical** (layout horizontal, la barra de menús) y `SeparatorText` no están portados.
+- La forma **vertical** (layout horizontal, la barra de menús) no está portada.
+
+### SeparatorText (peso 1): cerrada
+
+Golden `separator_text`: "A", `SeparatorText("S")` y "B" en la misma ventana de 300×200.
+
+- El ítem mide **de ancho** la etiqueta más `SeparatorTextPadding.x * 2` (7 + 40 = 47, pero el
+  rectángulo del ítem llega hasta `WorkRect.Max.x`, así que su caja es `(8,25)-(292,44)`), y **de alto**
+  `max(label.y + padding.y*2, SeparatorTextBorderSize)` = `13 + 6` = **19**.
+- `text_baseline_y = ImTrunc((alto - label.y) * SeparatorTextAlign.y + 0.999)`: con align (0, 0.5) da
+  **3**, y la etiqueta se pinta en `pos.x + padding.x` = 28 (la línea de la izquierda acaba en 24, en
+  `label.x - ItemSpacing.x`).
+- Las líneas van a `trunc((bb.min.y + bb.max.y) * 0.5) + 1` = **35.5 → 35 + 1 = 36** (un `y` entero), con
+  grosor `SeparatorTextBorderSize` = 3 y `StrokeCenterBiased`: en píxeles enteros el reference toma el
+  atajo `PrimRect(min_x, y - offset)-(max_x, y - offset + 3)` con `offset = (3/2) + (3&1)*(3-3)` = 1.
+  Por eso **no** necesita la tabla de líneas (no es un trazo AA en este caso).
+- Medición: "A" en `y 8..21`, ítem `25..44`, "B" en `48..61` y el cursor acaba en `y 65`; 20 vértices
+  (A, dos líneas, S y B).
+- `SeparatorText` recorta la etiqueta a `bb.Max.x` y usa `ItemSpacing.x` a cada lado; sin etiqueta
+  dibuja una sola línea de extremo a extremo (no hay golden de ese caso).
 
 ### Colapso de ventana por API (peso 1): cerrada
 
@@ -582,7 +602,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 110 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 111 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
