@@ -468,8 +468,13 @@ pide cerrar todavia lo dibuja, y el siguiente ya no.
   popup al frame siguiente.
 - **Limite medido**: la lista propia del popup, justo en el frame del cierre, difiere en **un comando
   vacio al final** (el reference emite 3 comandos, el port 2). Los 16 vertices y los dos comandos reales
-  son identicos, y el comando extra es el `AddDrawCmd` que la referencia deja al popear el clip de la
-  ventana que se oculta: es la misma frontera de comandos por canal/momento que falta para el splitter.
+  son identicos, y el comando extra **repite el mismo clip** que el anterior: sale de un `AddDrawCmd()`
+  explicito (copia el `_CmdHeader` actual), no de un cambio de clip. **Ojo, son dos reglas distintas**:
+  `_PopUnusedDrawCmd()` **borra** los comandos vacios del final antes de entregar la lista, asi que el
+  caso general del port (no emitir vacios) es correcto; el vacio del popup aparece porque su lista pasa
+  por un `ChannelsMerge` que corre **despues** del pop. La frontera del **splitter** es otra cosa: un
+  cambio de clip/canal **con dibujo detras**, no un artefacto de merge.
+  ventana que se oculta.
   Por eso el golden compara el frame completo del **host** y la secuencia de apertura, no la lista del
   popup en ese frame.
 ### SetNextItemOpen (peso 1): cerrada
