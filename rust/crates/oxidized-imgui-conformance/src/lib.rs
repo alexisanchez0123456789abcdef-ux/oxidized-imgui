@@ -65,6 +65,7 @@ pub const SCENARIOS: &[&str] = &[
     "tables_cell_bg_twice",
     "tables_column_hovered_flag",
     "tables_sort_specs",
+    "tables_sort_tristate",
     "text_draw",
     "button",
     "widgets_basic",
@@ -3406,6 +3407,65 @@ pub fn tables_sort_specs_dump() -> String {
     out
 }
 
+/// The `tables_sort_tristate` scenario: a sortable table with `SortTristate` and no default column. It
+/// still starts with exactly one spec, on the first sortable column.
+pub fn tables_sort_tristate_dump() -> String {
+    use oxidized_imgui::{Context, Vec2, WindowFlags, column_flags, table_flags};
+
+    let mut ctx = Context::new();
+    ctx.io_mut().delta_time = 0.1;
+    ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+    ctx.io_mut().mouse_down[0] = false;
+    ctx.begin_frame();
+    ctx.set_next_window_flags(
+        WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+    );
+    ctx.begin_window_ex(
+        "W",
+        Some(Vec2 { x: 60.0, y: 60.0 }),
+        Some(Vec2 { x: 300.0, y: 200.0 }),
+        false,
+    );
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario tables_sort_tristate\n");
+
+    let began = ctx.begin_table(
+        "T",
+        2,
+        table_flags::SORTABLE | table_flags::SORT_TRISTATE,
+        Vec2::default(),
+    );
+    out.push_str(&format!("table begin {}\n", i32::from(began)));
+    ctx.table_setup_column("A", column_flags::WIDTH_FIXED, 60.0);
+    ctx.table_setup_column("B", column_flags::WIDTH_FIXED, 80.0);
+    ctx.table_next_row_min(20.0);
+    ctx.table_next_column();
+    ctx.dummy(Vec2 { x: 10.0, y: 10.0 });
+
+    match ctx.table_get_sort_specs() {
+        Some((specs, dirty)) => out.push_str(&format!(
+            "specs 1 count {} dirty {}\n",
+            specs.len(),
+            i32::from(dirty)
+        )),
+        None => out.push_str("specs 0 count -1 dirty -1\n"),
+    }
+    ctx.end_table();
+
+    let full = dump("tables_sort_tristate", ctx.draw_list());
+    for line in full.lines().skip(2) {
+        out.push_str(line);
+        out.push('\n');
+    }
+    ctx.end_window();
+    ctx.end_frame();
+    out
+}
+
 /// The `text_draw` scenario: glyph quads for a short string.
 ///
 /// UVs are **omitted on purpose**: the atlas coordinates depend on the reference's internal
@@ -6473,6 +6533,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "tables_cell_bg_twice" => Some(tables_cell_bg_twice_dump()),
         "tables_column_hovered_flag" => Some(tables_column_hovered_flag_dump()),
         "tables_sort_specs" => Some(tables_sort_specs_dump()),
+        "tables_sort_tristate" => Some(tables_sort_tristate_dump()),
         "text_draw" => Some(text_draw_dump()),
         "button" => Some(button_dump()),
         "widgets_basic" => Some(widgets_basic_dump()),
