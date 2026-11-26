@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **75 escenarios** más la **prueba negativa**.
+   que ejecuta **76 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **82 PRs** fusionados.
-- **75 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **83 PRs** fusionados.
+- **76 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 68.1 %.** Proyecto (contando el arnés): **70.3 %**.
 - 32 tests unitarios en 6 binarios.
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
@@ -125,10 +125,13 @@ Están hechos el primer corte (`tables_basic`), las cabeceras (`tables_headers`)
 (`tables_rowbg`), el fondo de celda (`tables_cellbg`) y la rejilla interior de bordes
 (`tables_borders`). El resto del sistema, por orden de coste:
 
-- **Borde exterior** (`BordersOuter`): es un `AddRect` de 1 px con trazo AA, que **muestrea la tabla
-  de líneas del atlas** (`TexUvLines`), así que su golden necesita el fixture de líneas como
-  `aa_strokes`. Con él el contenido se desplaza 5 px al principio y 6 entre columnas (medido en la
-  ventana de 400×300 en (40,40)).
+- **Borde exterior** (`BordersOuter`): es un `AddRect` de 1 px. Con coordenadas enteras y densidad
+  entera la referencia no muestrea la tabla de líneas: toma el **atajo alineado a píxel** (8 vértices,
+  24 índices, UV blanca), y sólo cae a la polilínea AA (que sí necesita el fixture de líneas) con
+  coordenadas fraccionarias. Ese atajo ya está portado y verificado en `rect_stroke`, así que este
+  corte sólo tiene que llamar a `add_rect_stroke` desde `EndTable`. Con borde exterior el contenido se
+  desplaza 5 px al principio y 6 entre columnas (medido en la ventana de 400×300 en (40,40)). Datos
+  del volcado: rect (68,68)-(352,119) en `TableBorderStrong`; verticales en x = 137 y 226 de 69 a 118.
 - **Políticas de tamaño**: sin `WidthFixed` la tabla reparte el ancho del contenido (en 384 px, dos
   columnas de 192, la segunda empieza en **204**); falta también stretch y auto-fit.
 - **Reordenar, congelar y el scroll propio de la tabla** (la tabla con `ScrollX`/`ScrollY` crea una
@@ -312,7 +315,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 75 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 76 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```

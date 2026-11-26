@@ -122,6 +122,29 @@ pub fn scene(name: &str) -> Option<DrawList> {
         // Public API: horizontal line, default inside stroke, one pixel thick.
         "line_h" => list.add_line_h(10.0, 30.0, 20.0, COL, 1.0),
         // Closed path with the inside stroke: a one-pixel border around a rectangle.
+        "rect_stroke" => {
+            list.white_uv = WHITE_UV;
+            list.fringe_scale = 1.0;
+            list.add_rect_stroke(
+                Vec2 { x: 10.0, y: 10.0 },
+                Vec2 { x: 60.0, y: 50.0 },
+                COL,
+                1.0,
+            );
+            list.add_rect_stroke(
+                Vec2 { x: 80.0, y: 10.0 },
+                Vec2 { x: 140.0, y: 50.0 },
+                COL,
+                3.0,
+            );
+            // Fractional coordinates take the closed inside-stroked polyline instead.
+            list.add_rect_stroke(
+                Vec2 { x: 150.5, y: 10.25 },
+                Vec2 { x: 200.5, y: 50.75 },
+                COL,
+                1.0,
+            );
+        }
         "aa_border" => {
             list.white_uv = WHITE_UV;
             list.fringe_scale = 1.0;
