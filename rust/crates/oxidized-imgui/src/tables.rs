@@ -32,6 +32,8 @@ pub mod table_flags {
     pub const SIZING_FIXED_FIT: u32 = 1 << 13;
     /// `ImGuiTableFlags_SizingFixedSame`.
     pub const SIZING_FIXED_SAME: u32 = 2 << 13;
+    /// `ImGuiTableFlags_SizingStretchProp`: stretch columns weight by their contents.
+    pub const SIZING_STRETCH_PROP: u32 = 3 << 13;
     /// `ImGuiTableFlags_SizingStretchSame`: every column stretches with the same weight.
     pub const SIZING_STRETCH_SAME: u32 = 4 << 13;
     /// `ImGuiTableFlags_PreciseWidths`: keeps the rounding remainder out of the stretch columns.

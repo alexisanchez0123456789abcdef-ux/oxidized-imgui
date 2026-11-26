@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **78 escenarios** más la **prueba negativa**.
+   que ejecuta **79 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **85 PRs** fusionados.
-- **78 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **86 PRs** fusionados.
+- **79 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 68.1 %.** Proyecto (contando el arnés): **70.3 %**.
 - 32 tests unitarios en 6 binarios.
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
@@ -111,6 +111,8 @@ contenido; `tables_headers`: la fila de cabecera con su banda y sus nombres, con
 `tables_borders`: la rejilla interior de `BordersInner`, con la línea fuerte bajo la cabecera;
 `tables_borders_outer`: el rectángulo exterior con el atajo alineado de `AddRect`;
 `tables_stretch`: las columnas stretch de `SizingStretchSame`, con el resto del reparto al último;
+`tables_stretch_weights`: una columna fija y dos stretch con pesos 2 y 1;
+	ables_stretch_weights: una columna fija y dos stretch con pesos 2 y 1;
 `tables_row_height`: la altura mínima de fila de `TableNextRow`, que gana al contenido).
 
 La tabla completa, con el nombre del golden de cada fila, está en `rust/README.md`.
@@ -130,7 +132,7 @@ del sistema, por orden de coste:
 
 - **Políticas de tamaño que faltan**: el ancho automático por contenido (`WidthAuto` con su
   `AutoFitQueue`, que se ajusta a lo largo de varios frames) y el peso de `SizingStretchProp`
-  derivado del contenido. `SizingStretchSame` con pesos iguales ya está.
+  derivado del contenido. `SizingStretchSame` y los pesos explícitos ya están.
 - **Reordenar, congelar y el scroll propio de la tabla** (la tabla con `ScrollX`/`ScrollY` crea una
   ventana hija, con todo lo que eso arrastra).
 - Hover y clic de la cabecera (resalte `HeaderHovered`/`HeaderActive`, ordenar y arrastrar para
@@ -312,7 +314,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 78 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 79 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
