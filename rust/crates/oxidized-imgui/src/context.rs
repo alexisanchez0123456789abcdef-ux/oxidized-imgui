@@ -19,6 +19,15 @@ const ARROW_DOWN_SIN: f32 = 1.0;
 const ARROW_RIGHT_COS: f32 = 1.0;
 const ARROW_RIGHT_SIN: f32 = 0.0;
 
+/// `FindRenderedTextEnd`: a label stops at `##`, so the part after it identifies the widget without
+/// being drawn.
+fn rendered_text(label: &str) -> &str {
+    match label.find("##") {
+        Some(at) => &label[..at],
+        None => label,
+    }
+}
+
 /// `FindBestWindowPosForPopupEx` with the combo box policy: below and toward the right first, then
 /// above it, then the two left-aligned variants, taking the first that fits the work area.
 fn combo_popup_pos(outer: (Vec2, Vec2), avoid: (Vec2, Vec2), size: Vec2) -> Vec2 {
@@ -114,6 +123,11 @@ struct WindowMemory {
     /// scrollbar decision compares the content against this, not against the current size.
     inner_size: Vec2,
     flags: WindowFlags,
+    /// `window->DC.MenuColumns`: the column widths the menu item rows are laid out with.
+    menu_columns: crate::menu_columns::MenuColumns,
+    /// `window->LastFrameActive`: the frame the window was last submitted on, which tells `Begin`
+    /// whether the window is reappearing and has to forget its measurements.
+    last_frame: u64,
 }
 
 impl WindowMemory {
@@ -176,6 +190,9 @@ pub struct Window {
     pub content_origin: Vec2,
     /// `size - style.WindowPadding * 2`, what `GetContentRegionAvail` returns inside the window.
     pub content_size: Vec2,
+    /// `window->DC.MenuColumns`: the column widths the rows of a menu are laid out with. It lives on
+    /// the window because it survives between frames.
+    pub menu_columns: crate::menu_columns::MenuColumns,
     cursor: Vec2,
     cursor_start: Vec2,
     cursor_max: Vec2,
@@ -264,6 +281,14 @@ pub struct Context {
     combo_saved_padding: Option<f32>,
     /// The window a popup belongs to, which takes the focus back when the popup closes.
     popup_host: Option<String>,
+    /// The window that hosts the child menu currently open. `IsRootOfOpenMenuSet` answers with it:
+    /// while a menu of this window is open, its siblings open on hover instead of waiting for a click.
+    child_menu_host: Option<String>,
+    /// `g.BeginMenuDepth`: menus are recycled by depth, and it names their windows.
+    menu_depth: usize,
+    /// `parent_window->ClipRect.Max.y` of the menu bar while its entries are submitted: it is the
+    /// reference position a child menu is placed below.
+    menu_bar_clip_max_y: Option<f32>,
     /// The popup name egin_popup opened, carried to nd_popup for the rectangle.
     last_popup_name: Option<String>,
     /// `g.HoveredIdTimer`: how long the border under the mouse has been hovered. The reference
@@ -329,6 +354,9 @@ impl Default for Context {
             next_size_min: None,
             combo_saved_padding: None,
             popup_host: None,
+            child_menu_host: None,
+            menu_depth: 0,
+            menu_bar_clip_max_y: None,
             last_popup_name: None,
             resize_grip_cols: [0; 2],
             resize_hover_timer: 0.0,
@@ -911,6 +939,16 @@ impl Context {
         // A window that has just appeared has no grips yet: the reference only handles them from
         // its second frame on.
         let window_just_created = remembered.is_none();
+        // `window_just_activated_by_user`: the window was not submitted on the previous frame, so
+        // this is its first frame back. A menu uses it to decide whether its columns are locked or
+        // thrown away, which is why a menu that has just been opened settles on its second frame.
+        let window_just_activated = match remembered {
+            Some(memory) => memory.last_frame + 1 < self.frame_count,
+            None => true,
+        };
+        let remembered_menu_columns = remembered
+            .map(|memory| memory.menu_columns)
+            .unwrap_or_default();
         let pos_was_set = pos.is_some();
         let (
             pos,
@@ -1335,6 +1373,7 @@ impl Context {
             is_child: false,
             content_origin,
             content_size,
+            menu_columns: remembered_menu_columns,
             cursor: content_origin,
             cursor_start: content_origin,
             cursor_max: content_origin,
@@ -1344,6 +1383,12 @@ impl Context {
             last_max: Vec2::default(),
             has_item: false,
         });
+        // `window->DC.MenuColumns.Update(style.ItemSpacing.x, window_just_activated_by_user)`: the
+        // offsets are locked from the previous frame before any item of this one is submitted.
+        let spacing = self.style.item_spacing.x;
+        if let Some(window) = self.windows.last_mut() {
+            window.menu_columns.update(spacing, window_just_activated);
+        }
 
         // `Begin` reports false while the window is collapsed, so callers skip its contents.
         !collapsed
@@ -1748,6 +1793,10 @@ impl Context {
             is_child: true,
             content_origin,
             content_size,
+            // A child region keeps no memory between frames in this port, so its menu columns are
+            // rebuilt every frame instead of being locked from the previous one. A menu opened from
+            // inside a child still gets its own window, whose columns do persist.
+            menu_columns: crate::menu_columns::MenuColumns::default(),
             cursor: content_origin,
             cursor_start: content_origin,
             cursor_max: content_origin,
@@ -1848,6 +1897,8 @@ impl Context {
                         .max(0.0),
                 },
                 flags: window.flags,
+                menu_columns: window.menu_columns,
+                last_frame: self.frame_count,
             };
             match WindowMemory::find_mut(&mut self.memory, &window.name) {
                 Some(slot) => *slot = entry,
@@ -2560,6 +2611,11 @@ impl Context {
 
     pub fn window(&self) -> &Window {
         self.windows.last().expect("no window is open")
+    }
+
+    /// The window being submitted, to change it while a function lays an item out.
+    fn window_mut(&mut self) -> &mut Window {
+        self.windows.last_mut().expect("no window is open")
     }
 
     /// `GetContentRegionAvail` inside the current window.
@@ -3436,71 +3492,7 @@ impl Context {
     /// expanded by half the item spacing on each side so that consecutive rows leave no gap the
     /// mouse can fall into.
     pub fn selectable(&mut self, label: &str, selected: bool) -> bool {
-        let id = self.get_id(label);
-        let text = self.font.calc_text_size(label, self.font.size);
-        let spacing = self.style.item_spacing;
-        let max_x = self.work_rect_max_x();
-        let pos = self.window().cursor;
-        // No size given: the row runs from the cursor to the right edge of the work rectangle.
-        let size = Vec2 {
-            x: text.x.max(max_x - pos.x),
-            y: text.y,
-        };
-        let spacing_l = (spacing.x * 0.5).trunc();
-        let spacing_u = (spacing.y * 0.5).trunc();
-        let click_min = Vec2 {
-            x: pos.x - spacing_l,
-            y: pos.y - spacing_u,
-        };
-        let click_max = Vec2 {
-            x: pos.x + size.x + (spacing.x - spacing_l),
-            y: pos.y + size.y + (spacing.y - spacing_u),
-        };
-        let pressed = self.interact_rect_spanning(id, click_min, click_max, size, false);
-        let highlighted = self.last_item_hovered;
-        let held = self.last_item_active;
-        if highlighted || selected {
-            let col = if held && highlighted {
-                crate::style::Col::HeaderActive
-            } else if highlighted {
-                crate::style::Col::HeaderHovered
-            } else {
-                crate::style::Col::Header
-            };
-            let colour = self.style.color_u32(col);
-            let rounding = self.style.selectable_rounding;
-            if rounding > 0.0 {
-                self.draw_list
-                    .add_rect_filled_aa_rounded(click_min, click_max, rounding, colour);
-            } else {
-                self.draw_list.prim_rect(click_min, click_max, colour);
-            }
-        }
-        let font = self.font.clone();
-        let text_col = self.style.color_u32(crate::style::Col::Text);
-        self.draw_list
-            .add_text(&font, font.size, pos, text_col, label);
-        // `CloseCurrentPopup` from `Selectable`: choosing a row of a popup closes it, and that
-        // frame still draws the popup, so the close lands on the next one.
-        if pressed {
-            let popup = self
-                .windows
-                .last()
-                .map(|window| window.flags.contains(WindowFlags::POPUP))
-                .unwrap_or(false);
-            if popup {
-                self.popup_pending_close = true;
-                // `ClosePopupToLevel` focuses the window the popup belonged to, and `FocusWindow`
-                // moves it to the end of the display order, so the host is drawn on top that frame.
-                if let Some(host) = self.popup_host.clone() {
-                    if let Some(index) = self.display_order.iter().position(|name| *name == host) {
-                        let host = self.display_order.remove(index);
-                        self.display_order.push(host);
-                    }
-                }
-            }
-        }
-        pressed
+        self.selectable_box(label, selected, Vec2::default(), false, false, true)
     }
 
     /// `ImGui::Text` for an unformatted string: an item as wide as the text, no interaction.
@@ -3553,6 +3545,11 @@ impl Context {
             },
         );
         self.draw_list.push_clip_rect(clip.0, clip.1, false);
+        // `PushID("##MenuBar")`: the entries of the bar get their own identifier scope.
+        self.push_id("##MenuBar");
+        // `FindBestWindowPosForPopup` places a child menu below its parent's clip rectangle, which
+        // while a menu bar is open is the bar itself. This is the edge it measures from.
+        self.menu_bar_clip_max_y = Some(clip.1.y);
         let Some(window) = self.windows.last_mut() else {
             return;
         };
@@ -3567,6 +3564,7 @@ impl Context {
 
     /// `ImGui::EndMenuBar`: back to a vertical layout, with the content starting below the bar.
     pub fn end_menu_bar(&mut self) {
+        self.pop_id();
         self.draw_list.pop_clip_rect();
         let pad = self.style.window_padding;
         let Some(window) = self.windows.last_mut() else {
@@ -3581,60 +3579,448 @@ impl Context {
         window.line_height = 0.0;
     }
 
-    /// `ImGui::MenuItem` inside a menu bar: a framed label that reports the click.
+    /// `window->DC.CurrLineTextBaseOffset`: a menu bar aligns its entries to the frame padding, and a
+    /// vertical menu does not offset its rows at all.
+    fn line_text_base_offset(&self) -> f32 {
+        if self.window().layout_horizontal {
+            self.style.frame_padding.y
+        } else {
+            0.0
+        }
+    }
+
+    /// `window->ContentRegionRect.Max.x`: the right edge `GetContentRegionAvail` measures from,
+    /// which is the interior less one window padding on each side.
+    fn content_region_max_x(&self) -> f32 {
+        let window = self.window();
+        let pad = self.style.window_padding.x;
+        let min_x = window.inner_rect.0.x - window.scroll.x + pad;
+        min_x + (window.inner_rect.1.x - window.inner_rect.0.x - pad * 2.0).max(0.0)
+    }
+
+    /// `ImGui::Selectable`, with the flags the menu code passes: an explicit size, whether the row
+    /// spans the available width, whether the press lands on the way down, and whether choosing the
+    /// row closes the popup it lives in.
     ///
-    /// The box is wider than the item's layout size by the frame padding on each side and starts that
-    /// much to the left of the cursor, so consecutive entries butt up against each other and the box
-    /// covers the spacing between them.
-    pub fn menu_item(&mut self, label: &str) -> bool {
+    /// The layout item and the clickable box are told apart, as the reference does: `ItemSize` runs
+    /// first with `size_arg`, and only then is the box widened to the work rectangle.
+    fn selectable_box(
+        &mut self,
+        label: &str,
+        selected: bool,
+        size_arg: Vec2,
+        span_avail_width: bool,
+        press_on_click: bool,
+        auto_close: bool,
+    ) -> bool {
         let id = self.get_id(label);
-        let pad = self.style.frame_padding;
-        let border = self.style.window_border_size;
         let text = self.font.calc_text_size(label, self.font.size);
-        let (cursor, bar_top) = {
-            let window = self.window();
-            (window.cursor, window.inner_rect.0.y)
+        let spacing = self.style.item_spacing;
+        let max_x = self.work_rect_max_x();
+        let base = self.line_text_base_offset();
+        // `pos = window->DC.CursorPos; pos.y += window->DC.CurrLineTextBaseOffset`: the text baseline
+        // moves the box down, while `ItemSize` below still advances from the cursor itself.
+        let cursor = self.window().cursor;
+        let pos = Vec2 {
+            x: cursor.x,
+            y: cursor.y + base,
         };
-        let min = Vec2 {
-            x: cursor.x - pad.x,
-            y: bar_top + border,
-        };
-        // The layout item is the label plus two paddings, and the box adds two more: with the
-        // horizontal layout's item spacing the next box starts where this one ends.
-        let item = Vec2 {
-            x: text.x + pad.x * 2.0,
-            y: self.frame_height(),
-        };
-        let max = Vec2 {
-            x: min.x + item.x + pad.x * 2.0,
-            y: bar_top + self.frame_height() - border,
-        };
-        let pressed = self.interact_rect(id, min, max, item, false);
-        let hovered = self.last_item_hovered;
-        let held = self.last_item_active;
-        if hovered || held {
-            let colour = if held {
-                self.style.color_u32(crate::style::Col::HeaderActive)
+        // `size(size_arg.x != 0 ? size_arg.x : label_size.x, size_arg.y != 0 ? ... : label_size.y)`.
+        let mut size = Vec2 {
+            x: if size_arg.x != 0.0 {
+                size_arg.x
             } else {
-                self.style.color_u32(crate::style::Col::HeaderHovered)
+                text.x
+            },
+            y: if size_arg.y != 0.0 {
+                size_arg.y
+            } else {
+                text.y
+            },
+        };
+        // `ItemSize` runs with this width, before the box is widened below: that is what keeps a
+        // full-width row from reporting the whole content region as its own width.
+        let item = size;
+        // `ImGuiSelectableFlags_SpanAvailWidth`, or no size given: the row runs to the work edge.
+        if size_arg.x == 0.0 || span_avail_width {
+            size.x = text.x.max(max_x - pos.x);
+        }
+        // Selectables are meant to be tightly packed, so the box covers the spacing between them.
+        let spacing_l = (spacing.x * 0.5).trunc();
+        let spacing_u = (spacing.y * 0.5).trunc();
+        let click_min = Vec2 {
+            x: pos.x - spacing_l,
+            y: pos.y - spacing_u,
+        };
+        let click_max = Vec2 {
+            x: pos.x + size.x + (spacing.x - spacing_l),
+            y: pos.y + size.y + (spacing.y - spacing_u),
+        };
+        let pressed = self.interact_rect_spanning(id, click_min, click_max, item, press_on_click);
+        let highlighted = self.last_item_hovered;
+        let held = self.last_item_active;
+        if highlighted || selected {
+            let col = if held && highlighted {
+                crate::style::Col::HeaderActive
+            } else if highlighted {
+                crate::style::Col::HeaderHovered
+            } else {
+                crate::style::Col::Header
             };
-            self.draw_list.prim_rect(min, max, colour);
+            let colour = self.style.color_u32(col);
+            let rounding = self.style.selectable_rounding;
+            if rounding > 0.0 {
+                self.draw_list
+                    .add_rect_filled_aa_rounded(click_min, click_max, rounding, colour);
+            } else {
+                self.draw_list.prim_rect(click_min, click_max, colour);
+            }
         }
         let font = self.font.clone();
         let text_col = self.style.color_u32(crate::style::Col::Text);
-        // `RenderText(bb.Min + FramePadding, ...)` where the box already starts a padding to the left:
-        // the pen ends up two paddings in, and at the bar's top plus one padding down.
-        self.draw_list.add_text(
-            &font,
-            font.size,
-            Vec2 {
-                x: min.x + pad.x * 2.0,
-                y: bar_top + pad.y,
-            },
-            text_col,
-            label,
-        );
+        self.draw_list
+            .add_text(&font, font.size, pos, text_col, label);
+        // `CloseCurrentPopup` from `Selectable`: choosing a row of a popup closes it, and that frame
+        // still draws the popup, so the close lands on the next one.
+        if pressed && auto_close {
+            self.close_popup_from_selectable();
+        }
         pressed
+    }
+
+    /// The tail of `Selectable`: a press inside a popup closes it and hands the focus back to the
+    /// window the popup belonged to.
+    fn close_popup_from_selectable(&mut self) {
+        let popup = self
+            .windows
+            .last()
+            .map(|window| window.flags.contains(WindowFlags::POPUP))
+            .unwrap_or(false);
+        if !popup {
+            return;
+        }
+        self.popup_pending_close = true;
+        // `ClosePopupToLevel` focuses the window the popup belonged to, and `FocusWindow` moves it
+        // to the end of the display order, so the host is drawn on top that frame.
+        if let Some(host) = self.popup_host.clone() {
+            if let Some(index) = self.display_order.iter().position(|name| *name == host) {
+                let host = self.display_order.remove(index);
+                self.display_order.push(host);
+            }
+        }
+    }
+
+    /// `ImGui::MenuItem` inside a menu bar: an unframed entry that reports the click.
+    ///
+    /// The entry is laid out the way `MenuItemEx` does in a horizontal layout: the cursor moves half
+    /// an item spacing right, the item spacing doubles while the box is measured (which is what
+    /// makes consecutive entries butt up against each other), and the box is as tall as the label
+    /// alone, not as the line.
+    pub fn menu_item(&mut self, label: &str) -> bool {
+        self.menu_item_ex(label, None)
+    }
+
+    /// `ImGui::MenuItem`: an entry of a menu bar, or a row of a vertical menu once [`Context::begin_menu`]
+    /// has opened one. `shortcut` is drawn in the third column of a vertical menu and ignored in a bar,
+    /// as the reference does.
+    pub fn menu_item_ex(&mut self, label: &str, shortcut: Option<&str>) -> bool {
+        if self.window().layout_horizontal {
+            self.menu_item_bar(label)
+        } else {
+            self.menu_item_column(label, shortcut)
+        }
+    }
+
+    /// `MenuItemEx` in a horizontal menu bar.
+    fn menu_item_bar(&mut self, label: &str) -> bool {
+        let shown = rendered_text(label);
+        let label_size = self.font.calc_text_size(shown, self.font.size);
+        let spacing = self.style.item_spacing;
+        let base = self.line_text_base_offset();
+        let pos = self.window().cursor;
+        self.window_mut().cursor.x += (spacing.x * 0.5).trunc();
+        self.style.item_spacing.x = spacing.x * 2.0;
+        let offset_label = self.window().menu_columns.offset_label();
+        let text_pos = Vec2 {
+            x: self.window().cursor.x + offset_label,
+            y: pos.y + base,
+        };
+        // `ImVec2(label_size.x, 0.0f)`: in a bar the row has no height of its own.
+        let pressed = self.selectable_box(
+            "",
+            false,
+            Vec2 {
+                x: label_size.x,
+                y: 0.0,
+            },
+            false,
+            false,
+            true,
+        );
+        self.style.item_spacing.x = spacing.x;
+        let font = self.font.clone();
+        let text_col = self.style.color_u32(crate::style::Col::Text);
+        self.draw_list
+            .add_text(&font, font.size, text_pos, text_col, shown);
+        self.window_mut().cursor.x += (spacing.x * (-1.0 + 0.5)).trunc();
+        pressed
+    }
+
+    /// `MenuItemEx` inside a vertical menu: a row that fills the available width, its label in the
+    /// measured label column and its shortcut in the shortcut column, right-aligned.
+    fn menu_item_column(&mut self, label: &str, shortcut: Option<&str>) -> bool {
+        let shown = rendered_text(label);
+        let label_size = self.font.calc_text_size(shown, self.font.size);
+        let base = self.line_text_base_offset();
+        let pos = self.window().cursor;
+        let shortcut_width = shortcut
+            .map(|text| self.font.calc_text_size(text, self.font.size).x)
+            .unwrap_or(0.0);
+        // `IM_TRUNC(FontSize * 1.20f)`: the mark column is always accounted for, even with no
+        // selectable row, because `selected` has no neutral setting.
+        let mark_width = crate::menu_columns::checkmark_width(self.font.size);
+        let min_width = self.window_mut().menu_columns.decl_columns(
+            0.0,
+            label_size.x,
+            shortcut_width,
+            mark_width,
+        );
+        let columns = self.window().menu_columns;
+        // `extra_w = ImMax(0.0f, GetContentRegionAvail().x - min_w)`: what is left of the row is
+        // pushed to the right, which is what right-aligns the shortcut.
+        let avail = self.content_region_max_x() - pos.x;
+        let stretch = (avail - min_width).max(0.0);
+        let pressed = self.selectable_box(
+            "",
+            false,
+            Vec2 {
+                x: min_width,
+                y: label_size.y,
+            },
+            true,
+            false,
+            true,
+        );
+        let font = self.font.clone();
+        let text_col = self.style.color_u32(crate::style::Col::Text);
+        let text_pos = Vec2 {
+            x: pos.x + columns.offset_label(),
+            y: pos.y + base,
+        };
+        self.draw_list
+            .add_text(&font, font.size, text_pos, text_col, shown);
+        if shortcut_width > 0.0 {
+            if let Some(shortcut) = shortcut {
+                let colour = self.style.color_u32(crate::style::Col::TextDisabled);
+                self.draw_list.add_text(
+                    &font,
+                    font.size,
+                    Vec2 {
+                        x: text_pos.x + columns.offset_shortcut() + stretch,
+                        y: text_pos.y,
+                    },
+                    colour,
+                    shortcut,
+                );
+            }
+        }
+        // Not modelled: an icon column, and the check mark of a selected row — `selected` is always
+        // false here, so the reserved mark column stays empty.
+        pressed
+    }
+
+    /// `ImGui::BeginMenu`: an entry of a menu bar, or a row of a vertical menu, whose own window
+    /// holds the entries of the menu it opens. Returns true while that window is open, and
+    /// [`Context::end_menu`] closes it.
+    ///
+    /// The menu window is a popup with `ImGuiWindowFlags_ChildMenu` named `"{label}###Menu_00"`,
+    /// placed below the entry it belongs to. Like every popup it is measured on its first frame and
+    /// draws nothing in it, so a menu settles on its second frame.
+    pub fn begin_menu(&mut self, label: &str) -> bool {
+        let id = self.get_id(label);
+        // A row chosen on the previous frame closed the menu then; that frame still drew it.
+        if self.popup_pending_close {
+            self.popup_open = None;
+            self.popup_pending_close = false;
+            self.popup_rect = None;
+            self.child_menu_host = None;
+        }
+        let horizontal = self.window().layout_horizontal;
+        let shown = rendered_text(label);
+        let label_size = self.font.calc_text_size(shown, self.font.size);
+        let spacing = self.style.item_spacing;
+        let base = self.line_text_base_offset();
+        let frame_padding = self.style.frame_padding;
+        let menu_bar_height = self.window().menu_bar_height;
+        let pos = self.window().cursor;
+        let mut menu_is_open = self.popup_open == Some(id);
+
+        // `popup_pos`: where the child menu is anchored, before `FindBestWindowPosForPopup` moves it.
+        let (pressed, popup_pos) = if horizontal {
+            self.window_mut().cursor.x += (spacing.x * 0.5).trunc();
+            self.style.item_spacing.x = spacing.x * 2.0;
+            let offset_label = self.window().menu_columns.offset_label();
+            let text_pos = Vec2 {
+                x: self.window().cursor.x + offset_label,
+                y: pos.y + base,
+            };
+            let pressed = self.selectable_box("", menu_is_open, label_size, false, true, false);
+            self.style.item_spacing.x = spacing.x;
+            let font = self.font.clone();
+            let text_col = self.style.color_u32(crate::style::Col::Text);
+            self.draw_list
+                .add_text(&font, font.size, text_pos, text_col, shown);
+            self.window_mut().cursor.x += (spacing.x * (-1.0 + 0.5)).trunc();
+            let popup_pos = Vec2 {
+                x: pos.x - 1.0 - (spacing.x * 0.5).trunc(),
+                y: text_pos.y - frame_padding.y + menu_bar_height,
+            };
+            (pressed, popup_pos)
+        } else {
+            // A row of a vertical menu: the label column and the arrow of a submenu, which is why
+            // the mark column is reserved here too.
+            let mark_width = crate::menu_columns::checkmark_width(self.font.size);
+            let min_width =
+                self.window_mut()
+                    .menu_columns
+                    .decl_columns(0.0, label_size.x, 0.0, mark_width);
+            let columns = self.window().menu_columns;
+            let avail = self.content_region_max_x() - pos.x;
+            let extra_w = (avail - min_width).max(0.0);
+            let text_pos = Vec2 {
+                x: pos.x,
+                y: pos.y + base,
+            };
+            let pressed = self.selectable_box(
+                "",
+                menu_is_open,
+                Vec2 {
+                    x: min_width,
+                    y: label_size.y,
+                },
+                true,
+                true,
+                false,
+            );
+            let font = self.font.clone();
+            let text_col = self.style.color_u32(crate::style::Col::Text);
+            self.draw_list.add_text(
+                &font,
+                font.size,
+                Vec2 {
+                    x: text_pos.x + columns.offset_label(),
+                    y: text_pos.y,
+                },
+                text_col,
+                shown,
+            );
+            self.draw_list.add_arrow(
+                Vec2 {
+                    x: text_pos.x + columns.offset_mark() + extra_w + self.font.size * 0.30,
+                    y: text_pos.y,
+                },
+                text_col,
+                ARROW_RIGHT_COS,
+                ARROW_RIGHT_SIN,
+                1.0,
+                self.font.size,
+                self.style.symbol_arrow_size_factor,
+                self.style.symbol_arrow_thickness_factor,
+            );
+            let popup_pos = Vec2 {
+                x: pos.x,
+                y: text_pos.y - self.style.window_padding.y,
+            };
+            (pressed, popup_pos)
+        };
+
+        let hovered = self.last_item_hovered;
+        let host = self.window().name.clone();
+        // `IsRootOfOpenMenuSet`: while one of this window's menus is open, its siblings open on hover.
+        let menuset_is_open = self.child_menu_host.as_deref() == Some(host.as_str());
+        let mut want_open = false;
+        let mut want_close = false;
+        if horizontal {
+            if menu_is_open && pressed && menuset_is_open {
+                // Clicking an open menu again closes it.
+                want_close = true;
+                menu_is_open = false;
+            } else if pressed || (hovered && menuset_is_open && !menu_is_open) {
+                want_open = true;
+            }
+        } else {
+            // Not modelled: the exemption that keeps the menu open while the mouse travels toward
+            // the child menu (`moving_toward_child_menu`), and the hover-timer fallback that opens a
+            // menu the mouse has rested on.
+            if menu_is_open && !hovered && self.hovered_window.as_deref() == Some(host.as_str()) {
+                want_close = true;
+            }
+            if !menu_is_open && (pressed || hovered) {
+                want_open = true;
+            }
+        }
+        if want_close && self.popup_open == Some(id) {
+            self.popup_open = None;
+            self.popup_rect = None;
+            self.child_menu_host = None;
+        }
+        // Not modelled: when another menu of this level is open the reference opens this one on the
+        // next frame instead, to close the sibling first.
+        if want_open && !menu_is_open {
+            self.open_popup(label);
+            menu_is_open = true;
+        }
+        if !menu_is_open {
+            return false;
+        }
+        self.begin_child_menu(label, popup_pos)
+    }
+
+    /// `BeginPopupMenuEx` for a menu: the child menu's own window, anchored below its entry.
+    fn begin_child_menu(&mut self, label: &str, popup_pos: Vec2) -> bool {
+        // `ImFormatString(name, "%s###Menu_%02d", label, g.BeginMenuDepth)`: recycled by depth. The
+        // "###" keeps the identifier stable while the label in front of it is what gets displayed.
+        let name = format!("{label}###Menu_{:02}", self.menu_depth);
+        let measured = WindowMemory::find(&self.memory, &name).map(|memory| memory.size_full);
+        self.popup_first_frame = measured.is_none();
+        let size = measured.unwrap_or_default();
+        // `FindBestWindowPosForPopup` for a child menu whose parent is a menu bar: the position the
+        // caller asked for is clamped into the display, and then the menu is pushed below the bar.
+        let max_x = self.io.display_size.x - size.x;
+        let clamped_x = if popup_pos.x < 0.0 {
+            0.0
+        } else if popup_pos.x > max_x {
+            max_x
+        } else {
+            popup_pos.x
+        };
+        let pos = Vec2 {
+            x: clamped_x.max(0.0),
+            y: self.menu_bar_clip_max_y.unwrap_or(popup_pos.y),
+        };
+        let flags = WindowFlags::ALWAYS_AUTO_RESIZE
+            | WindowFlags::NO_RESIZE
+            | WindowFlags::NO_MOVE
+            | WindowFlags::NO_SCROLLBAR
+            | WindowFlags::POPUP;
+        self.set_next_window_flags(flags);
+        // The menu belongs to the window whose entry opened it: that window takes the focus back
+        // when a row is chosen, and it is the parent a nested submenu is placed against.
+        let host = self.window().name.clone();
+        self.popup_host = Some(host.clone());
+        self.child_menu_host = Some(host);
+        self.menu_depth += 1;
+        let host_list = core::mem::take(&mut self.draw_list);
+        self.list_stack.push(host_list);
+        self.last_popup_name = Some(name.clone());
+        self.begin_window(&name, Some(pos), None);
+        true
+    }
+
+    /// `ImGui::EndMenu`: close the menu's window, handing the list back to the window that hosts it.
+    pub fn end_menu(&mut self) {
+        self.menu_depth = self.menu_depth.saturating_sub(1);
+        self.end_popup();
     }
 
     /// `ImGui::BeginTooltip`: a tooltip is a window at the mouse that takes neither the mouse nor the

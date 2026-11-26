@@ -26,6 +26,7 @@ pub mod draw_list;
 pub mod font;
 pub mod id;
 pub mod io;
+pub mod menu_columns;
 pub mod style;
 
 /// Matches `IMGUI_VERSION` in `imgui.h` of the reference this crate is checked against.
@@ -41,4 +42,5 @@ pub use draw_list::{
 pub use font::{Font, Glyph};
 pub use id::{ImGuiID, hash_data, hash_str, hash_str_utf8};
 pub use io::{Io, Key, KeyData};
+pub use menu_columns::MenuColumns;
 pub use style::{Col, Style};

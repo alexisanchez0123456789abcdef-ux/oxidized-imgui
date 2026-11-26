@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **61 escenarios** más la **prueba negativa**.
+   que ejecuta **62 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,10 +46,10 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **67 PRs** fusionados.
-- **61 escenarios** con golden propio, todos en verde, más la prueba negativa.
-- **Reescritura: 61.7 %.** Proyecto (contando el arnés): **64.3 %**.
-- 14 tests unitarios en 6 binarios.
+- `master` limpio, **68 PRs** fusionados.
+- **62 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- **Reescritura: 62.2 %.** Proyecto (contando el arnés): **64.8 %**.
+- 20 tests unitarios en 6 binarios.
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
 
 ## Método que funciona (y lo que cuesta caro)
@@ -95,45 +95,19 @@ primitivas de dibujo y antialiasing.
 Widgets: botón (geometría, dibujo, estados, borde), label y checkbox, slider,
 **cabecera colapsable**, **nodos de árbol**, **región hija** (lista propia, recorte,
 borde en la lista del padre, scroll con rueda y arrastre), **Selectable**, **popup**,
-**clic en fila de popup**, **combo**, **tooltip** y **barra de menús**.
+**clic en fila de popup**, **combo**, **tooltip**, **barra de menús** y **submenús
+desplegables** (ventana hija, columnas de menú, filas con etiqueta y atajo).
 
 La tabla completa, con el nombre del golden de cada fila, está en `rust/README.md`.
 El detalle por pieza y su peso, en `docs/progress.json`.
 
 ## Pendiente, en el orden sugerido
 
-### 1. Submenús desplegables (`BeginMenu` / `EndMenu` + `MenuColumns`)
-
-Es lo único que falta para cerrar el área de menús. **Ya está medido todo esto:**
-
-- **`MenuColumns`** (a portar, implementación de referencia completa):
-  campos `total_width`, `next_total_width`, `padding`, `offset_icon/label/shortcut/mark`,
-  `widths[4]`.
-  - `Update(spacing, window_reappearing)`: bloquea los offsets con los anchos del frame
-    anterior (`CalcNextTotalWidth(true)`), reinicia `widths`, y `total = next; next = 0`.
-  - `DeclColumns(icon, label, shortcut, mark)`: pliega los anchos con `max`, llama
-    `CalcNextTotalWidth(false)` y devuelve `max(total, next)`.
-  - `CalcNextTotalWidth(update_offsets)`: recorre las 4 columnas, suma el espaciado
-    **sólo entre columnas que existen**, guarda los offsets y el total.
-  - Es **estado por ventana que persiste entre frames**.
-- La entrada de menú reacciona **al pulsar** (`ImGuiSelectableFlags_SelectOnClick`),
-  no al soltar.
-- El menú hijo es una **ventana propia** llamada `Etiqueta###Menu_00`.
-- Su **posición**: `(caja de la entrada .x - 1, borde inferior de la barra)`.
-- Se mide en su primer frame y **no dibuja nada** en él; dibuja desde el segundo.
-- Sus **filas** son selectables a **todo el ancho del contenido**, con la etiqueta en
-  `MenuColumns.offset_label` y una **columna de marca reservada** de
-  `trunc(tamaño de fuente * 1.2)`.
-- Quedaron **dos comportamientos** sin resolver al revertir:
-  1. en el primer frame dibujado sólo se pintaba una fila (30 elementos frente a 42);
-  2. al elegir una fila, la referencia dibuja el **menú antes** que su ventana (el mismo
-     mecanismo de foco que se resolvió en el escenario `popup_click`).
-
-### 2. Entrada de texto (peso 4)
+### 1. Entrada de texto (peso 4)
 
 La pieza grande que queda: cursor, selección, teclado y portapapeles.
 
-### 3. Tablas (peso 2)
+### 2. Tablas (peso 2)
 
 Sistema aparte, el más grande de todos.
 
@@ -141,11 +115,29 @@ Sistema aparte, el más grande de todos.
 
 Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
+## Lo que enseñó el submenú (para no repetirlo)
+
+- **`CalcTextSize("")` no es (0, 0)**: devuelve `(0, tamaño de fuente)`. Es lo que hace que
+  la caja de un `MenuItem` de barra mida 17 px aunque pida altura 0. `font.rs` ya lo hacía
+  bien; no lo cambies.
+- **`ItemSize` corre con el tamaño *pedido*, antes de que `SpanAvailWidth` ensanche la caja.**
+  Si mides el avance con el ancho final, una fila de menú reporta todo el ancho del contenido
+  como propio y la ventana crece 8 px por frame para siempre.
+- **`FramePadding` es `(4, 3)`**, no `(3, 3)`. Un píxel de diferencia desplaza el texto de la
+  barra y tira el golden entero.
+- La barra de menús no empieza en el padding: empieza en
+  `max(WindowPadding.x, ItemSpacing.x)` = 8 desde el borde izquierdo de la ventana.
+- **`window_just_activated_by_user`** es "la ventana no se envió en el frame anterior", no
+  "es nueva": de eso depende que `MenuColumns` bloquee o tire sus medidas. En el port se
+  guarda `WindowMemory.last_frame` para saberlo.
+- Un `MenuColumns` que no se bloquea se nota **sólo** en el primer frame dibujado, y ahí la
+  ventana aún se está midiendo: por eso el escenario tiene que llegar al segundo frame.
+
 ## Cómo comprobar que todo sigue sano
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 61 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 62 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
