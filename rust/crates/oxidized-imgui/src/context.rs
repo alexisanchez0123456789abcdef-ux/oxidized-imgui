@@ -269,6 +269,10 @@ pub struct Context {
     /// it reuses (and reloads them from its settings), so a sort applied by a click survives to the
     /// frames that draw it and only a first frame (or a click) asks the caller to sort.
     table_sort_state: std::collections::HashMap<String, crate::tables::TableSortState>,
+    /// `column->DisplayOrder` plus the reorder request a drag queued (`ReorderColumn` and
+    /// `ReorderColumnDstOrder`), by table identifier: the reference keeps them in the `ImGuiTable` it
+    /// reuses, and the move is applied by the next `BeginTable`.
+    table_column_order: std::collections::HashMap<String, (Vec<i32>, i32, i32)>,
     /// `g.ActiveId` for the header cells: the one held with the mouse, until the button is released.
     header_active: Option<(String, usize)>,
     /// Per-window state between frames: position, size, scroll, content size and flags.
@@ -395,6 +399,7 @@ impl Default for Context {
             table_last_outer_height: std::collections::HashMap::new(),
             table_hovered_row_next: std::collections::HashMap::new(),
             table_sort_state: std::collections::HashMap::new(),
+            table_column_order: std::collections::HashMap::new(),
             header_active: None,
             table_host: None,
             table_indices: Vec::new(),
@@ -3153,6 +3158,22 @@ impl Context {
         if let Some(state) = self.table_sort_state.get(id) {
             table.restore_sort_state(state);
         }
+        // `TableSaveSettings` for the display order, then the reorder request the previous frame's
+        // drag queued, which `BeginTableEx` applies before the layout runs.
+        if let Some((orders, reorder_column, reorder_dst)) = self.table_column_order.get(id) {
+            if orders.len() == columns {
+                table.display_orders.clone_from(orders);
+                table.reorder_column = *reorder_column;
+                table.reorder_column_dst_order = *reorder_dst;
+                table.fix_display_order();
+            }
+        }
+        table.apply_pending_reorder();
+        // `if (g.ActiveId == 0) table->ReorderColumn = -1`: the header no longer holds the drag, so
+        // the next click on it sorts again. `header_active` is the port's ActiveId for headers.
+        if self.header_active.is_none() {
+            table.reorder_column = -1;
+        }
         self.table = Some(table);
         self.table_id = Some(id.to_string());
         true
@@ -3317,6 +3338,7 @@ impl Context {
             no_sort,
             sort_order,
             sort_direction,
+            reorderable,
         ) = {
             let Some(table) = self.table.as_ref() else {
                 return;
@@ -3339,6 +3361,7 @@ impl Context {
                 column_flags & crate::tables::column_flags::NO_SORT != 0,
                 table.sort_order(column_n),
                 table.sort_direction(column_n),
+                table.flags & crate::tables::table_flags::REORDERABLE != 0,
             )
         };
         // `FindRenderedTextEnd`: everything after "##" identifies the column but is not drawn.
@@ -3427,6 +3450,32 @@ impl Context {
         if let Some(bg) = bg {
             self.table_set_cell_bg_color(bg);
         }
+        // The reorder drag: while the pressed header is held and the mouse crosses past its edge, the
+        // column asks for the display position of the neighbour it crossed. The move is applied by the
+        // next `BeginTable`, as the reference queues it, so the layout never changes mid-frame.
+        if held && reorderable && self.io.is_mouse_dragging(0, -1.0) {
+            if let Some(mouse) = self.io.mouse_pos {
+                let delta_x = self.io.mouse_delta.x;
+                if let Some(mut table) = self.table.take() {
+                    let current = table.display_order(column_n);
+                    if delta_x < 0.0 && mouse.x < cell.0.x {
+                        let previous = table.column_at_display_order(current - 1);
+                        if previous != -1 {
+                            let target = table.display_order(previous as usize);
+                            table.queue_column_display_order(column_n, target);
+                        }
+                    }
+                    if delta_x > 0.0 && mouse.x > cell.1.x {
+                        let next = table.column_at_display_order(current + 1);
+                        if next != -1 {
+                            let target = table.display_order(next as usize);
+                            table.queue_column_display_order(column_n, target);
+                        }
+                    }
+                    self.table = Some(table);
+                }
+            }
+        }
         // The sort order number, faded to 70 %, and the arrow, both before the label.
         if sort_arrow {
             let mut x = cell.0.x.max(cell.1.x - w_arrow - w_sort_text);
@@ -3470,8 +3519,12 @@ impl Context {
         if pressed && sortable && !no_sort {
             let shift = self.io.key_shift;
             if let Some(mut table) = self.table.take() {
-                let next = table.next_sort_direction(column_n);
-                table.set_column_sort_direction(column_n, next, shift);
+                // `pressed && table->ReorderColumn != column_n`: a header that was just dragged does
+                // not also apply a click.
+                if table.reorder_column != column_n as i32 {
+                    let next = table.next_sort_direction(column_n);
+                    table.set_column_sort_direction(column_n, next, shift);
+                }
                 self.table = Some(table);
             }
         }
@@ -3648,7 +3701,12 @@ impl Context {
         if table.flags & crate::tables::table_flags::BORDERS_INNER_V != 0 {
             let draw_y1 = table.outer_rect.0.y.max(table.work_rect.0.y) + border_outer_h;
             let draw_y2 = table.outer_rect.1.y - border_outer_h;
-            for column in &table.columns {
+            // The reference walks the columns in display order, which is the declared order unless a
+            // drag reordered them.
+            for column_n in table.display_order_to_index.clone() {
+                let Some(column) = table.columns.get(column_n as usize) else {
+                    continue;
+                };
                 let mut draw_x2 = column.max_x;
                 if draw_x2 >= table.inner_clip.1.x && draw_x2 - 1.0 <= table.inner_clip.1.x {
                     draw_x2 = table.inner_clip.1.x;
@@ -3694,9 +3752,12 @@ impl Context {
         // The command opened when the table began holds no geometry of its own (the cells moved
         // their indices to the channels), so the merge drops it before rebuilding the list.
         self.draw_list.pop_all_unused_commands();
+        // `TableMergeDrawChannels` walks the columns **by index** to build the groups and the merge
+        // copies the channels in channel-number order, which is the index order (the display order
+        // only decides where the geometry was placed, not how the channels are merged).
         let mut shared = background;
-        for (channel, fits) in channels.iter().zip(&fits) {
-            if *fits {
+        for (n, channel) in channels.iter().enumerate() {
+            if fits[n] {
                 shared.extend_from_slice(channel);
             }
         }
@@ -3743,7 +3804,16 @@ impl Context {
             self.table_content_max_x.insert(id.clone(), extents);
             // `TableSaveSettings` for the sort bits: the orders, the directions and the dirty flags the
             // next frame starts from, kept by table identifier like the content extents.
-            self.table_sort_state.insert(id, table.sort_state());
+            self.table_sort_state.insert(id.clone(), table.sort_state());
+            // The display order and the reorder request a drag queued for the next `BeginTable`.
+            self.table_column_order.insert(
+                id,
+                (
+                    table.display_orders.clone(),
+                    table.reorder_column,
+                    table.reorder_column_dst_order,
+                ),
+            );
         }
         // Back at the table's top-left and at the host's line start, then laid out as one item.
         if let Some(window) = self.windows.last_mut() {

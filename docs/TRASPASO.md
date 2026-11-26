@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **102 escenarios** más la **prueba negativa**.
+   que ejecuta **103 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **109 PRs** fusionados.
-- **102 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **110 PRs** fusionados.
+- **103 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 68.1 %.** Proyecto (contando el arnés): **70.3 %**.
 - 32 tests unitarios en 6 binarios.
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
@@ -137,7 +137,9 @@ contenido; `tables_headers`: la fila de cabecera con su banda y sus nombres, con
 `tables_sort_arrow`: la flecha de orden que dibuja la cabecera de una tabla ordenable (trazo AA con la
 tabla de líneas en el fixture), con ascendente/descendente y el número de orden del segundo criterio;
 `tables_sort_click`: el clic de cabecera que alterna la dirección, con el frame del clic (flecha vieja)
-y el siguiente (flecha nueva).
+y el siguiente (flecha nueva);
+`tables_reorder`: el arrastre de una cabecera que reordena las columnas, aplicado en el `BeginTable`
+siguiente (dos movimientos, con la columna bajo el ratón como prueba de texto).
 
 La tabla completa, con el nombre del golden de cada fila, está en `rust/README.md`.
 El detalle por pieza y su peso, en `docs/progress.json`.
@@ -155,17 +157,16 @@ Están hechos el primer corte (`tables_basic`), las cabeceras (`tables_headers`)
 de columnas (`tables_set_column`, `tables_names` y `tables_header_id`), el recorte de celda con sus
 comandos por columna (`tables_clip`), las specs de orden (`tables_sort_specs`, `tables_sort_tristate`
 y `tables_column_sorted_flag`), la **flecha de orden** (`tables_sort_arrow`, con el número del
-segundo criterio y la dirección descendente) y el **clic** que alterna la dirección
-(`tables_sort_click`). El resto del sistema, por orden de coste:
+segundo criterio y la dirección descendente), el **clic** que alterna la dirección
+(`tables_sort_click`) y el **reordenado por arrastre** (`tables_reorder`). El resto del sistema, por
+orden de coste:
 
 - **Políticas de tamaño**: `SizingStretchSame`, los pesos explícitos y el ancho automático por
   contenido ya están; falta el peso de `SizingStretchProp` derivado del contenido (no el declarado).
 
-- **Reordenar por arrastre** (la cabecera pulsada mueve la columna al lado del ratón, con
-  `TableQueueSetColumnDisplayOrder`), **congelar** filas/columnas y el **scroll propio de la tabla**
-  (la tabla con `ScrollX`/`ScrollY` crea una ventana hija, con todo lo que eso arrastra). Medido:
-  `TableSetupScrollFreeze(0, 1)` en una tabla sin scroll deja el volcado **idéntico** al de no usarlo,
-  así que su golden necesita recorte o scroll.
+- **Congelar** filas/columnas y el **scroll propio de la tabla** (la tabla con `ScrollX`/`ScrollY` crea
+  una ventana hija, con todo lo que eso arrastra). Medido: `TableSetupScrollFreeze(0, 1)` en una tabla
+  sin scroll deja el volcado **idéntico** al de no usarlo, así que su golden necesita recorte o scroll.
 - Abierto: con `RowBg` y **dos** columnas, la banda alterna del volcado de referencia sólo cubre
   `68..132` (la primera columna) en vez de `68..220`; hace falta medir de dónde sale ese recorte antes
   de portarlo. Con una columna el golden `tables_rowbg_headers` cuadra.
@@ -315,6 +316,33 @@ del ratón, pulsación, mantenido, suelte y el frame siguiente, dos veces para a
 - El estado de orden persiste por id de tabla (`Context::table_sort_state`, ya usado por la flecha);
   sin eso el clic se perdería al re-declarar las columnas en el frame siguiente.
 
+### Tablas, reordenar por arrastre (peso 1): cerrada
+
+Golden `tables_reorder`: 17 frames con dos movimientos (B antes de A y C antes de A) sobre una tabla
+`Reorderable` de tres columnas fijas.
+
+- El arrastre: con la cabecera pulsada, `IsMouseDragging(0)` (umbral de 6 px medido desde la pulsación) y
+  el ratón cruzando el borde de su celda en el sentido del delta, `TableQueueSetColumnDisplayOrder` guarda
+  `ReorderColumn` y `ReorderColumnDstOrder`. **El movimiento no se aplica en ese frame**: lo aplica el
+  `BeginTable` siguiente (`TableSetColumnDisplayOrder`), así que el frame del arrastre aún dibuja el orden
+  viejo. En el golden se ve en que el frame 4 sigue con el orden A,B,C y el 5 ya trae B,A,C.
+- `TableSetColumnDisplayOrder` lleva la columna al orden destino y desplaza ±1 las de en medio;
+  `TableGetMaxDisplayOrderAllowed` recorta el destino para no cruzar una columna `NoReorder` (en la
+  referencia también las congeladas; aquí no están modeladas).
+- `ReorderColumn` se mantiene mientras la cabecera sigue pulsada (`header_active` en el port, `g.ActiveId`
+  en la referencia) y se limpia en el `BeginTable` siguiente al suelte; mientras vale `column_n`, el clic
+  de orden de **esa** columna se suprime (`pressed && ReorderColumn != column_n`).
+- **El layout sigue el orden de display** (la cadena de `MinX`/`MaxX` y `NextEnabledColumn`), pero **los
+  canales de dibujo no**: `TableSetupDrawChannels` los asigna por índice de columna y
+  `TableMergeDrawChannels` los fusiona en orden de canal, o sea por índice. Los **bordes** sí siguen el
+  orden de display. Ese detalle costó una tirada: el primer intento fusionaba por display y el golden
+  difería sólo en la sección `idx`.
+- La prueba de texto del movimiento es `TableGetHoveredColumn` con el ratón quieto: en x = 170 la columna
+  bajo el ratón es la 0 antes del segundo movimiento y la 2 después, porque es la geometría la que se
+  mueve, no los índices.
+- Geometría: con columnas de 60/80/100 el paso es 68/88/108; tras el primer movimiento el orden B, A, C
+  ocupa en pantalla `64..152`, `152..220` y `220..328`.
+
 ### Entrada de texto (peso 4): cerrada
 
 La pieza grande que quedó cerrada entre los PRs 71 y 76: estado de edición, cursor, selección,
@@ -406,7 +434,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 102 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 103 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```

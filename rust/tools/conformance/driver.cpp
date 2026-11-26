@@ -1897,6 +1897,68 @@ static void DumpTablesColumnHoveredFlag()
         ImGui::EndFrame();
     }
 }
+// tables_reorder: dragging a header past its edge moves the column to the neighbour's display
+// position. The move is queued by the drag and applied by the next BeginTable, so the frame the drag
+// starts on still draws the old order. Two moves: B before A, then C before A. The hovered column at
+// a fixed mouse position is the text proof that the display order changed.
+static void DumpTablesReorder()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario tables_reorder\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[3] = { 'A', 'B', 'C' };
+    for (int i = 0; i < 3; i++)
+        baked->FindGlyph((ImWchar)bake_order[i]);
+    ImGui::NewFrame();
+    ImGui::EndFrame();
+    WriteWindowIconsFixture(font, bake_order, 3);
+
+    io.DeltaTime = 0.1f;
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground;
+    static const float xs[17] = { 0.0f, 180.0f, 180.0f, 180.0f, 120.0f, 120.0f, 120.0f, 120.0f,
+        280.0f, 280.0f, 280.0f, 170.0f, 170.0f, 170.0f, 170.0f, 170.0f, 0.0f };
+    static const float ys[17] = { 0.0f, 75.0f, 75.0f, 75.0f, 75.0f, 75.0f, 75.0f, 75.0f, 75.0f,
+        75.0f, 75.0f, 75.0f, 75.0f, 75.0f, 75.0f, 75.0f, 0.0f };
+    static const bool downs[17] = { false, false, true, true, true, true, false, false, false, true,
+        true, true, true, false, false, false, false };
+    for (int frame = 0; frame < 17; frame++)
+    {
+        io.MousePos = ImVec2(xs[frame], ys[frame]);
+        io.MouseDown[0] = downs[frame];
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+        ImGui::Begin("S", NULL, flags);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+
+        const bool began = ImGui::BeginTable("ORDER", 3, ImGuiTableFlags_Reorderable,
+            ImVec2(0.0f, 0.0f), 0.0f);
+        printf("frame %d table begin %d\n", frame, (int)began);
+        ImGui::TableSetupColumn("A", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+        ImGui::TableSetupColumn("B", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        ImGui::TableSetupColumn("C", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+        ImGui::TableHeadersRow();
+        printf("frame %d hovered %d\n", frame, ImGui::TableGetHoveredColumn());
+        ImGui::EndTable();
+        if (frame == 0 || frame == 4 || frame == 5 || frame == 12 || frame == 13 || frame == 15)
+        {
+            printf("frame %d dump\n", frame);
+            DumpDrawListBody(*dl);
+        }
+        ImGui::End();
+        ImGui::EndFrame();
+    }
+}
 // tables_sort_click: clicking a header cycles its sort direction. The sequence covers the hover
 // latch the header needs before it presses, the release that applies the click (the arrow keeps the
 // old direction on that frame) and the frame after it, twice: ascending -> descending -> ascending.
@@ -5949,6 +6011,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "tables_sort_tristate") == 0)
     {
         DumpTablesSortTristate();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "tables_reorder") == 0)
+    {
+        DumpTablesReorder();
         ImGui::DestroyContext();
         return 0;
     }
