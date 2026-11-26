@@ -722,6 +722,16 @@ impl Context {
         self.next_collapsed = Some(collapsed);
     }
 
+    /// `ImGui::SetWindowFocus(name)`: the named window comes to the front of the display order and
+    /// takes the focus at once, which is the state the next `Begin` reads. An unknown name is a
+    /// no-op, like a failed `FindWindowByName` in the reference.
+    pub fn set_window_focus(&mut self, name: &str) {
+        if let Some(index) = self.display_order.iter().position(|known| known == name) {
+            let name = self.display_order.remove(index);
+            self.display_order.push(name.clone());
+            self.focused_window = Some(name);
+        }
+    }
     /// `ImGui::SetWindowCollapsed(name, collapsed)` without the condition: the window takes the
     /// state at its next `Begin`, which reads the remembered collapsed flag.
     pub fn set_window_collapsed(&mut self, name: &str, collapsed: bool) {

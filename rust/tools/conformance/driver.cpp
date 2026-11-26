@@ -4909,6 +4909,65 @@ static void DumpWindowsSetCollapsed()
     DumpWindowOrderFrame(frame++, "expanded_again");
 }
 
+// windows_set_focus: SetWindowFocus by name raises the window and gives it the focus at once, so the
+// draw order swaps on the same frame, like a click but without one.
+static void FrameTwoWindowsSetFocus(int focus)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    if (focus == 0)
+        ImGui::SetWindowFocus("A");
+    else if (focus == 1)
+        ImGui::SetWindowFocus("B");
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar;
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("A", NULL, flags);
+    ImGui::End();
+    ImGui::SetNextWindowPos(ImVec2(110.0f, 100.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("B", NULL, flags);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpWindowsSetFocus()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario windows_set_focus\n");
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[2] = { 'A', 'B' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    WriteGlyphFixture(font, bake_order, 2);
+
+    for (int i = 0; i < 6; i++)
+        FrameTwoWindowsSetFocus(-1);
+    int frame = 0;
+
+    FrameTwoWindowsSetFocus(-1);
+    DumpWindowOrderFrame(frame++, "idle");
+    FrameTwoWindowsSetFocus(0);
+    DumpWindowOrderFrame(frame++, "focus_a");
+    FrameTwoWindowsSetFocus(-1);
+    DumpWindowOrderFrame(frame++, "idle_a_on_top");
+    FrameTwoWindowsSetFocus(1);
+    DumpWindowOrderFrame(frame++, "focus_b");
+    FrameTwoWindowsSetFocus(-1);
+    DumpWindowOrderFrame(frame++, "idle_b_on_top");
+}
+
 // windows_move: dragging a window by its title bar and by its body, and the clamp that keeps it
 // reachable when it is dragged off the display. Only the positions are dumped: the geometry of a
 // window is what windows_order already covers.
@@ -6797,6 +6856,13 @@ int main(int argc, char** argv)
         return 0;
     }
 
+
+    if (strcmp(name, "windows_set_focus") == 0)
+    {
+        DumpWindowsSetFocus();
+        ImGui::DestroyContext();
+        return 0;
+    }
 
     if (strcmp(name, "windows_set_collapsed") == 0)
     {
