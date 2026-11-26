@@ -67,7 +67,7 @@ Cada fase termina con una demostración ejecutable, no con una descripción.
 
 | # | Decisión | Recomendación |
 | --- | --- | --- |
-| D1 | Ergonomía de la API: fiel a ImGui (`begin`/`end`, `ui.button`) o idiomática | núcleo fiel; capa idiomática después |
+| D1 | Ergonomía de la API: fiel a ImGui (`begin`/`end`, `ui.button`) o idiomática | **decidido: núcleo fiel** (ver abajo) |
 | D2 | Publicar en crates.io (`oxidized-imgui` está libre hoy) | sí, cuando F2 cierre |
 | D3 | Política con upstream: pin por fase y merge al inicio de fase | sí |
 | D4 | Fuentes: portar `stb_truetype` (paridad) o usar un crate (rapidez) | portar, por paridad |
@@ -75,6 +75,22 @@ Cada fase termina con una demostración ejecutable, no con una descripción.
 | D6 | Alcance del v1: qué widgets entran | lista de F3 menos tablas |
 | D7 | Credenciales git: `gh auth login` una vez, o llave SSH temporal por sesión | `gh auth login` (ver abajo) |
 | D8 | Cadencia: revisar cada PR o por fase | cada PR |
+
+### Sobre D1
+
+**Decidido: el port es fiel a ImGui.** La superficie pública sigue la forma de la API de ImGui
+(`begin`/`end`, `begin_menu`, `input_text` con buffer), no una envoltura idiomática: lo que dibuja
+sale del mismo grafo de llamadas que el C++, porque la paridad byte a byte es el contrato.
+
+El objetivo de producto es que **un proyecto Rust que hoy usa bindings de ImGui pueda cambiar a
+Oxidized-ImGui sin reescribir su interfaz**. Eso fija dos cosas:
+
+- el núcleo mantiene los nombres y el orden de llamadas de ImGui, y
+- la comodidad de los bindings (las capas tipo `imgui-rs`) se construye **encima** como capa de
+  compatibilidad, no dentro del núcleo.
+
+Todo widget nuevo se implementa primero en la forma de ImGui, aunque la capa idiomática acabe
+ocultándola después.
 
 ### Sobre D7
 
