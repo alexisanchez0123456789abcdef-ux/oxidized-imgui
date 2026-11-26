@@ -29,6 +29,7 @@ pub const SCENARIOS: &[&str] = &[
     "io_mouse_events",
     "io_keyboard_events",
     "io_text_events",
+    "text_clip",
     "font_metrics",
     "clip_stack",
     "text_draw",
@@ -523,6 +524,98 @@ pub fn io_text_dump() -> String {
     out
 }
 
+/// The `text_clip` scenario: `ImDrawList::AddText` under different `cpu_fine_clip_rect` values,
+/// which trim the quads and their texture coordinates in software.
+pub fn text_clip_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2, WindowFlags};
+
+    // The atlas is only stable inside the process that baked it, so the table travels with the
+    // scenario as a fixture written by the same reference run that produced the golden.
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/text_clip.glyphs.txt"
+    );
+    let text = std::fs::read_to_string(path).expect("text_clip fixture");
+    let font = Font::from_pinned(&text).expect("font fixture");
+    let size = font.size;
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font.clone());
+    ctx.io_mut().delta_time = 0.1;
+    ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+    ctx.io_mut().mouse_down[0] = false;
+    ctx.begin_frame();
+    ctx.set_next_window_flags(
+        WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+    );
+    ctx.begin_window_ex(
+        "W",
+        Some(Vec2 { x: 60.0, y: 60.0 }),
+        Some(Vec2 { x: 300.0, y: 200.0 }),
+        false,
+    );
+
+    const COL: u32 = 0xFFFF_FFFF;
+    let clip_rect = |min: Vec2, max: Vec2| (min, max);
+    {
+        let list = ctx.draw_list_mut();
+        // No fine clip: the control, every glyph whole.
+        list.add_text(&font, size, Vec2 { x: 68.0, y: 70.0 }, COL, "Hello");
+        // Cut on both sides, through the middle of the first and last glyphs.
+        list.add_text_clipped(
+            &font,
+            size,
+            Vec2 { x: 68.0, y: 90.0 },
+            COL,
+            "Hello",
+            clip_rect(Vec2 { x: 70.0, y: 0.0 }, Vec2 { x: 96.0, y: 720.0 }),
+        );
+        // Cut on both sides vertically.
+        list.add_text_clipped(
+            &font,
+            size,
+            Vec2 { x: 68.0, y: 110.0 },
+            COL,
+            "Hello",
+            clip_rect(
+                Vec2 { x: 0.0, y: 112.0 },
+                Vec2 {
+                    x: 1280.0,
+                    y: 116.0,
+                },
+            ),
+        );
+        // Entirely below the text: the fast-forward consumes the line.
+        list.add_text_clipped(
+            &font,
+            size,
+            Vec2 { x: 68.0, y: 130.0 },
+            COL,
+            "Hello",
+            clip_rect(
+                Vec2 { x: 0.0, y: 200.0 },
+                Vec2 {
+                    x: 1280.0,
+                    y: 300.0,
+                },
+            ),
+        );
+        // Entirely to the left of the text.
+        list.add_text_clipped(
+            &font,
+            size,
+            Vec2 { x: 100.0, y: 150.0 },
+            COL,
+            "Hello",
+            clip_rect(Vec2 { x: 0.0, y: 0.0 }, Vec2 { x: 50.0, y: 720.0 }),
+        );
+    }
+    let out = dump("text_clip", ctx.draw_list());
+    ctx.end_window();
+    ctx.end_frame();
+    out
+}
+
 /// The `font_metrics` scenario: the default font's baked metrics, its glyph advances and
 /// `CalcTextSize` at two sizes. The advances are pinned inputs (see `Font::reference_default`).
 pub fn font_metrics_dump() -> String {
@@ -637,7 +730,17 @@ pub fn text_draw_dump() -> String {
     let mut list = DrawList::new();
     list.white_uv = WHITE_UV;
     list.fringe_scale = 1.0;
-    list.add_text(&font, 13.0, Vec2 { x: 10.0, y: 20.0 }, 0xFFFF_FFFF, "Hi");
+    // The reference calls `ImFont::RenderText` with the display rectangle as the clip, on a list
+    // whose command clip is still zero, so the text is drawn against the rectangle it passes.
+    list.add_text_in(
+        &font,
+        13.0,
+        Vec2 { x: 10.0, y: 20.0 },
+        0xFFFF_FFFF,
+        "Hi",
+        Some([0.0, 0.0, 1280.0, 720.0]),
+        None,
+    );
     dump("text_draw", &list)
 }
 /// The `button` scenario: one button, six frames of mouse input, printing the item rect, the
@@ -3642,6 +3745,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "io_mouse_events" => Some(io_mouse_dump()),
         "io_keyboard_events" => Some(io_keyboard_dump()),
         "io_text_events" => Some(io_text_dump()),
+        "text_clip" => Some(text_clip_dump()),
         "font_metrics" => Some(font_metrics_dump()),
         "clip_stack" => Some(clip_stack_dump()),
         "text_draw" => Some(text_draw_dump()),
