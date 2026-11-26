@@ -77,6 +77,7 @@ instead of against our own expectations:
 | Window close | clip starts below the title band; the empty command from the clip push is dropped and the pop adds one only after geometry | `window_bg`, `window_title` goldens |
 | Full scene | titled window with a button: background, band, border, title, fill, label and the three commands | `scene_window_button` golden |
 | Label, checkbox | text item rect; checkbox box from frame height plus inner spacing, toggling on release | `widgets_basic` golden |
+| Scalar style var | `PushStyleVar` for the float entries (`Alpha`, `DisabledAlpha`, `FrameBorderSize`, `IndentSpacing`, `SeparatorSize`) has its own stack; `Alpha` reaches every colour through `Style::color_u32` | `style_var_alpha` golden |
 | Style var scope | `PushStyleVar` saves one of the vector style entries (`ItemSpacing`, `FramePadding`, `WindowPadding`, `ItemInnerSpacing`) and overwrites it, `PopStyleVar` restores it; framed widgets read `frame_padding`, so they resize on their own | `style_var` golden |
 | Style colour scope | `PushStyleColor` saves one entry of `Style::colors` and overwrites it, `PopStyleColor` restores it; every widget reads through `color_u32`, so the override needs no widget-side change | `style_color` golden |
 | Content region available | `GetContentRegionAvail` is the content region from the cursor to its far corner (`WorkRect.Max - CursorPos`), so it shrinks as the cursor advances and when an `Indent` moves the line start | `content_avail` golden |

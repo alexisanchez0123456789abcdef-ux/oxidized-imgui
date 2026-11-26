@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **133 escenarios** más la **prueba negativa**.
+   que ejecuta **134 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **150 PRs** fusionados (el número sale de la búsqueda de la API: `is:pr is:merged`).
-- **133 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **151 PRs** fusionados (el número sale de la búsqueda de la API: `is:pr is:merged`).
+- **134 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 69.9 %.** Proyecto (contando el arnés): **71.8 %**.
 - 42 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
@@ -457,6 +457,16 @@ redondeo no pase desapercibido hasta el CI:
 - `color_u32_alpha(Text, 0.70)` da `0xB3FFFFFF` y no `0xB2`: es el redondeo por floats del reference.
 
 Los tests subieron de 39 a **42**.
+### Variable de estilo escalar Alpha (peso 1): cerrada
+
+Golden `style_var_alpha`: tres textos con `PushStyleVar(ImGuiStyleVar_Alpha, 0.5)` alrededor del de
+en medio. Medido: los glifos del texto central salen con **0x80FFFFFF** y los otros dos con
+**0xFFFFFFFF**; el fondo y el borde de la ventana no cambian porque se dibujan fuera del ambito.
+
+Es la segunda forma del stack: las variables que son **un solo float** (`Alpha`, `DisabledAlpha`,
+`FrameBorderSize`, `IndentSpacing`, `SeparatorSize`) viven en `scalar_style_var_stack`, con
+`push_style_var_f32` / `pop_style_var_f32`. Como todo color pasa por `Style::color_u32`, que ya
+multiplica por `Style::Alpha`, el ambito funciona sin tocar ningun widget.
 ### Variables de estilo por ambito (peso 1): cerrada
 
 Golden `style_var`: tres botones con `PushStyleVar(ImGuiStyleVar_FramePadding, (4, 8))` alrededor del
@@ -896,7 +906,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 133 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 134 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
