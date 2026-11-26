@@ -494,9 +494,18 @@ Leido en `imgui_draw.cpp`, no de memoria:
 - Conteo para un rectangulo: **8 vertices** (4 internos opacos + 4 externos con alfa 0) y **30 indices**
   (2 triangulos de relleno + 8 de franja). Ese 30 coincide con el `elems 30` que aparece en los goldens de
   `Button`/`popup`, que es una comprobacion cruzada util.
-- **Por confirmar contra el golden** (no lo he leido): el orden exacto de los indices de la franja y si el
-  primer vertice externo se parchea al final (`prev_outer_idx`, 1374). Hay que medirlo con un escenario
-  de un solo `AddRectFilled` fraccionario antes de escribirlo.
+- **Medido** con un `AddRectFilled` de `(10.5, 20.5)` a `(30.5, 50.5)` en un escenario de sondeo (revertido,
+  no se commitea): 8 vertices y 30 indices, `fringe_scale` 1.0, 2 comandos (el segundo vacio). El interior va
+  en `esquina + offset` y el exterior en `esquina - offset`, con
+  `offset = (n0 + n1) * min(1000, 1/(1 + max(LIMITE, dot(n0,n1)))) * half_aa`; medido: interior `(11,21)` y
+  exterior `(10,20)` para la esquina `(10.5, 20.5)`.
+- Indices, en el orden exacto que devolvio la medicion (interiores 0..3 en orden de esquina, exteriores 4..7):
+  por cada esquina `i1`, con `prev_outer` y `prev_inner` de la anterior, dos triangulos
+  `(prev_outer, outer[i1], inner[i1])` y `(prev_outer, inner[i1], prev_inner)`; despues, al final, el
+  abanico de relleno `(0,1,2)` y `(0,2,3)`. La medicion dio `7 4 0`, `7 0 3`, `4 5 1`, `4 1 0`, `5 6 2`, ...
+  hasta 30 indices (`elems 30` en el comando).
+- El port debe llamar a esto solo cuando alguna coordenada sea fraccionaria; con enteras se mantiene
+  `PrimRect`, que es lo que ya verifican los 140 goldens.
 
 Ruta propuesta: `add_rect_filled` del port mira si alguna coordenada es fraccionaria; si lo es, delega en
 un `add_convex_poly_filled_aa` con las cuatro esquinas, y el primer golden es un relleno de 0.5 px de
