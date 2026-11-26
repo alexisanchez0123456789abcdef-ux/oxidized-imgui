@@ -3967,6 +3967,9 @@ static void DumpWindowsCollapseApi()
     // The collapse arrow is an anti-aliased stroke, so the fixture carries the line rows too.
     ImGui::NewFrame();
     ImGui::EndFrame();
+    // The line rows only exist after a frame has selected the atlas, as the other arrow scenarios do.
+    ImGui::NewFrame();
+    ImGui::EndFrame();
     WriteWindowIconsFixture(font, bake_order, 2);
     int frame = 0;
 
@@ -4894,6 +4897,9 @@ static void DumpWindowsSetCollapsed()
     }
     ImGui::NewFrame();
     ImGui::EndFrame();
+    // The line rows only exist after a frame has selected the atlas, as the other arrow scenarios do.
+    ImGui::NewFrame();
+    ImGui::EndFrame();
     WriteWindowIconsFixture(font, bake_order, 2);
     int frame = 0;
 
@@ -5461,6 +5467,53 @@ static void DumpCalcTextSize()
     }
     ImGui::End();
     ImGui::EndFrame();
+}
+
+// set_next_item_open: SetNextItemOpen forces the state of the next collapsing header, which then
+// keeps that state in its storage.
+static void DumpSetNextItemOpen()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario set_next_item_open\n");
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[2] = { 'T', 'A' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    // The line rows only exist after a frame has selected the atlas, as the other arrow scenarios do.
+    ImGui::NewFrame();
+    ImGui::EndFrame();
+    WriteWindowIconsFixture(font, bake_order, 2);
+
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
+    for (int frame = 0; frame < 3; frame++)
+    {
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+        ImGui::Begin("W", NULL, flags);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        if (frame == 1)
+            ImGui::SetNextItemOpen(true);
+        const bool open = ImGui::CollapsingHeader("T");
+        if (open)
+            ImGui::Text("A");
+        printf("frame %d open %d\n", frame, open ? 1 : 0);
+        ImGui::End();
+        if (frame == 2)
+            DumpDrawListBody(*dl);
+        ImGui::EndFrame();
+    }
 }
 
 // windows_move: dragging a window by its title bar and by its body, and the clamp that keeps it
@@ -7351,6 +7404,13 @@ int main(int argc, char** argv)
         return 0;
     }
 
+
+    if (strcmp(name, "set_next_item_open") == 0)
+    {
+        DumpSetNextItemOpen();
+        ImGui::DestroyContext();
+        return 0;
+    }
 
     if (strcmp(name, "calc_text_size") == 0)
     {

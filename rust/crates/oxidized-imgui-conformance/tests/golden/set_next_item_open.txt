@@ -1,0 +1,118 @@
+header imgui 1.93.1 WIP 19303
+scenario set_next_item_open
+frame 0 open 0
+frame 1 open 1
+frame 2 open 1
+white_uv 3a800000 3b800000
+cmd_count 3
+cmd 0 clip 00000000 00000000 44a00000 44340000 elems 30 vtxoff 0 idxoff 0
+cmd 1 clip 42740000 42740000 43b38000 43818000 elems 42 vtxoff 0 idxoff 30
+cmd 2 clip 00000000 00000000 44a00000 44340000 elems 0 vtxoff 0 idxoff 72
+vtx_count 34
+vtx 0 pos 42700000 42700000 uv 3a800000 3b800000 col ff262626
+vtx 1 pos 43b40000 42700000 uv 3a800000 3b800000 col ff262626
+vtx 2 pos 43b40000 43820000 uv 3a800000 3b800000 col ff262626
+vtx 3 pos 42700000 43820000 uv 3a800000 3b800000 col ff262626
+vtx 4 pos 42700000 42700000 uv 3a800000 3b800000 col 80806e6e
+vtx 5 pos 42740000 42740000 uv 3a800000 3b800000 col 80806e6e
+vtx 6 pos 43b40000 42700000 uv 3a800000 3b800000 col 80806e6e
+vtx 7 pos 43b38000 42740000 uv 3a800000 3b800000 col 80806e6e
+vtx 8 pos 43b40000 43820000 uv 3a800000 3b800000 col 80806e6e
+vtx 9 pos 43b38000 43818000 uv 3a800000 3b800000 col 80806e6e
+vtx 10 pos 42700000 43820000 uv 3a800000 3b800000 col 80806e6e
+vtx 11 pos 42740000 43818000 uv 3a800000 3b800000 col 80806e6e
+vtx 12 pos 42800000 42880000 uv 3a800000 3b800000 col 4ffa9642
+vtx 13 pos 43b20000 42880000 uv 3a800000 3b800000 col 4ffa9642
+vtx 14 pos 43b20000 42ae0000 uv 3a800000 3b800000 col 4ffa9642
+vtx 15 pos 42800000 42ae0000 uv 3a800000 3b800000 col 4ffa9642
+vtx 16 pos 42a7c5b3 4297fd07 uv 3ef68000 3e960000 col 00ffffff
+vtx 17 pos 42a34fff 4293f980 uv 3f014000 3e960000 col 00ffffff
+vtx 18 pos 42a66f31 42997999 uv 3ef68000 3e960000 col ffffffff
+vtx 19 pos 42a1f97d 42957612 uv 3f014000 3e960000 col ffffffff
+vtx 20 pos 429d0000 42a3f523 uv 3ef68000 3e960000 col ffffffff
+vtx 21 pos 429d0000 429afd0e uv 3f014000 3e960000 col ffffffff
+vtx 22 pos 429390cf 42997999 uv 3ef68000 3e960000 col ffffffff
+vtx 23 pos 42980683 42957612 uv 3f014000 3e960000 col ffffffff
+vtx 24 pos 42923a4d 4297fd07 uv 3ef68000 3e960000 col 00ffffff
+vtx 25 pos 4296b001 4293f980 uv 3f014000 3e960000 col 00ffffff
+vtx 26 pos 42ba0000 42940000 uv 3f690000 00000000 col ffffffff
+vtx 27 pos 42c80000 42940000 uv 3f6c8000 00000000 col ffffffff
+vtx 28 pos 42c80000 42a40000 uv 3f6c8000 3d800000 col ffffffff
+vtx 29 pos 42ba0000 42a40000 uv 3f690000 3d800000 col ffffffff
+vtx 30 pos 428a0000 42bc0000 uv 3f6d0000 00000000 col ffffffff
+vtx 31 pos 42960000 42bc0000 uv 3f700000 00000000 col ffffffff
+vtx 32 pos 42960000 42cc0000 uv 3f700000 3d800000 col ffffffff
+vtx 33 pos 428a0000 42cc0000 uv 3f6d0000 3d800000 col ffffffff
+idx_count 72
+idx 0
+idx 1
+idx 2
+idx 0
+idx 2
+idx 3
+idx 4
+idx 7
+idx 5
+idx 4
+idx 6
+idx 7
+idx 6
+idx 9
+idx 7
+idx 6
+idx 8
+idx 9
+idx 8
+idx 11
+idx 9
+idx 8
+idx 10
+idx 11
+idx 10
+idx 5
+idx 11
+idx 10
+idx 4
+idx 5
+idx 12
+idx 13
+idx 14
+idx 12
+idx 14
+idx 15
+idx 16
+idx 18
+idx 19
+idx 16
+idx 19
+idx 17
+idx 18
+idx 20
+idx 21
+idx 18
+idx 21
+idx 19
+idx 20
+idx 22
+idx 23
+idx 20
+idx 23
+idx 21
+idx 22
+idx 24
+idx 25
+idx 22
+idx 25
+idx 23
+idx 26
+idx 27
+idx 28
+idx 26
+idx 28
+idx 29
+idx 30
+idx 31
+idx 32
+idx 30
+idx 32
+idx 33
