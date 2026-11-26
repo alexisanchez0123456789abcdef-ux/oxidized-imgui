@@ -4932,6 +4932,23 @@ impl Context {
             pressed,
         )
     }
+    /// `ImGui::SmallButton`: a button with no **vertical** padding, which is what a toolbar wants.
+    /// Measured: the reference keeps `FramePadding.x` (the frame stays 15 wide) and zeroes only the
+    /// height (13 instead of 19).
+    pub fn small_button(&mut self, label: &str) -> bool {
+        let padding_x = self.style.frame_padding.x;
+        self.push_style_var(
+            StyleVar::FramePadding,
+            Vec2 {
+                x: padding_x,
+                y: 0.0,
+            },
+        );
+        let pressed = self.button(label);
+        self.pop_style_var();
+        pressed
+    }
+
     /// `ImGui::Button`: a framed label. Returns true on the frame the mouse is released inside.
     pub fn button(&mut self, label: &str) -> bool {
         // `SkipItems`: a collapsed window lays nothing out, so an item submitted into it draws
