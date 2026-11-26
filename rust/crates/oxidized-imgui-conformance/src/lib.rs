@@ -36,6 +36,7 @@ pub const SCENARIOS: &[&str] = &[
     "input_text_mouse_undo",
     "font_metrics",
     "clip_stack",
+    "cmd_split",
     "text_draw",
     "button",
     "widgets_basic",
@@ -1133,6 +1134,98 @@ pub fn clip_stack_dump() -> String {
     intersect.pop_clip_rect();
     dump_list(&mut out, "clip_intersect", &intersect);
 
+    out
+}
+
+/// The `cmd_split` scenario: one window draw list where every clip change has to cut the command
+/// the same way the reference does.
+///
+/// A clip that does not change must not start a command, one that does must, and a push/pop pair
+/// that draws nothing merges back into the command it came from. Drawing on a window's list is
+/// deliberate: the reference faults when it is handed a loose `ImDrawList` inside a frame.
+pub fn cmd_split_dump() -> String {
+    use oxidized_imgui::{Context, Vec2, WindowFlags};
+
+    let mut ctx = Context::new();
+    ctx.io_mut().delta_time = 0.1;
+    ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+    ctx.io_mut().mouse_down[0] = false;
+    ctx.begin_frame();
+    ctx.set_next_window_flags(
+        WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+    );
+    ctx.begin_window_ex(
+        "W",
+        Some(Vec2 { x: 60.0, y: 60.0 }),
+        Some(Vec2 { x: 300.0, y: 200.0 }),
+        false,
+    );
+
+    // The clip the window started with, which is the clip of the command already in the buffer.
+    let win = ctx.draw_list().current_clip_rect();
+    let cmin = Vec2 {
+        x: win[0],
+        y: win[1],
+    };
+    let cmax = Vec2 {
+        x: win[2],
+        y: win[3],
+    };
+    let rect = |list: &mut oxidized_imgui::DrawList, x0: f32, y0: f32, x1: f32, y1: f32| {
+        list.add_rect_filled(Vec2 { x: x0, y: y0 }, Vec2 { x: x1, y: y1 }, COL);
+    };
+
+    let list = ctx.draw_list_mut();
+    // 1. The window clip first, the command every later step is compared against.
+    rect(list, 70.0, 70.0, 110.0, 90.0);
+    // 2. Pushing that very rectangle is not a change: no new command.
+    list.push_clip_rect(cmin, cmax, false);
+    rect(list, 70.0, 100.0, 110.0, 120.0);
+    // 3. A second identical push, nested, neither.
+    list.push_clip_rect(cmin, cmax, false);
+    rect(list, 70.0, 130.0, 110.0, 150.0);
+    list.pop_clip_rect();
+    // 4. Popping back to the clip the command already carries: still no split.
+    list.pop_clip_rect();
+    rect(list, 120.0, 70.0, 160.0, 90.0);
+    // 5. Intersecting with a larger rectangle leaves the clip alone: no split.
+    list.push_clip_rect(
+        Vec2 {
+            x: cmin.x - 20.0,
+            y: cmin.y - 20.0,
+        },
+        Vec2 {
+            x: cmax.x + 20.0,
+            y: cmax.y + 20.0,
+        },
+        true,
+    );
+    rect(list, 120.0, 100.0, 160.0, 120.0);
+    list.pop_clip_rect();
+    // 6. Intersecting with a smaller one does change it: the command is cut here.
+    list.push_clip_rect(
+        Vec2 { x: 130.0, y: 60.0 },
+        Vec2 { x: 200.0, y: 200.0 },
+        true,
+    );
+    rect(list, 120.0, 130.0, 180.0, 160.0);
+    list.pop_clip_rect();
+    // 7. Back at the window clip, which the command just closed does not carry: cut again.
+    rect(list, 120.0, 170.0, 160.0, 190.0);
+    // 8. A push that changes the clip and a pop that undoes it with nothing drawn in between: the
+    // empty command merges back into the one it came from, so this rectangle joins the previous one
+    // instead of opening a fourth command.
+    list.push_clip_rect(
+        Vec2 { x: 62.0, y: 62.0 },
+        Vec2 { x: 300.0, y: 150.0 },
+        false,
+    );
+    list.pop_clip_rect();
+    rect(list, 70.0, 170.0, 110.0, 190.0);
+
+    let out = dump("cmd_split", ctx.draw_list());
+    ctx.end_window();
+    ctx.end_frame();
     out
 }
 
@@ -4174,6 +4267,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "input_text_mouse_undo" => Some(input_text_mouse_undo_dump()),
         "font_metrics" => Some(font_metrics_dump()),
         "clip_stack" => Some(clip_stack_dump()),
+        "cmd_split" => Some(cmd_split_dump()),
         "text_draw" => Some(text_draw_dump()),
         "button" => Some(button_dump()),
         "widgets_basic" => Some(widgets_basic_dump()),

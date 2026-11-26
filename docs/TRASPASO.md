@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **67 escenarios** más la **prueba negativa**.
+   que ejecuta **68 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,9 +46,9 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **74 PRs** fusionados.
-- **67 escenarios** con golden propio, todos en verde, más la prueba negativa.
-- **Reescritura: 65.9 %.** Proyecto (contando el arnés): **68.2 %**.
+- `master` limpio, **75 PRs** fusionados.
+- **68 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- **Reescritura: 66.7 %.** Proyecto (contando el arnés): **68.9 %**.
 - 30 tests unitarios en 6 binarios.
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
 
@@ -91,7 +91,10 @@ caracteres y la repetición de una tecla mantenida), fondo, borde,
 barra de título, iconos y su interacción, arrastre de ventana, scroll (barra, arrastre,
 página, rueda, bloqueo de rueda), auto-ajuste de tamaño, tamaño mínimo, tiradores de
 redimensión (bordes, cursor, doble clic, autofit), orden de ventanas, y todas las
-primitivas de dibujo y antialiasing.
+primitivas de dibujo y antialiasing. Los recortes también están cerrados: la pila de
+`PushClipRect`/`PopClipRect` con su intersección (`clip_stack`) y el corte de comandos de
+`_OnChangedClipRect` (`cmd_split`: el clip que no cambia no parte, el que cambia sí, y el
+push/pop sin geometría se fusiona con el comando anterior).
 
 Widgets: botón (geometría, dibujo, estados, borde), label y checkbox, slider,
 **cabecera colapsable**, **nodos de árbol**, **región hija** (lista propia, recorte,
@@ -104,11 +107,64 @@ El detalle por pieza y su peso, en `docs/progress.json`.
 
 ## Pendiente, en el orden sugerido
 
-### 1. Entrada de texto (peso 4)
+La entrada de texto (peso 4) está cerrada y su sección queda más abajo como referencia de lo ya
+medido. Lo que sigue, por orden de coste:
 
-La pieza grande que queda: estado de edición, cursor, selección, teclado, ratón, portapapeles y
-scroll interno. **Ya está medido con una sonda** (`InputText` de una línea, etiqueta `##field`,
-`SetNextItemWidth(150)`, ventana de 300×200 en (60,60), fuente 13, 7 px por avance):
+### 1. Curvas AA (peso 1): círculos
+
+`AddCircleFilled` y `AddCircle` arrastran casi todo el sistema de arcos: `_PathArcToFastEx` (la
+tabla de 22 muestras), `PathArcTo`, el corte `ArcFastRadiusCutoff`, la tabla cacheada
+`CircleSegmentCounts` y el escalado de fringe. La referencia reescribió estas funciones, así que
+**medir antes de escribir código**: con `num_segments = 0`, para radios 1..40, cuántos vértices
+emite `AddCircleFilled`. De esa medida sale la tabla de segmentos automáticos
+(`IM_DRAWLIST_CIRCLE_AUTO_SEGMENT_CALC`) y se puede comprobar contra el arnés actual
+(`arc_steps` ya pinna los pasos de arco de radios 1..14, pero no los círculos).
+
+El escenario puede pintar círculos rellenos y contorneados de varios radios sobre la lista de una
+ventana y comparar la lista entera, como los demás escenarios de AA.
+
+### 2. Tablas (peso 2)
+
+Sistema aparte, el más grande de todos. **Medido** (sonda `probe-tables`, ventana de 400×300 en
+(40,40), padding 8, fuente 13 px, `ItemSpacing` 8×4, `CellPadding` por defecto); las cifras están
+en coordenadas locales de la ventana:
+
+- **`CellPadding` por defecto es (4, 3)**, el mismo `FramePadding`. Una columna `WidthFixed` de
+  `w` px mide `w + 2·CellPadding.x` entre `MinX` y `MaxX`: 60 px → 68 px de paso, 80 → 88, 100 → 108.
+- **Sin bordes, el contenido de la primera columna empieza en `x = 8`**, que es
+  `WindowPadding.x` (el `WorkMinX` de la columna coincide con el borde del contenido). La segunda
+  columna de 60 px empieza en **76**.
+- **Los bordes desplazan el contenido**: con `Borders`, la primera columna empieza en **13** y la
+  segunda en **82**. Es decir, 5 px de más al principio (borde exterior + celda) y 6 entre columnas.
+- **Fila de datos: 17 px de alto con texto de 13** (`13 + 2·CellPadding.y`); el alto de fila mínimo
+  sube a **21** con `CellPadding = (8, 4)`.
+- **El texto de una celda se coloca en el cursor tal cual**: la celda 0,0 pone el texto en
+  `(8, 10)` y deja el cursor en `(8, 27)`. La fila 1 repite en `y = 27`.
+- **Con `TableHeadersRow`** la primera fila de datos se va a `y = 27` y la segunda a `y = 44`
+  (la cabecera ocupa el primer hueco de 17 px), y `TableGetRowIndex()` cuenta la cabecera: tras dos
+  filas de datos vale **2**.
+- **Un ancho explícito en `BeginTable` no cambia nada con columnas fijas**: 3 columnas de 60/80/100
+  con `outer_size.x = 300` empiezan en 8, 76 y 164, igual que sin ese ancho.
+- **Con anchos automáticos** (sin `WidthFixed`) la tabla reparte el ancho del contenido: en 384 px
+  las dos columnas quedan de 192 y la segunda empieza en **204**.
+- Tras `EndTable` el cursor queda por debajo de la última fila: dos filas → `y = 46`; con cabecera,
+  tres filas de hueco → `y = 63`.
+- **`GetItemRectMin()` es espacio de pantalla**, `GetCursorPos()` es local de la ventana: la sonda
+  imprime los dos y hay que restar la posición de la ventana para compararlos.
+
+Lo que un primer corte tiene que dejar clavado: `TableBegin` creando el estado y midiendo, el
+`TableUpdateLayout` que resuelve los anchos, `TableNextRow`/`TableNextColumn` colocando el cursor, y
+el `CellPadding`/`BorderInner` sumando donde dicen las cifras de arriba. Cabeceras, políticas de
+tamaño (stretch, auto-fit), reordenar, congelar y el scroll propio de la tabla vienen después.
+
+## Lo cerrado, con su detalle medido
+
+### Entrada de texto (peso 4): cerrada
+
+La pieza grande que quedó cerrada entre los PRs 71 y 76: estado de edición, cursor, selección,
+teclado, ratón, portapapeles y scroll interno. **Se midió con una sonda** (`InputText` de una
+línea, etiqueta `##field`, `SetNextItemWidth(150)`, ventana de 300×200 en (60,60), fuente 13,
+7 px por avance):
 
 **Geometría**
 
@@ -168,40 +224,6 @@ scroll interno. **Ya está medido con una sonda** (`InputText` de una línea, et
 Quedan fuera de este primer corte: multilínea, `Password`, `Hint`, `ReadOnly`, callbacks y
 portapapeles.
 
-### 2. Tablas (peso 2)
-
-Sistema aparte, el más grande de todos. **Medido** (sonda `probe-tables`, ventana de 400×300 en
-(40,40), padding 8, fuente 13 px, `ItemSpacing` 8×4, `CellPadding` por defecto); las cifras están
-en coordenadas locales de la ventana:
-
-- **`CellPadding` por defecto es (4, 3)**, el mismo `FramePadding`. Una columna `WidthFixed` de
-  `w` px mide `w + 2·CellPadding.x` entre `MinX` y `MaxX`: 60 px → 68 px de paso, 80 → 88, 100 → 108.
-- **Sin bordes, el contenido de la primera columna empieza en `x = 8`**, que es
-  `WindowPadding.x` (el `WorkMinX` de la columna coincide con el borde del contenido). La segunda
-  columna de 60 px empieza en **76**.
-- **Los bordes desplazan el contenido**: con `Borders`, la primera columna empieza en **13** y la
-  segunda en **82**. Es decir, 5 px de más al principio (borde exterior + celda) y 6 entre columnas.
-- **Fila de datos: 17 px de alto con texto de 13** (`13 + 2·CellPadding.y`); el alto de fila mínimo
-  sube a **21** con `CellPadding = (8, 4)`.
-- **El texto de una celda se coloca en el cursor tal cual**: la celda 0,0 pone el texto en
-  `(8, 10)` y deja el cursor en `(8, 27)`. La fila 1 repite en `y = 27`.
-- **Con `TableHeadersRow`** la primera fila de datos se va a `y = 27` y la segunda a `y = 44`
-  (la cabecera ocupa el primer hueco de 17 px), y `TableGetRowIndex()` cuenta la cabecera: tras dos
-  filas de datos vale **2**.
-- **Un ancho explícito en `BeginTable` no cambia nada con columnas fijas**: 3 columnas de 60/80/100
-  con `outer_size.x = 300` empiezan en 8, 76 y 164, igual que sin ese ancho.
-- **Con anchos automáticos** (sin `WidthFixed`) la tabla reparte el ancho del contenido: en 384 px
-  las dos columnas quedan de 192 y la segunda empieza en **204**.
-- Tras `EndTable` el cursor queda por debajo de la última fila: dos filas → `y = 46`; con cabecera,
-  tres filas de hueco → `y = 63`.
-- **`GetItemRectMin()` es espacio de pantalla**, `GetCursorPos()` es local de la ventana: la sonda
-  imprime los dos y hay que restar la posición de la ventana para compararlos.
-
-Lo que un primer corte tiene que dejar clavado: `TableBegin` creando el estado y midiendo, el
-`TableUpdateLayout` que resuelve los anchos, `TableNextRow`/`TableNextColumn` colocando el cursor, y
-el `CellPadding`/`BorderInner` sumando donde dicen las cifras de arriba. Cabeceras, políticas de
-tamaño (stretch, auto-fit), reordenar, congelar y el scroll propio de la tabla vienen después.
-
 ### Sin empezar en otras áreas
 
 Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
@@ -228,7 +250,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 67 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 68 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
