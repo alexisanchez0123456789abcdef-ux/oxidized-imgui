@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **136 escenarios** más la **prueba negativa**.
+   que ejecuta **137 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **153 PRs** fusionados (el número sale de la búsqueda de la API: `is:pr is:merged`).
-- **136 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **154 PRs** fusionados (el número sale de la búsqueda de la API: `is:pr is:merged`).
+- **137 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 69.9 %.** Proyecto (contando el arnés): **71.8 %**.
 - 42 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
@@ -457,6 +457,21 @@ redondeo no pase desapercibido hasta el CI:
 - `color_u32_alpha(Text, 0.70)` da `0xB3FFFFFF` y no `0xB2`: es el redondeo por floats del reference.
 
 Los tests subieron de 39 a **42**.
+### CloseCurrentPopup (peso 1): cerrada, con un limite medido
+
+Golden `close_current_popup`: `OpenPopup("P")` en el primer frame, el popup dibujado con un texto, y
+`CloseCurrentPopup()` llamado **desde dentro** en el tercero. Medido: **open 1, 1, 1, 0** -- el frame que
+pide cerrar todavia lo dibuja, y el siguiente ya no.
+
+- El port ya tenia el cierre diferido (`popup_pending_close`) para el combo; `close_current_popup` solo
+  lo marca, y se aplica en el siguiente `begin_popup`, igual que el reference oculta la ventana del
+  popup al frame siguiente.
+- **Limite medido**: la lista propia del popup, justo en el frame del cierre, difiere en **un comando
+  vacio al final** (el reference emite 3 comandos, el port 2). Los 16 vertices y los dos comandos reales
+  son identicos, y el comando extra es el `AddDrawCmd` que la referencia deja al popear el clip de la
+  ventana que se oculta: es la misma frontera de comandos por canal/momento que falta para el splitter.
+  Por eso el golden compara el frame completo del **host** y la secuencia de apertura, no la lista del
+  popup en ese frame.
 ### SetNextItemOpen (peso 1): cerrada
 
 Golden `set_next_item_open`: un `CollapsingHeader` cerrado, forzado a abierto en el segundo frame con
@@ -931,7 +946,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 136 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 137 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
