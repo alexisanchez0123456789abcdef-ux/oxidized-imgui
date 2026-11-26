@@ -1,10 +1,10 @@
 //! `ImGuiTable`: the layout of a table with fixed columns.
 //!
-//! Only the paths the `tables_basic` golden pins are here: columns sized with `WidthFixed`, rows
-//! that grow to their contents, and the cell padding and spacing the reference derives from
-//! `ImGuiStyle::CellPadding`. Headers, the borders themselves, sizing policies, reordering, freezing
-//! and the table's own scrolling are still missing; the geometry they add is measured in
-//! `docs/TRASPASO.md`.
+//! The paths the table goldens pin are here: fixed and stretch columns, rows that grow to their
+//! contents, the cell padding and spacing the reference derives from `ImGuiStyle::CellPadding`, the
+//! display order the reorder drag rewrites, and the sort orders and directions the headers draw and
+//! the clicks change. Freezing, the table's own scrolling and the context menu are still missing;
+//! the geometry they add is measured in `docs/TRASPASO.md`.
 
 use crate::draw_list::Vec2;
 
@@ -27,6 +27,8 @@ pub mod table_flags {
     /// `ImGuiTableFlags_Resizable`: columns can be resized, so a fixed one keeps its request
     /// instead of tracking its contents.
     pub const RESIZABLE: u32 = 1 << 0;
+    /// `ImGuiTableFlags_Reorderable`: the user can drag a header to reorder the columns.
+    pub const REORDERABLE: u32 = 1 << 1;
     /// `ImGuiTableFlags_Sortable`: the table exposes sort specs.
     pub const SORTABLE: u32 = 1 << 3;
     /// `ImGuiTableFlags_SortMulti`: the specs may hold more than one column.
@@ -71,6 +73,8 @@ pub mod column_flags {
     pub const PREFER_SORT_DESCENDING: u32 = 1 << 15;
     /// `ImGuiTableColumnFlags_NoResize`.
     pub const NO_RESIZE: u32 = 1 << 5;
+    /// `ImGuiTableColumnFlags_NoReorder`: other columns cannot cross over it.
+    pub const NO_REORDER: u32 = 1 << 6;
     /// `ImGuiTableColumnFlags_IndentEnable`: column 0 keeps the current indent.
     pub const INDENT_ENABLE: u32 = 1 << 16;
     /// `ImGuiTableColumnFlags_IndentDisable`: the other columns ignore it.
@@ -204,6 +208,15 @@ pub struct Table {
     /// True once the sort state came from a previous frame (or from the table's settings) instead of
     /// from the `DefaultSort` flags just declared.
     pub sort_state_loaded: bool,
+    /// `column->DisplayOrder`: where each column sits in the display order, by column index.
+    pub display_orders: Vec<i32>,
+    /// `table->DisplayOrderToIndex`: the column index at each display position.
+    pub display_order_to_index: Vec<i32>,
+    /// `table->ReorderColumn`: the column being dragged, `-1` when none is.
+    pub reorder_column: i32,
+    /// `table->ReorderColumnDstOrder`: the display position the drag asked for, applied at the next
+    /// `BeginTable`.
+    pub reorder_column_dst_order: i32,
     /// `table->HoveredColumnBody`: the column under the mouse, `-1` outside the table and the column
     /// count in the unused space right of the last one.
     pub hovered_column_body: i32,
@@ -232,6 +245,10 @@ impl Table {
             hovered_row_next: 0,
             sort_orders: vec![-1; columns],
             sort_directions: vec![0; columns],
+            display_orders: (0..columns as i32).collect(),
+            display_order_to_index: (0..columns as i32).collect(),
+            reorder_column: -1,
+            reorder_column_dst_order: -1,
             ..Self::default()
         }
     }
@@ -510,9 +527,128 @@ impl Table {
         self.sort_specs_dirty = true;
     }
 
+    /// `column->DisplayOrder`: where the column sits in the display order.
+    pub fn display_order(&self, column: usize) -> i32 {
+        self.display_orders.get(column).copied().unwrap_or(-1)
+    }
+
+    /// `table->DisplayOrderToIndex`: the column at a display position, `-1` when there is none.
+    pub fn column_at_display_order(&self, order: i32) -> i32 {
+        if order < 0 {
+            return -1;
+        }
+        self.display_order_to_index
+            .get(order as usize)
+            .copied()
+            .unwrap_or(-1)
+    }
+
+    /// `TableFixDisplayOrder`: rebuilds the display-order-to-index map from the columns' orders.
+    pub fn fix_display_order(&mut self) {
+        for (n, order) in self.display_orders.iter().enumerate() {
+            if let Some(slot) = self.display_order_to_index.get_mut(*order as usize) {
+                *slot = n as i32;
+            }
+        }
+    }
+
+    /// `TableSetColumnDisplayOrder`: moves one column to `dst_order` and shifts the columns in between,
+    /// then rebuilds the map, as the reference does.
+    pub fn set_column_display_order(&mut self, column: usize, dst_order: i32) {
+        let Some(&src_order) = self.display_orders.get(column) else {
+            return;
+        };
+        let columns_count = self.display_orders.len() as i32;
+        if columns_count == 0 {
+            return;
+        }
+        let dst_order = dst_order.clamp(0, columns_count - 1);
+        if src_order == dst_order {
+            return;
+        }
+        let reorder_dir = if dst_order < src_order { -1 } else { 1 };
+        // The columns between the two positions, read from the map before it is rebuilt.
+        let mut shifted = Vec::new();
+        let mut order_n = src_order + reorder_dir;
+        while order_n != dst_order + reorder_dir {
+            if let Some(&n) = self.display_order_to_index.get(order_n as usize) {
+                shifted.push(n as usize);
+            }
+            order_n += reorder_dir;
+        }
+        self.display_orders[column] = dst_order;
+        for n in shifted {
+            if let Some(entry) = self.display_orders.get_mut(n) {
+                *entry -= reorder_dir;
+            }
+        }
+        self.fix_display_order();
+    }
+
+    /// `TableGetMaxDisplayOrderAllowed`: clamps the destination of a drag so it cannot cross a column
+    /// that refuses reordering. Frozen columns are not modelled.
+    fn max_display_order_allowed(&self, src_order: i32, dst_order: i32) -> i32 {
+        let columns_count = self.columns.len() as i32;
+        if columns_count == 0 {
+            return 0;
+        }
+        let mut dst_order = dst_order.clamp(0, columns_count - 1);
+        if src_order == dst_order {
+            return dst_order;
+        }
+        let reorder_dir = if src_order < dst_order { 1 } else { -1 };
+        let mut order_n = src_order;
+        while (src_order < dst_order && order_n <= dst_order)
+            || (dst_order < src_order && order_n >= dst_order)
+        {
+            if let Some(&n) = self.display_order_to_index.get(order_n as usize) {
+                let refuses = self
+                    .columns
+                    .get(n as usize)
+                    .map(|column| column.flags & column_flags::NO_REORDER != 0)
+                    .unwrap_or(false);
+                if refuses {
+                    dst_order = if order_n == src_order {
+                        src_order
+                    } else {
+                        order_n - reorder_dir
+                    };
+                    break;
+                }
+            }
+            order_n += reorder_dir;
+        }
+        dst_order
+    }
+
+    /// `TableQueueSetColumnDisplayOrder`: a header drag asks for a move, which the next `BeginTable`
+    /// applies. `layout_locked` mirrors the reference's early-out for a request that would not move.
+    pub fn queue_column_display_order(&mut self, column: usize, dst_order: i32) {
+        let Some(&src_order) = self.display_orders.get(column) else {
+            return;
+        };
+        self.reorder_column = column as i32;
+        self.reorder_column_dst_order = -1;
+        let dst_order = self.max_display_order_allowed(src_order, dst_order);
+        if self.layout_locked && dst_order == src_order {
+            return;
+        }
+        self.reorder_column_dst_order = dst_order;
+    }
+
+    /// `BeginTableEx`'s "Handle reordering request": applies the move queued by the previous frame.
+    pub fn apply_pending_reorder(&mut self) {
+        if self.reorder_column != -1 && self.reorder_column_dst_order != -1 {
+            let column = self.reorder_column as usize;
+            let dst_order = self.reorder_column_dst_order;
+            self.set_column_display_order(column, dst_order);
+            self.reorder_column_dst_order = -1;
+        }
+    }
+
     /// `TableUpdateLayout`, for the paths the first cut supports: every column is `WidthFixed` with
-    /// a width of its own, nothing is hidden, stretched or reordered, and the table neither scrolls
-    /// nor freezes.
+    /// a width of its own, nothing is hidden or stretched, the columns follow their display order,
+    /// and the table neither scrolls nor freezes.
     ///
     /// `cell_padding` is `ImGuiStyle::CellPadding` and `host_clip` is the window's clip rectangle,
     /// which the reference keeps as `table->HostClipRect`.
@@ -677,21 +813,24 @@ impl Table {
         }
 
         // The column chain: the first column starts one spacing before the table's content start,
-        // and each column begins where the previous one ended.
+        // each column begins where the previous one ended, and the walk follows the display order the
+        // reorder drag rewrites.
         let mut min_x = self.outer_rect.0.x + self.outer_padding_x - self.cell_spacing_x1;
-        let columns_count = self.columns.len() as i32;
-        for (n, column) in self.columns.iter_mut().enumerate() {
+        let display_order = self.display_order_to_index.clone();
+        for (order_n, column_n) in display_order.iter().enumerate() {
+            let n = *column_n as usize;
+            let next_enabled_column = display_order.get(order_n + 1).copied().unwrap_or(-1);
+            let sorted = self.sort_orders.get(n).copied().unwrap_or(-1) != -1;
+            let Some(column) = self.columns.get_mut(n) else {
+                continue;
+            };
             // `TableUpdateLayout` clears the status bits and marks the column it lays out.
             column.flags &= !column_flags::STATUS_MASK;
             column.flags |= column_flags::IS_ENABLED | column_flags::IS_VISIBLE;
-            if self.sort_orders.get(n).copied().unwrap_or(-1) != -1 {
+            if sorted {
                 column.flags |= column_flags::IS_SORTED;
             }
-            column.next_enabled_column = if (n as i32) + 1 < columns_count {
-                n as i32 + 1
-            } else {
-                -1
-            };
+            column.next_enabled_column = next_enabled_column;
             column.min_x = min_x;
             column.work_min_x = min_x + self.cell_spacing_x1 + self.cell_padding_x;
             column.max_x =
@@ -707,6 +846,7 @@ impl Table {
             column.content_max_x = column.work_min_x;
             min_x = column.max_x;
         }
+        // The columns keep their declared index as their identity; only the chain above moves.
 
         self.work_rect = self.outer_rect;
         self.bg_clip = self.inner_clip;

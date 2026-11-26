@@ -66,6 +66,7 @@ pub const SCENARIOS: &[&str] = &[
     "tables_column_hovered_flag",
     "tables_sort_specs",
     "tables_sort_tristate",
+    "tables_reorder",
     "tables_sort_arrow",
     "tables_sort_click",
     "tables_column_sorted_flag",
@@ -3332,6 +3333,85 @@ pub fn tables_column_hovered_flag_dump() -> String {
         ctx.end_table();
         if frame == 2 {
             let full = dump("tables_column_hovered_flag", ctx.draw_list());
+            for line in full.lines().skip(2) {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
+        ctx.end_window();
+        ctx.end_frame();
+    }
+    out
+}
+
+/// The `tables_reorder` scenario: dragging a header past its edge moves the column to the
+/// neighbour's display position. The drag queues the move and the next `BeginTable` applies it, so the
+/// frame the drag starts on still draws the old order. Two moves: B before A, then C before A. The
+/// hovered column at a fixed mouse position is the text proof that the display order changed.
+pub fn tables_reorder_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2, WindowFlags, column_flags, table_flags};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/tables_reorder.fixture.txt"
+    );
+    let text = std::fs::read_to_string(path).expect("tables reorder fixture");
+    let font = Font::from_pinned(&text).expect("font fixture");
+    let line_uvs = parse_line_uvs(&text);
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    ctx.set_line_uv_lines(line_uvs);
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario tables_reorder\n");
+
+    let xs = [
+        0.0f32, 180.0, 180.0, 180.0, 120.0, 120.0, 120.0, 120.0, 280.0, 280.0, 280.0, 170.0, 170.0,
+        170.0, 170.0, 170.0, 0.0,
+    ];
+    let ys = [
+        0.0f32, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0,
+        75.0, 0.0,
+    ];
+    let downs = [
+        false, false, true, true, true, true, false, false, false, true, true, true, true, false,
+        false, false, false,
+    ];
+    for frame in 0..17 {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 {
+            x: xs[frame],
+            y: ys[frame],
+        });
+        ctx.io_mut().mouse_down[0] = downs[frame];
+        ctx.begin_frame();
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+        );
+        ctx.begin_window_ex(
+            "S",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+            false,
+        );
+        let began = ctx.begin_table("ORDER", 3, table_flags::REORDERABLE, Vec2::default());
+        out.push_str(&format!("frame {frame} table begin {}\n", i32::from(began)));
+        ctx.table_setup_column("A", column_flags::WIDTH_FIXED, 60.0);
+        ctx.table_setup_column("B", column_flags::WIDTH_FIXED, 80.0);
+        ctx.table_setup_column("C", column_flags::WIDTH_FIXED, 100.0);
+        ctx.table_headers_row();
+        out.push_str(&format!(
+            "frame {frame} hovered {}\n",
+            ctx.table_get_hovered_column()
+        ));
+        ctx.end_table();
+        if matches!(frame, 0 | 4 | 5 | 12 | 13 | 15) {
+            out.push_str(&format!("frame {frame} dump\n"));
+            let full = dump("tables_reorder", ctx.draw_list());
             for line in full.lines().skip(2) {
                 out.push_str(line);
                 out.push('\n');
@@ -6858,6 +6938,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "tables_column_hovered_flag" => Some(tables_column_hovered_flag_dump()),
         "tables_sort_specs" => Some(tables_sort_specs_dump()),
         "tables_sort_tristate" => Some(tables_sort_tristate_dump()),
+        "tables_reorder" => Some(tables_reorder_dump()),
         "tables_sort_arrow" => Some(tables_sort_arrow_dump()),
         "tables_sort_click" => Some(tables_sort_click_dump()),
         "tables_column_sorted_flag" => Some(tables_column_sorted_flag_dump()),
