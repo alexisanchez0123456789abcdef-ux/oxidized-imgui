@@ -521,6 +521,25 @@ reference (`cross_extent = FontSize * 0.5 * 0.7071 - 1`).
 Lo cubren los goldens `window_icons`, `window_icons_states` y `window_icons_drag` (hover, pulsado y
 arrastre sobre el aspa). Consecuencia: **no hay que "portar CloseButton"**; si alguna vez hace falta un aspa
 suelta, lo correcto es exponer un `button` con ese dibujo, no duplicar el de la ventana.
+### Barra indeterminada: formula del reference y sonda lista
+
+Leido en `imgui_widgets.cpp` (1456-1477) y ya capturado con el driver: con `fraction < 0` la barra no lleva
+texto (salvo overlay explicito) y el relleno sale de
+
+```
+fill_width_n = 0.2
+fill_n0 = ImFmod(-fraction, 1) * (1 + 0.2) - 0.2
+fill_n1 = ImSaturate(fill_n0 + 0.2);  fill_n0 = ImSaturate(fill_n0)
+fill_x0 = ImLerp(bb.Min.x, bb.Max.x, fill_n0);  fill_x1 = ImLerp(..., fill_n1)
+if (fill_x0 < fill_x1) RenderRectFilledInRangeH(..., PlotHistogram, fill_x0, fill_x1, FrameRounding)
+```
+
+La sonda `progress_bar_indeterminate` ya esta en el driver (escenario **manual**, fuera de `SCENARIOS` y de
+`gen-golden.ps1`) con fracciones **fijas** (-1.25 y -1.75), asi que no depende del tiempo: para -1.25 da
+`fill_n0 = 0.10` y `fill_n1 = 0.30`. Golden de referencia capturado: items de `200x19`, `cmd_count 3`, `vtx_count 32`,
+`idx_count 78`. Los bordes caen en fraccionarios (0.1 y 0.3 de 200 px), que es justo lo que el relleno AA
+ya verificado sabe dibujar: la implementacion en el port es la formula de arriba mas un `add_rect_filled` con
+las dos x.
 ### DECISION: el golden del marco redondeado queda aparcado
 
 Tras cinco rondas (54, 57, 60, 62, 63) y tres hipotesis descartadas con medicion -- el **paso** de arco, el
