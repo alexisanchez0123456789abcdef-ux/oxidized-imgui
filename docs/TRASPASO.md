@@ -469,7 +469,8 @@ y **206** tras sacar la pila.
   fuente si la ventana se ajusta sola).
 - `CalcItemWidth` mira primero el `SetNextItemWidth` pendiente, luego la pila y luego el defecto; un
   ancho **negativo** es ese margen menos lo que queda de area de contenido desde el cursor (la misma
-  regla que `calc_item_size` usa para sus ejes negativos). El caso negativo no tiene golden propio.
+  regla que `calc_item_size` usa para sus ejes negativos). Medido tambien: con `PushItemWidth(-20)` el item mide **275** (284 - 20 + 4 + 7).
+
 ### Cursor por eje (peso 1): cerrada
 
 Golden `cursor_pos_xy`: `SetCursorPosX(10)` y luego `SetCursorPosY(30)` en una ventana de 300x200.
