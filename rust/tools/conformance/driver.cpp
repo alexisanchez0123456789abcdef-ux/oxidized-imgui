@@ -1397,6 +1397,54 @@ static void DumpTablesHeaderInRow()
     ImGui::End();
     ImGui::EndFrame();
 }
+// tables_column_flags: `TableGetColumnFlags` after the table policy has filled in the width kind,
+// the resize bit and the indentation bit, for a fixed table and for a stretch one.
+static void DumpTablesColumnFlags()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario tables_column_flags\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground;
+    ImGui::Begin("W", NULL, flags);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+
+    const bool began = ImGui::BeginTable("T", 3, ImGuiTableFlags_SizingFixedFit,
+        ImVec2(0.0f, 0.0f), 0.0f);
+    printf("table begin %d count %d\n", (int)began, ImGui::TableGetColumnCount());
+    ImGui::TableSetupColumn("A", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+    ImGui::TableSetupColumn("B");
+    ImGui::TableSetupColumn("C", ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_NoResize, 80.0f);
+    for (int n = 0; n < 3; n++)
+        printf("fixed column %d flags %08x\n", n, (unsigned)ImGui::TableGetColumnFlags(n));
+    ImGui::TableNextRow(ImGuiTableRowFlags_None, 20.0f);
+    ImGui::TableNextColumn();
+    for (int n = 0; n < 3; n++)
+        printf("fixed inside %d flags %08x\n", n, (unsigned)ImGui::TableGetColumnFlags(n));
+    ImGui::EndTable();
+    printf("after flags %08x\n", (unsigned)ImGui::TableGetColumnFlags(0));
+
+    const bool began2 = ImGui::BeginTable("T2", 2, ImGuiTableFlags_SizingStretchSame,
+        ImVec2(0.0f, 0.0f), 0.0f);
+    printf("table2 begin %d\n", (int)began2);
+    ImGui::TableSetupColumn("A");
+    ImGui::TableSetupColumn("B", ImGuiTableColumnFlags_WidthFixed, 40.0f);
+    for (int n = 0; n < 2; n++)
+        printf("stretch column %d flags %08x\n", n, (unsigned)ImGui::TableGetColumnFlags(n));
+    ImGui::EndTable();
+
+    DumpDrawListBody(*dl);
+    ImGui::End();
+    ImGui::EndFrame();
+}
 // tables_row_height: `TableNextRow(flags, min_height)` with a minimum taller than the cell contents.
 // Each row is 20 px instead of the 17 its text needs, and the rows below start lower.
 static void DumpTablesRowHeight()
@@ -5141,6 +5189,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "tables_set_column") == 0)
     {
         DumpTablesSetColumn();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "tables_column_flags") == 0)
+    {
+        DumpTablesColumnFlags();
         ImGui::DestroyContext();
         return 0;
     }
