@@ -69,7 +69,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **AA: segmentación automática de arcos** — golden arc_steps (radios 1..14)
 - **AA: puntos de bézier por subdivisión** — golden bezier_points
 - **AA: trazado de polilínea (miters, extremos abiertos)** — golden aa_polyline
-- **AA: trazo cerrado con trazo interior (bordes)** — golden aa_border
+- **AA: trazo cerrado con trazo interior (bordes) y AddRect sin redondeo (atajo alineado a píxel y caída a polilínea)** — goldens aa_border y rect_stroke
 - **AA: círculos** — golden aa_circles (14 círculos rellenos y contorneados bajo el corte arc-fast, con la tabla de segmentos cacheada y el radio mínimo con alfa)
 - **Estilo: colores, redondeos y bordes por defecto** — golden style_defaults
 - **Texto dibujado en la lista (geometría, sin UVs)** — golden text_draw (geometría; UVs omitidos por no ser reproducibles)

@@ -4108,6 +4108,15 @@ static void SceneRectFilled(ImDrawList& list)
 }
 
 // Public API, default inside stroke, one pixel thick.
+static void SceneRectStroke(ImDrawList& list)
+{
+    // `AddRect` without rounding: whole coordinates take the pixel-aligned fast path (one quad per
+    // side), a fractional rectangle takes the closed inside-stroked polyline.
+    list.AddRect(ImVec2(10.0f, 10.0f), ImVec2(60.0f, 50.0f), COL, 0.0f, 1.0f);
+    list.AddRect(ImVec2(80.0f, 10.0f), ImVec2(140.0f, 50.0f), COL, 0.0f, 3.0f);
+    list.AddRect(ImVec2(150.5f, 10.25f), ImVec2(200.5f, 50.75f), COL, 0.0f, 1.0f);
+}
+
 static void SceneLineH(ImDrawList& list)
 {
     list.AddLineH(10.0f, 30.0f, 20.0f, COL, 1.0f);
@@ -4573,6 +4582,7 @@ int main(int argc, char** argv)
     else if (strcmp(name, "prim_rect") == 0) scene = ScenePrimRect;
     else if (strcmp(name, "rect_filled") == 0) scene = SceneRectFilled;
     else if (strcmp(name, "line_h") == 0) scene = SceneLineH;
+    else if (strcmp(name, "rect_stroke") == 0) scene = SceneRectStroke;
     else if (strcmp(name, "aa_rect") == 0) scene = SceneAaRect;
     else if (strcmp(name, "aa_line") == 0) scene = SceneAaLine;
     else if (strcmp(name, "aa_bevel") == 0) scene = SceneAaBevel;

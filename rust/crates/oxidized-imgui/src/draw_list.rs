@@ -1096,6 +1096,183 @@ impl DrawList {
         );
     }
 
+    /// `ImDrawList::AddRect` for a rectangle **without rounding**, which is the shape a table's
+    /// outer border takes.
+    ///
+    /// Two paths, as in the reference: when the coordinates, the thickness and the pixel density are
+    /// all whole numbers it emits eight vertices and twenty-four indices (the four sides as quads,
+    /// white texture, opaque colour); otherwise it falls back to the closed inside-stroked polyline.
+    /// A rectangle thinner than its stroke collapses into a filled one.
+    pub fn add_rect_stroke(&mut self, min: Vec2, max: Vec2, col: ImU32, thickness: f32) {
+        const A_MASK: u32 = 0xFF00_0000;
+        if (col & A_MASK) == 0 {
+            return;
+        }
+        let flags = self.flags;
+        let stroke = stroke_pos(flags, draw_flags::STROKE_INSIDE);
+        if stroke == draw_flags::STROKE_LEGACY {
+            let half = if flags & draw_flags::AALINES != 0 {
+                0.50
+            } else {
+                0.49
+            };
+            let points = [
+                Vec2 {
+                    x: min.x + 0.50,
+                    y: min.y + 0.50,
+                },
+                Vec2 {
+                    x: max.x - 0.50,
+                    y: min.y + 0.50,
+                },
+                Vec2 {
+                    x: max.x - 0.50,
+                    y: max.y - half,
+                },
+                Vec2 {
+                    x: min.x + 0.50,
+                    y: max.y - half,
+                },
+            ];
+            self.add_polyline_max(
+                &points,
+                col,
+                thickness,
+                draw_flags::CLOSED | draw_flags::JOIN_MITER | draw_flags::STROKE_CENTER,
+                f32::MAX,
+            );
+            return;
+        }
+
+        // The outer boundary of the stroke depends on where the stroke sits.
+        let offset = if stroke == draw_flags::STROKE_CENTER {
+            thickness * 0.5
+        } else if stroke == draw_flags::STROKE_CENTER_BIASED {
+            self.center_biased_offset(thickness)
+        } else if stroke == draw_flags::STROKE_OUTSIDE {
+            thickness
+        } else {
+            0.0
+        };
+        let outer_min = Vec2 {
+            x: min.x - offset,
+            y: min.y - offset,
+        };
+        let outer_max = Vec2 {
+            x: max.x + offset,
+            y: max.y + offset,
+        };
+        let half_min_dim = ((outer_max.x - outer_min.x).min(outer_max.y - outer_min.y)) * 0.5;
+        if half_min_dim <= thickness {
+            self.add_rect_filled(outer_min, outer_max, col);
+            return;
+        }
+
+        let inv_fringe = 1.0 / self.fringe_scale;
+        let is_truncated = outer_min.x.fract() == 0.0
+            && outer_min.y.fract() == 0.0
+            && outer_max.x.fract() == 0.0
+            && outer_max.y.fract() == 0.0
+            && thickness.fract() == 0.0;
+        let fringe_is_integer = inv_fringe.fract() == 0.0;
+        if fringe_is_integer && is_truncated {
+            let screen_thickness = (thickness * inv_fringe) as i32;
+            if screen_thickness <= 0 {
+                return;
+            }
+            // Pixel aligned non-rounded rectangle: one quad per side, shared corners.
+            let t = screen_thickness as f32 * self.fringe_scale;
+            let uv = self.white_uv;
+            let base = self.vtx_buffer.len() as u32;
+            for (pos, col) in [
+                (outer_min, col),
+                (
+                    Vec2 {
+                        x: outer_min.x + t,
+                        y: outer_min.y + t,
+                    },
+                    col,
+                ),
+                (
+                    Vec2 {
+                        x: outer_max.x,
+                        y: outer_min.y,
+                    },
+                    col,
+                ),
+                (
+                    Vec2 {
+                        x: outer_max.x - t,
+                        y: outer_min.y + t,
+                    },
+                    col,
+                ),
+                (outer_max, col),
+                (
+                    Vec2 {
+                        x: outer_max.x - t,
+                        y: outer_max.y - t,
+                    },
+                    col,
+                ),
+                (
+                    Vec2 {
+                        x: outer_min.x,
+                        y: outer_max.y,
+                    },
+                    col,
+                ),
+                (
+                    Vec2 {
+                        x: outer_min.x + t,
+                        y: outer_max.y - t,
+                    },
+                    col,
+                ),
+            ] {
+                self.vtx_buffer.push(DrawVert { pos, uv, col });
+            }
+            for tri in [
+                [0u32, 3, 1],
+                [0, 2, 3],
+                [2, 5, 3],
+                [2, 4, 5],
+                [4, 7, 5],
+                [4, 6, 7],
+                [6, 1, 7],
+                [6, 0, 1],
+            ] {
+                for i in tri {
+                    self.idx_buffer.push((base + i) as ImDrawIdx);
+                }
+            }
+            if let Some(cmd) = self.cmd_buffer.last_mut() {
+                cmd.elem_count += 24;
+            }
+            return;
+        }
+
+        let points = [
+            outer_min,
+            Vec2 {
+                x: outer_max.x,
+                y: outer_min.y,
+            },
+            outer_max,
+            Vec2 {
+                x: outer_min.x,
+                y: outer_max.y,
+            },
+        ];
+        self.add_polyline_max(
+            &points,
+            col,
+            thickness,
+            draw_flags::CLOSED | draw_flags::JOIN_MITER | draw_flags::STROKE_INSIDE,
+            half_min_dim,
+        );
+    }
+
     /// `ImDrawList::AddRect` with defaults: a closed miter stroke placed inside the rectangle.
     pub fn add_rect_border_inside_aa(&mut self, min: Vec2, max: Vec2, col: ImU32, thickness: f32) {
         let points = [
