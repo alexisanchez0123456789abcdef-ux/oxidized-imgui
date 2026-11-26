@@ -21,6 +21,9 @@ const ARROW_RIGHT_SIN: f32 = 0.0;
 /// `g_ImGuiDirCosSin[ImGuiDir_Up]`: the sort arrow of a column sorted ascending.
 const ARROW_UP_COS: f32 = 0.0;
 const ARROW_UP_SIN: f32 = -1.0;
+/// `g_ImGuiDirCosSin[ImGuiDir_Left]`: the arrow an ArrowButton shows pointing left.
+const ARROW_LEFT_COS: f32 = -1.0;
+const ARROW_LEFT_SIN: f32 = 0.0;
 
 /// `Shortcut(ImGuiMod_Ctrl | key)` reduced to the ones a text field acts on.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -4967,6 +4970,60 @@ impl Context {
         );
         let pressed = self.button(label);
         self.pop_style_var();
+        pressed
+    }
+
+    /// `ImGui::ArrowButton`: a square framed button with an arrow inside, `GetFrameHeight()` on each
+    /// side. The arrow sits at `max(0, (size - FontSize) * 0.5)` from the frame corner, which for the
+    /// default style is three pixels.
+    pub fn arrow_button(&mut self, id_str: &str, left: bool) -> bool {
+        let size = Vec2 {
+            x: self.get_frame_height(),
+            y: self.get_frame_height(),
+        };
+        let id = self.get_id(id_str);
+        let min = self.window().cursor;
+        let pressed = self.interact(id, size);
+        let max = Vec2 {
+            x: min.x + size.x,
+            y: min.y + size.y,
+        };
+        let frame_color = if self.last_item_hovered {
+            self.style.color_u32(crate::style::Col::ButtonHovered)
+        } else {
+            self.style.color_u32(crate::style::Col::Button)
+        };
+        self.draw_list.prim_rect(min, max, frame_color);
+        if self.style.frame_border_size > 0.0 {
+            self.draw_list.add_aligned_rect_border(
+                min,
+                max,
+                self.style.color_u32(crate::style::Col::Border),
+                self.style.frame_border_size,
+            );
+        }
+        let offset = Vec2 {
+            x: ((size.x - self.font.size) * 0.5).max(0.0),
+            y: ((size.y - self.font.size) * 0.5).max(0.0),
+        };
+        let (cos_a, sin_a) = if left {
+            (ARROW_LEFT_COS, ARROW_LEFT_SIN)
+        } else {
+            (ARROW_RIGHT_COS, ARROW_RIGHT_SIN)
+        };
+        self.draw_list.add_arrow(
+            Vec2 {
+                x: min.x + offset.x,
+                y: min.y + offset.y,
+            },
+            self.style.color_u32(crate::style::Col::Text),
+            cos_a,
+            sin_a,
+            1.0,
+            self.font.size,
+            self.style.symbol_arrow_size_factor,
+            self.style.symbol_arrow_thickness_factor,
+        );
         pressed
     }
 

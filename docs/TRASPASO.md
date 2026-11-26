@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **139 escenarios** más la **prueba negativa**.
+   que ejecuta **140 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -49,7 +49,7 @@ comparar.
 - `master` limpio. **PRs fusionados: 158** al cerrar esta sesion (2026-11-26). Ese numero es una foto
   fija y **no se mantiene a mano**: el valor vivo sale de la busqueda de la API
   (`is:pr is:merged`). Si lees esto mucho despues, consultalo en vez de fiarte de la cifra.
-- **139 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- **140 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 69.9 %.** Proyecto (contando el arnés): **71.8 %**.
 - 42 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
@@ -479,6 +479,18 @@ tamano. Asi, olvidar el cuarto sitio ya no puede pasar en silencio.
 Regla que queda: al anadir un escenario hay que tocar **cuatro** sitios (driver, ``dump_for``,
 `SCENARIOS` y `gen-golden.ps1`); si falta `SCENARIOS` el golden es decorativo y el `cargo test` no
 lo nota.
+### ArrowButton (peso 1): cerrada
+
+Golden `arrow_button`: dos `ArrowButton` (izquierda y derecha) en la misma ventana. Medido: cada uno mide
+**19x19** (`GetFrameHeight()` en cada lado) y la lista entera coincide, flechas incluidas.
+
+- La flecha va en `max(0, (size - FontSize) * 0.5)` desde la esquina del marco: con 19 y 13 son **3 px**.
+- `ImGuiDir_Left` es `cos = -1, sin = 0` (`g_ImGuiDirCosSin`), la constante que faltaba en el port.
+- Se apoya en `add_arrow` con los mismos factores de estilo que la flecha de una ventana, asi que no hay
+  un segundo camino de dibujo de flechas.
+- **Trampa recordada**: el fixture de iconos exige un `NewFrame`/`EndFrame` **antes** de
+  `WriteWindowIconsFixture` y el port necesita `set_line_uv_lines(parse_line_uvs(...))`, o la flecha
+  revienta con "the atlas line-texture table is not pinned".
 ### SameLine con offset (peso 1): cerrada
 
 Golden `same_line_offset`: cuatro textos en la misma linea con `SameLine(50)`, `SameLine(0, 10)` y
@@ -996,7 +1008,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 139 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 140 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
