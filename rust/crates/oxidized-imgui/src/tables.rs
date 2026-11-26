@@ -27,6 +27,8 @@ pub mod table_flags {
     /// `ImGuiTableFlags_Resizable`: columns can be resized, so a fixed one keeps its request
     /// instead of tracking its contents.
     pub const RESIZABLE: u32 = 1 << 0;
+    /// `ImGuiTableFlags_Sortable`: the table exposes sort specs.
+    pub const SORTABLE: u32 = 1 << 3;
     /// `ImGuiTableFlags_RowBg`: every other row gets `TableRowBgAlt`.
     pub const ROW_BG: u32 = 1 << 6;
     /// `ImGuiTableFlags_SizingMask_`: the bits that pick the table sizing policy.
@@ -53,6 +55,10 @@ pub mod column_flags {
     pub const WIDTH_STRETCH: u32 = 1 << 3;
     /// `ImGuiTableColumnFlags_WidthMask_`.
     pub const WIDTH_MASK: u32 = 1 << 3 | 1 << 4;
+    /// `ImGuiTableColumnFlags_DefaultSort`: the column starts as the sorting one.
+    pub const DEFAULT_SORT: u32 = 1 << 2;
+    /// `ImGuiTableColumnFlags_NoSort`.
+    pub const NO_SORT: u32 = 1 << 9;
     /// `ImGuiTableColumnFlags_NoResize`.
     pub const NO_RESIZE: u32 = 1 << 5;
     /// `ImGuiTableColumnFlags_IndentEnable`: column 0 keeps the current indent.
@@ -158,6 +164,10 @@ pub struct Table {
     pub row_cells: Vec<(usize, u32)>,
     /// `table->RowBgColorCounter`: the odd/even counter of `RowBg`, which skips header rows.
     pub row_bg_counter: u32,
+    /// `table->SortSpecs.Specs`: the columns the caller should sort by, with their direction.
+    pub sort_specs: Vec<(usize, i32)>,
+    /// `table->IsSortSpecsDirty`: set when the specs changed and cleared when they are handed out.
+    pub sort_specs_dirty: bool,
     /// `table->HoveredColumnBody`: the column under the mouse, `-1` outside the table and the column
     /// count in the unused space right of the last one.
     pub hovered_column_body: i32,
@@ -313,6 +323,19 @@ impl Table {
                 stretch_sum_width_auto += column.width_auto;
                 count_stretch += 1.0;
             }
+        }
+
+        // `TableUpdateSpecs`: the columns that asked for the default sort become the first specs, in
+        // column order, and the specs are marked dirty so the caller re-sorts.
+        if self.flags & table_flags::SORTABLE != 0 && self.sort_specs.is_empty() {
+            for (n, column) in self.columns.iter().enumerate() {
+                if column.flags & column_flags::DEFAULT_SORT != 0
+                    && column.flags & column_flags::NO_SORT == 0
+                {
+                    self.sort_specs.push((n, 1));
+                }
+            }
+            self.sort_specs_dirty = !self.sort_specs.is_empty();
         }
 
         // [Part 3b] The request of each column and, for the stretch ones, its weight.
