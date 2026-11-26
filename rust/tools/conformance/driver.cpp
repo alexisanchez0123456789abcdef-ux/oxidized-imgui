@@ -4209,6 +4209,76 @@ static void DumpSeparatorText()
     }
 }
 
+// menu_bar_separator: a `Separator` inside a menu bar is the vertical form: a line as tall as the
+// line the bar already laid out, one pixel wide, that only advances the horizontal layout.
+static void FrameMenuBarSeparator(int frame)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("W", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar |
+        ImGuiWindowFlags_MenuBar);
+    if (ImGui::BeginMenuBar())
+    {
+        ImGui::MenuItem("File");
+        ImGui::Separator();
+        const ImVec2 wpos = ImGui::GetWindowPos();
+        const ImVec2 mn = PSub(ImGui::GetItemRectMin(), wpos);
+        const ImVec2 mx = PSub(ImGui::GetItemRectMax(), wpos);
+        const ImVec2 cursor = PSub(ImGui::GetCursorScreenPos(), wpos);
+        printf("frame %d sep item %08x %08x %08x %08x cursor %08x %08x\n", frame, Bits(mn.x),
+            Bits(mn.y), Bits(mx.x), Bits(mx.y), Bits(cursor.x), Bits(cursor.y));
+        ImGui::MenuItem("Edit");
+        ImGui::EndMenuBar();
+    }
+    ImGui::Button("x");
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpMenuBarSeparator()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario menu_bar_separator\n");
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    // Every letter of every string, including the button's label, which the reference bakes on demand.
+    const char bake_order[8] = { 'F', 'i', 'l', 'e', 'E', 'd', 't', 'x' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    WriteGlyphFixture(font, bake_order, 8);
+
+    for (int f = 0; f < 5; f++)
+    {
+        FrameMenuBarSeparator(f);
+        ImGui::Render();
+        ImDrawData* dd = ImGui::GetDrawData();
+        ImGuiContext& g = *GImGui;
+        printf("frame %d lists %d\n", f, dd->CmdListsCount);
+        for (int i = 0; i < dd->CmdListsCount; i++)
+        {
+            const ImDrawList* list = dd->CmdLists[i];
+            const char* name = "?";
+            for (int w = 0; w < g.Windows.Size; w++)
+                if (g.Windows[w]->DrawList == list)
+                    name = g.Windows[w]->Name;
+            printf("list %d %s\n", i, name);
+            DumpDrawListBody(*list);
+        }
+    }
+}
+
 // windows_move: dragging a window by its title bar and by its body, and the clamp that keeps it
 // reachable when it is dragged off the display. Only the positions are dumped: the geometry of a
 // window is what windows_order already covers.
@@ -6097,6 +6167,13 @@ int main(int argc, char** argv)
         return 0;
     }
 
+
+    if (strcmp(name, "menu_bar_separator") == 0)
+    {
+        DumpMenuBarSeparator();
+        ImGui::DestroyContext();
+        return 0;
+    }
 
     if (strcmp(name, "menu_bar") == 0)
     {
