@@ -2103,6 +2103,19 @@ impl DrawList {
         );
     }
 
+    /// `AddLineV` with one pixel and aligned coordinates: the reference's fast path, a `PrimRect`
+    /// from `(x, min_y)` to `(x + 1, max_y)`.
+    pub fn add_line_v(&mut self, x: f32, min_y: f32, max_y: f32, col: ImU32, thickness: f32) {
+        self.prim_rect(
+            Vec2 { x, y: min_y },
+            Vec2 {
+                x: x + thickness,
+                y: max_y,
+            },
+            col,
+        );
+    }
+
     pub fn vertices(&self) -> &[DrawVert] {
         &self.vtx_buffer
     }

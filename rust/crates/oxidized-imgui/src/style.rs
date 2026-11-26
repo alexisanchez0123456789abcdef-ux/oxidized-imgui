@@ -109,6 +109,10 @@ pub struct Style {
     pub table_row_bg: u32,
     /// `ImGuiCol_TableRowBgAlt`: the odd rows of a `RowBg` table, white at 6 % alpha.
     pub table_row_bg_alt: u32,
+    /// `ImGuiCol_TableBorderStrong`: the outer border and the line under a header row.
+    pub table_border_strong: u32,
+    /// `ImGuiCol_TableBorderLight`: the borders between data rows and between columns.
+    pub table_border_light: u32,
     /// `Style::WindowMinSize`: the smallest size a requested window size is clamped to.
     pub window_min_size: Vec2,
     /// `Style::ScrollbarSize`: the width of a scrollbar, taken out of the window's interior.
@@ -172,6 +176,8 @@ impl Default for Style {
             table_header_bg: 0xFF4A_4747,
             table_row_bg: 0x0000_0000,
             table_row_bg_alt: 0x0FFF_FFFF,
+            table_border_strong: 0xFF73_6666,
+            table_border_light: 0xFF57_5252,
             window_min_size: Vec2 { x: 32.0, y: 32.0 },
             scrollbar_size: 14.0,
             scrollbar_padding: 2.0,
