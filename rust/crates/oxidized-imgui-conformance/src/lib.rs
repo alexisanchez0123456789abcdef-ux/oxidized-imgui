@@ -77,6 +77,7 @@ pub const SCENARIOS: &[&str] = &[
     "combo",
     "tooltip",
     "menu_bar",
+    "submenu",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -3465,6 +3466,81 @@ pub fn menu_bar_dump() -> String {
     }
     out
 }
+/// The `submenu` scenario: a menu-bar entry opens a child menu of its own, whose rows are menu
+/// items laid out in columns measured across the rows and locked from the previous frame.
+pub fn submenu_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/submenu.glyphs.txt"
+    );
+    let text = std::fs::read_to_string(path).expect("submenu fixture");
+    let font = Font::from_pinned(&text).expect("font fixture");
+    let line_uvs = parse_line_uvs(&text);
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    ctx.set_line_uv_lines(line_uvs);
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario submenu\n");
+
+    let steps = [
+        (0.0f32, 0.0f32, false),
+        (75.0, 68.0, false),
+        (75.0, 68.0, true),
+        (75.0, 68.0, false),
+        (100.0, 95.0, false),
+        (100.0, 95.0, true),
+        (100.0, 95.0, false),
+        (0.0, 0.0, false),
+        (0.0, 0.0, false),
+        (130.0, 62.0, false),
+        (0.0, 0.0, false),
+    ];
+    for (n, (mx, my, down)) in steps.iter().enumerate() {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: *mx, y: *my });
+        ctx.io_mut().mouse_down[0] = *down;
+        ctx.begin_frame();
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE
+                | WindowFlags::NO_SCROLLBAR
+                | WindowFlags::NO_RESIZE
+                | WindowFlags::MENU_BAR,
+        );
+        ctx.begin_window(
+            "W",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        ctx.begin_menu_bar();
+        if ctx.begin_menu("File") {
+            ctx.menu_item_ex("New", Some("Ctrl+N"));
+            ctx.menu_item("Open");
+            ctx.end_menu();
+        }
+        ctx.menu_item("Edit");
+        ctx.end_menu_bar();
+        ctx.button("x");
+        ctx.end_window();
+        ctx.end_frame();
+        let lists = ctx.render_lists();
+        out.push_str(&format!("frame {n} lists {}\n", lists.len()));
+        for (i, (name, list)) in lists.iter().enumerate() {
+            out.push_str(&format!("list {i} {name}\n"));
+            let body = dump("submenu", list);
+            for line in body.lines().skip(2) {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
+    }
+    out
+}
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -3512,6 +3588,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "combo" => Some(combo_dump()),
         "tooltip" => Some(tooltip_dump()),
         "menu_bar" => Some(menu_bar_dump()),
+        "submenu" => Some(submenu_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),

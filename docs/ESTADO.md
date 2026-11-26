@@ -1,10 +1,10 @@
 # Estado del proyecto
 
-_Actualizado: 2026-11-18. Generado desde `docs/progress.json`: no editar a mano._
+_Actualizado: 2026-11-25. Generado desde `docs/progress.json`: no editar a mano._
 
-## Reescritura a Rust: **61.7 %**
+## Reescritura a Rust: **62.2 %**
 
-Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 64.3 %.
+Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 64.8 %.
 
 Qué cuenta como hecho: solo lo que tiene una prueba que lo compara con el código C++ original.
 Un cambio de estado sin evidencia no sube el porcentaje.
@@ -13,7 +13,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 | --- | ---: | ---: |
 | Núcleo: contexto, IO, ventanas, identificadores, layout | 58 | 76 % |
 | Listas de dibujo y primitivas | 17 | 88 % |
-| Widgets | 27 | 78 % |
+| Widgets | 29 | 79 % |
 | Fuentes y texto | 13 | 15 % |
 | Docking y viewports | 10 | 0 % |
 | Backends y ejemplos | 8 | 0 % |
@@ -87,6 +87,8 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Popup como ventana: lista propia, fondo de popup, medida en el primer frame y z-orden** — golden popup (10 frames, 48770 bytes)
 - **Tooltip: ventana al ratón, sin ratón ni teclado, medida en el primer frame** — golden tooltip (6 frames, 19705 bytes)
 - **Barra de menús: franja, recorte propio, layout horizontal y entradas** — golden menu_bar (5 frames, 23068 bytes)
+- **Columnas de menú: anchos por columna acumulados en el frame y bloqueados desde el anterior, espaciado solo entre columnas que existen** — menu_columns::tests (6 casos) + golden submenu
+- **Submenús desplegables: ventana hija propia bajo la barra, filas a todo el ancho con etiqueta y atajo en sus columnas, cierre al elegir y foco del anfitrión** — golden submenu (11 frames, lista completa de 72305 bytes)
 - **UVs de texto con el atlas fijado por fixture** — golden text_draw con UVs + fixture text_draw.glyphs.txt
 - **Medida de texto (CalcTextSize) con tabla de avances fijada** — golden font_metrics
 - **Oráculo de constantes y layouts desde el C++** — rust/tools/oracle

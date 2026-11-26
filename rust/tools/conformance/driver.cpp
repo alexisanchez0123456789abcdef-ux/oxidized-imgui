@@ -2750,6 +2750,91 @@ static void DumpMenuBar()
         }
     }
 }
+// submenu: a menu-bar entry opens a child menu of its own. The child menu is a window that is
+// measured on its first frame and only draws from the second; its rows are menu items laid out in
+// columns whose widths are accumulated during a frame and locked from the previous one.
+static void FrameSubmenu(float mx, float my, bool down)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = down;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("W", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar |
+        ImGuiWindowFlags_MenuBar);
+    if (ImGui::BeginMenuBar())
+    {
+        if (ImGui::BeginMenu("File"))
+        {
+            ImGui::MenuItem("New", "Ctrl+N");
+            ImGui::MenuItem("Open");
+            ImGui::EndMenu();
+        }
+        ImGui::MenuItem("Edit");
+        ImGui::EndMenuBar();
+    }
+    ImGui::Button("x");
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpSubmenu()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario submenu\n");
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    // Every letter of every string, since the reference bakes on demand.
+    const char bake_order[16] = { 'F', 'i', 'l', 'e', 'N', 'w', 'C', 't', 'r', '+', 'O', 'p', 'n', 'E', 'd', 'x' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    WriteGlyphFixture(font, bake_order, 16);
+
+    // The bar runs across the top at y 60..79. Frame 2 presses "File", 3 releases it, 4 hovers the
+    // first row of the menu, 5 presses it and 6 releases it so the choice lands and the menu closes.
+    // Frame 9 then hovers "Edit", a plain menu item, whose box is only as tall as its label.
+    const float steps[11][3] = {
+        { 0.0f, 0.0f, 0.0f },
+        { 75.0f, 68.0f, 0.0f },
+        { 75.0f, 68.0f, 1.0f },
+        { 75.0f, 68.0f, 0.0f },
+        { 100.0f, 95.0f, 0.0f },
+        { 100.0f, 95.0f, 1.0f },
+        { 100.0f, 95.0f, 0.0f },
+        { 0.0f, 0.0f, 0.0f },
+        { 0.0f, 0.0f, 0.0f },
+        { 130.0f, 62.0f, 0.0f },
+        { 0.0f, 0.0f, 0.0f },
+    };
+    for (int f = 0; f < 11; f++)
+    {
+        FrameSubmenu(steps[f][0], steps[f][1], steps[f][2] != 0.0f);
+        ImGui::Render();
+        ImDrawData* dd = ImGui::GetDrawData();
+        ImGuiContext& g = *GImGui;
+        printf("frame %d lists %d\n", f, dd->CmdListsCount);
+        for (int i = 0; i < dd->CmdListsCount; i++)
+        {
+            const ImDrawList* list = dd->CmdLists[i];
+            const char* name = "?";
+            for (int w = 0; w < g.Windows.Size; w++)
+                if (g.Windows[w]->DrawList == list)
+                    name = g.Windows[w]->Name;
+            printf("list %d %s\n", i, name);
+            DumpDrawListBody(*list);
+        }
+    }
+}
 // cmd_offsets: two commands in one list, so each carries cumulative vertex/index offsets.
 
 static void DumpCmdOffsets()
@@ -3007,6 +3092,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "menu_bar") == 0)
     {
         DumpMenuBar();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "submenu") == 0)
+    {
+        DumpSubmenu();
         ImGui::DestroyContext();
         return 0;
     }
