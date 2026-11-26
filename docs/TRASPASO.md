@@ -85,6 +85,12 @@ Esto está aprendido a base de fallar, y ahorra sesiones enteras:
   devuelve `count 0`, y su golden dice `count 1` porque al generarse el ini ya tenía un `Sort`
   guardado—. Los escenarios nuevos se generan en un **directorio temporal sin `imgui.ini`** y con
   nombre de tabla propio, nunca desde la raíz del repo.
+- **La prueba negativa hecha a mano sólo vale si se confirma que la mutación se aplicó.** Verificado el
+  2026-11-26: cambiar un nibble de `tests/golden/prim_rect.txt` hace fallar `cargo test --test golden`
+  con `scenario prim_rect differs from the reference dump`; restaurar el fichero lo devuelve a verde. Pero
+  el primer intento mutaba `col ff00ff00`, que **no existe** en ese golden: la sustitucion fue un no-op,
+  la prueba paso, y eso parece una confirmacion cuando no lo es. Imprime o comprueba que el fichero
+  cambio (`changed: True`) antes de creerte el resultado. `gen-golden.ps1` lo hace por construccion.
 - **El golden se captura con la redirección de `cmd`, no con `>` de PowerShell**: `>` de PowerShell
   convierte los saltos a CRLF y el golden deja de coincidir byte a byte (el `cargo test` lo dice). Por
   eso `gen-golden.ps1` lanza el driver con `cmd /c`.
