@@ -79,6 +79,9 @@ pub struct TableColumn {
     pub work_max_x: f32,
     /// `column->ClipRect`: the span clipped to the table's inner clip.
     pub clip: [f32; 4],
+    /// `column->ContentMaxXUnfrozen`: the furthest the column's content reached this frame, which
+    /// decides whether the column can share a draw command with the others.
+    pub content_max_x: f32,
     /// `column->NextEnabledColumn`: the next visible column, `-1` for the last one.
     pub next_enabled_column: i32,
 }
@@ -312,6 +315,8 @@ impl Table {
                 column.max_x.min(self.inner_clip.1.x),
                 self.inner_clip.1.y,
             ];
+            // The content extent restarts at the column's work edge on every layout.
+            column.content_max_x = column.work_min_x;
             min_x = column.max_x;
         }
 
@@ -347,6 +352,12 @@ impl Table {
     /// The `TableEndCell` part that grows the row: the cell's content plus its vertical padding.
     pub fn end_cell(&mut self, cursor_max_y: f32) {
         self.row_pos_y2 = self.row_pos_y2.max(cursor_max_y + self.row_cell_padding_y);
+    }
+
+    /// `TableMergeDrawChannels`' test, which only looks at the right edge: a column whose content
+    /// stayed inside its clip can share a command with the others.
+    pub fn column_content_fits(&self, column: usize) -> bool {
+        self.columns[column].content_max_x <= self.columns[column].clip[2]
     }
 
     /// `TableGetCellBgRect`: the column's span clipped to the work rectangle, over the current row.

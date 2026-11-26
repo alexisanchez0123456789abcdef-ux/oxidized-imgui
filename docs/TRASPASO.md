@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **82 escenarios** más la **prueba negativa**.
+   que ejecuta **83 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **89 PRs** fusionados.
-- **82 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **90 PRs** fusionados.
+- **83 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 68.1 %.** Proyecto (contando el arnés): **70.3 %**.
 - 32 tests unitarios en 6 binarios.
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
@@ -113,7 +113,9 @@ contenido; `tables_headers`: la fila de cabecera con su banda y sus nombres, con
 `tables_stretch`: las columnas stretch de `SizingStretchSame`, con el resto del reparto al último;
 `tables_stretch_weights`: una columna fija y dos stretch con pesos 2 y 1;
 `tables_set_column`: celdas direccionadas con `TableSetColumnIndex` en cualquier orden;
-	ables_stretch_weights: una columna fija y dos stretch con pesos 2 y 1;
+`tables_names`: `TableGetColumnCount` y `TableGetColumnName` dentro y fuera de la tabla;
+`tables_header_id`: las etiquetas de cabecera cortadas en `##`;
+`tables_clip`: el recorte de una celda a su columna y los comandos por columna;
 `tables_row_height`: la altura mínima de fila de `TableNextRow`, que gana al contenido).
 
 La tabla completa, con el nombre del golden de cada fila, está en `rust/README.md`.
@@ -128,19 +130,14 @@ cerradas y su sección queda más abajo como referencia de lo ya medido. Lo que 
 
 Están hechos el primer corte (`tables_basic`), las cabeceras (`tables_headers`), las bandas de fila
 (`tables_rowbg`), el fondo de celda (`tables_cellbg`), los bordes (`tables_borders` y
-`tables_borders_outer`) y las columnas stretch de `SizingStretchSame` (`tables_stretch`). El resto
-del sistema, por orden de coste:
+`tables_borders_outer`), las columnas stretch (`tables_stretch` y `tables_stretch_weights`), la API
+de columnas (`tables_set_column`, `tables_names` y `tables_header_id`) y el recorte de celda con sus
+comandos por columna (`tables_clip`). El resto del sistema, por orden de coste:
 
 - **Políticas de tamaño que faltan**: el ancho automático por contenido (`WidthAuto` con su
   `AutoFitQueue`, que se ajusta a lo largo de varios frames) y el peso de `SizingStretchProp`
   derivado del contenido. `SizingStretchSame` y los pesos explícitos ya están.
-- **Recorte por celda y comandos por columna**: hoy el port dibuja el texto de una celda contra el
-  clip de la ventana. La referencia pone `window->ClipRect` al clip de la columna y, cuando el
-  contenido de una columna **se sale** de su rectángulo (`ContentMaxX > ClipRect.Max.x`), esa columna
-  no se fusiona con las demás: acaba en un comando propio con el clip de la columna (medido: con una
-  columna de 10 px y el texto "A00", el volcado da `cmd_count 2`, el primero con clip
-  `(68,68)-(82,259)` y 12 elementos, más un comando vacío con el clip de la ventana). Hace falta
-  modelar `TableMergeDrawChannels` (sólo compara `MaxX`) y el `ImDrawListSplitter`.
+
 - **Reordenar, congelar y el scroll propio de la tabla** (la tabla con `ScrollX`/`ScrollY` crea una
   ventana hija, con todo lo que eso arrastra).
 - Hover y clic de la cabecera (resalte `HeaderHovered`/`HeaderActive`, ordenar y arrastrar para
@@ -322,7 +319,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 82 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 83 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```

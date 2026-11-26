@@ -96,6 +96,7 @@ instead of against our own expectations:
 | Table explicit column addressing | `TableSetColumnIndex` moves between cells of one row in any order; the row grows to the tallest cell whatever order they are submitted in | `tables_set_column` golden |
 | Table column API | `TableGetColumnCount` reports the declared count, `TableGetColumnName` the label a column was declared with (empty before the declaration, null once the table is closed) and `TableGetColumnIndex` the column being built | `tables_names` golden |
 | Table header `##id` | a column label may carry a `##id` suffix: `TableGetColumnName` keeps the whole string while the header draws only what `FindRenderedTextEnd` leaves, so `Alpha##1` renders `Alpha` | `tables_header_id` golden |
+| Table cell clipping and per-column commands | the items of a cell are clipped to the column (`window.clip_rect` feeds the text's base clip); at `EndTable` the columns whose content stayed inside their clip share one window-clipped command and an overflowing column gets its own command with the column's clip, with the trailing empty command the merge leaves | `tables_clip` golden |
 
 The conformance driver is compiled with `/DIMGUI_DISABLE_SSE`: the reference's default `ImRsqrtPrecise` uses the SSE reciprocal-square-root estimate, whose last bits depend on the CPU model, which would make every AA golden machine-specific. Both sides take the exact `1/sqrt` path instead.
 
