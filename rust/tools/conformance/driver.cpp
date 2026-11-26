@@ -1897,6 +1897,74 @@ static void DumpTablesColumnHoveredFlag()
         ImGui::EndFrame();
     }
 }
+// tables_sort_click: clicking a header cycles its sort direction. The sequence covers the hover
+// latch the header needs before it presses, the release that applies the click (the arrow keeps the
+// old direction on that frame) and the frame after it, twice: ascending -> descending -> ascending.
+// The specs are handed out right after the header row, so their dirty flag shows the click too.
+static void DumpTablesSortClick()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario tables_sort_click\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[3] = { 'A', 'B', 'C' };
+    for (int i = 0; i < 3; i++)
+        baked->FindGlyph((ImWchar)bake_order[i]);
+    ImGui::NewFrame();
+    ImGui::EndFrame();
+    WriteWindowIconsFixture(font, bake_order, 3);
+
+    io.DeltaTime = 0.1f;
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground;
+    static const float xs[12] = { 0.0f, 100.0f, 100.0f, 100.0f, 100.0f, 100.0f, 100.0f, 100.0f,
+        100.0f, 100.0f, 0.0f, 0.0f };
+    static const float ys[12] = { 0.0f, 75.0f, 75.0f, 75.0f, 75.0f, 75.0f, 75.0f, 75.0f, 75.0f,
+        75.0f, 0.0f, 0.0f };
+    static const bool downs[12] = { false, false, true, true, false, false, true, true, false,
+        false, false, false };
+    for (int frame = 0; frame < 12; frame++)
+    {
+        io.MousePos = ImVec2(xs[frame], ys[frame]);
+        io.MouseDown[0] = downs[frame];
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+        ImGui::Begin("S", NULL, flags);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+
+        const bool began = ImGui::BeginTable("SORT", 3, ImGuiTableFlags_Sortable,
+            ImVec2(0.0f, 0.0f), 0.0f);
+        printf("frame %d table begin %d\n", frame, (int)began);
+        ImGui::TableSetupColumn("A", ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_DefaultSort, 60.0f);
+        ImGui::TableSetupColumn("B", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        ImGui::TableSetupColumn("C", ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_NoSort, 100.0f);
+        ImGui::TableHeadersRow();
+        const ImGuiTableSortSpecs* specs = ImGui::TableGetSortSpecs();
+        printf("frame %d specs %d count %d dirty %d", frame, specs != NULL,
+            specs ? specs->SpecsCount : -1, specs ? (int)specs->SpecsDirty : -1);
+        if (specs != NULL)
+            for (int n = 0; n < specs->SpecsCount; n++)
+                printf(" %d:%d", specs->Specs[n].ColumnIndex, (int)specs->Specs[n].SortDirection);
+        printf("\n");
+        ImGui::EndTable();
+        if (frame == 0 || frame == 2 || frame == 4 || frame == 5 || frame == 8 || frame == 9)
+        {
+            printf("frame %d dump\n", frame);
+            DumpDrawListBody(*dl);
+        }
+        ImGui::End();
+        ImGui::EndFrame();
+    }
+}
 // tables_sort_arrow: the sort arrow a sortable header draws for the columns the specs point at.
 // `SortMulti` lets two columns keep sort orders 0 and 1, so the second one also draws its order
 // number, and `PreferSortDescending` makes its arrow point down. The third column is `NoSort`, so it
@@ -5881,6 +5949,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "tables_sort_tristate") == 0)
     {
         DumpTablesSortTristate();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "tables_sort_click") == 0)
+    {
+        DumpTablesSortClick();
         ImGui::DestroyContext();
         return 0;
     }

@@ -63,6 +63,10 @@ pub mod column_flags {
     pub const DEFAULT_SORT: u32 = 1 << 2;
     /// `ImGuiTableColumnFlags_NoSort`.
     pub const NO_SORT: u32 = 1 << 9;
+    /// `ImGuiTableColumnFlags_NoSortAscending`: the column cannot be sorted ascending.
+    pub const NO_SORT_ASCENDING: u32 = 1 << 10;
+    /// `ImGuiTableColumnFlags_NoSortDescending`: the column cannot be sorted descending.
+    pub const NO_SORT_DESCENDING: u32 = 1 << 11;
     /// `ImGuiTableColumnFlags_PreferSortDescending`: the direction its `DefaultSort` starts with.
     pub const PREFER_SORT_DESCENDING: u32 = 1 << 15;
     /// `ImGuiTableColumnFlags_NoResize`.
@@ -87,6 +91,20 @@ pub mod column_flags {
 
 /// `TABLE_BORDER_SIZE`.
 const BORDER_SIZE: f32 = 1.0;
+
+/// The sort state a table keeps between frames, `ImGuiTable`'s sort fields that the reference keeps
+/// alive in the table it reuses (and reloads from its settings).
+#[derive(Clone, Debug, Default)]
+pub struct TableSortState {
+    /// `column->SortOrder` of every column.
+    pub orders: Vec<i32>,
+    /// `column->SortDirection` of every column.
+    pub directions: Vec<i32>,
+    /// `table->IsSortSpecsDirty`: the specs have to be rebuilt and the caller told to sort.
+    pub dirty: bool,
+    /// `table->SortSpecs.SpecsDirty`: stays set until the caller clears it.
+    pub specs_dirty: bool,
+}
 
 /// One column, `ImGuiTableColumn`, with the geometry `TableUpdateLayout` resolves for it.
 #[derive(Clone, Debug, Default)]
@@ -176,6 +194,9 @@ pub struct Table {
     pub sort_specs: Vec<(usize, i32)>,
     /// `table->IsSortSpecsDirty`: set when the specs changed and cleared when they are handed out.
     pub sort_specs_dirty: bool,
+    /// `table->SortSpecs.SpecsDirty`: what the caller reads. It is set whenever the specs are rebuilt
+    /// and stays set until the caller clears it, exactly as the reference documents.
+    pub sort_specs_public_dirty: bool,
     /// `column->SortOrder`: where the column sits in the specs, `-1` when it is not sorted.
     pub sort_orders: Vec<i32>,
     /// `column->SortDirection`: `0` none, `1` ascending, `2` descending.
@@ -287,6 +308,14 @@ impl Table {
             self.sort_specs_dirty = false;
             return;
         }
+        // `IsSortSpecsDirty` survives the rebuild: it comes from `BeginTable` on the first frame and
+        // from a click, and only `TableGetSortSpecs` clears it. The one case that re-arms it here is
+        // the reference's own test at the end of `TableUpdateLayout`: a sortable table with no specs
+        // and no `SortTristate` must ask the caller to sort.
+        let was_dirty = self.sort_specs_dirty;
+        if was_dirty {
+            self.sort_specs_public_dirty = true;
+        }
         let columns = self.columns.len();
         let mut sort_order_count = 0u32;
         let mut sort_order_mask = 0u64;
@@ -365,7 +394,8 @@ impl Table {
             }
         }
         self.sort_specs = specs;
-        self.sort_specs_dirty = !self.sort_specs.is_empty();
+        self.sort_specs_dirty = was_dirty
+            || (self.sort_specs.is_empty() && self.flags & table_flags::SORT_TRISTATE == 0);
     }
 
     /// `column->SortOrder`: where the column sits in the specs, `-1` when it is not sorted.
@@ -373,9 +403,111 @@ impl Table {
         self.sort_orders.get(column).copied().unwrap_or(-1)
     }
 
+    /// The sort state that has to outlive the frame, `TableSaveSettings`'s sort fields.
+    pub fn sort_state(&self) -> TableSortState {
+        TableSortState {
+            orders: self.sort_orders.clone(),
+            directions: self.sort_directions.clone(),
+            dirty: self.sort_specs_dirty,
+            specs_dirty: self.sort_specs_public_dirty,
+        }
+    }
+
+    /// Restores the state [`Self::sort_state`] saved, so the `DefaultSort` flags only pick the state
+    /// of a table that has none.
+    pub fn restore_sort_state(&mut self, state: &TableSortState) -> bool {
+        if state.orders.len() != self.columns.len() || state.directions.len() != self.columns.len()
+        {
+            return false;
+        }
+        self.sort_orders.clone_from(&state.orders);
+        self.sort_directions.clone_from(&state.directions);
+        self.sort_specs_dirty = state.dirty;
+        self.sort_specs_public_dirty = state.specs_dirty;
+        self.sort_state_loaded = true;
+        true
+    }
+
     /// `column->SortDirection`: `0` none, `1` ascending, `2` descending.
     pub fn sort_direction(&self, column: usize) -> i32 {
         self.sort_directions.get(column).copied().unwrap_or(0)
+    }
+
+    /// `column->SortDirectionsAvailList`: the directions clicking the column cycles through, in order.
+    /// `PreferSortDescending` moves descending to the front; `SortTristate` appends "none".
+    pub fn sort_directions_avail(&self, column: usize) -> Vec<i32> {
+        let flags = self
+            .columns
+            .get(column)
+            .map(|entry| entry.flags)
+            .unwrap_or(0);
+        let no_ascending = flags & column_flags::NO_SORT_ASCENDING != 0;
+        let no_descending = flags & column_flags::NO_SORT_DESCENDING != 0;
+        let prefer_descending = flags & column_flags::PREFER_SORT_DESCENDING != 0;
+        let mut avail = Vec::new();
+        if !prefer_descending && !no_ascending {
+            avail.push(1);
+        }
+        if prefer_descending && !no_descending {
+            avail.push(2);
+        }
+        if prefer_descending && !no_ascending {
+            avail.push(1);
+        }
+        if !prefer_descending && !no_descending {
+            avail.push(2);
+        }
+        if self.flags & table_flags::SORT_TRISTATE != 0 || avail.is_empty() {
+            avail.push(0);
+        }
+        avail
+    }
+
+    /// `TableGetColumnNextSortDirection`: the direction a click on the column would set. A column that
+    /// is not sorted takes the first available direction; the sorted one takes the next in the list.
+    pub fn next_sort_direction(&self, column: usize) -> i32 {
+        let avail = self.sort_directions_avail(column);
+        if avail.is_empty() {
+            return 0;
+        }
+        if self.sort_order(column) == -1 {
+            return avail[0];
+        }
+        let current = self.sort_direction(column);
+        match avail.iter().position(|direction| *direction == current) {
+            Some(at) => avail[(at + 1) % avail.len()],
+            None => 0,
+        }
+    }
+
+    /// `TableSetColumnSortDirection`: applies the direction a click produced. Unless `append` (which
+    /// needs `SortMulti` and Shift), the other columns lose their sort order and this one takes 0.
+    pub fn set_column_sort_direction(&mut self, column: usize, direction: i32, append: bool) {
+        let append = append && self.flags & table_flags::SORT_MULTI != 0;
+        let columns = self.columns.len();
+        if column >= columns {
+            return;
+        }
+        let mut sort_order_max = 0;
+        if append {
+            for n in 0..columns {
+                sort_order_max = sort_order_max.max(self.sort_order(n));
+            }
+        }
+        self.sort_directions[column] = direction;
+        if direction == 0 {
+            self.sort_orders[column] = -1;
+        } else if self.sort_order(column) == -1 || !append {
+            self.sort_orders[column] = if append { sort_order_max + 1 } else { 0 };
+        }
+        if !append {
+            for (n, order) in self.sort_orders.iter_mut().enumerate().take(columns) {
+                if n != column {
+                    *order = -1;
+                }
+            }
+        }
+        self.sort_specs_dirty = true;
     }
 
     /// `TableUpdateLayout`, for the paths the first cut supports: every column is `WidthFixed` with

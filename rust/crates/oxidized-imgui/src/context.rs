@@ -264,10 +264,11 @@ pub struct Context {
     table_last_outer_height: std::collections::HashMap<String, f32>,
     /// `table_instance->HoveredRowNext` from the last frame, which is what the next layout reads.
     table_hovered_row_next: std::collections::HashMap<String, i32>,
-    /// `column->SortOrder` and `column->SortDirection` from the last frame a table was built, by table
-    /// identifier: the reference keeps them in the `ImGuiTable` it reuses (and reloads them from its
-    /// settings), so a sort applied by a click survives to the frames that draw it.
-    table_sort_state: std::collections::HashMap<String, (Vec<i32>, Vec<i32>)>,
+    /// `column->SortOrder`, `column->SortDirection` and the two dirty flags of the sort specs from the
+    /// last frame a table was built, by table identifier: the reference keeps them in the `ImGuiTable`
+    /// it reuses (and reloads them from its settings), so a sort applied by a click survives to the
+    /// frames that draw it and only a first frame (or a click) asks the caller to sort.
+    table_sort_state: std::collections::HashMap<String, crate::tables::TableSortState>,
     /// `g.ActiveId` for the header cells: the one held with the mouse, until the button is released.
     header_active: Option<(String, usize)>,
     /// Per-window state between frames: position, size, scroll, content size and flags.
@@ -3144,15 +3145,13 @@ impl Context {
         if let Some(&next) = self.table_hovered_row_next.get(id) {
             table.hovered_row_next = next;
         }
-        // `TableLoadSettings`: the sort orders the table ended the previous frame with (the reference
-        // keeps them in the table it reuses and reloads them from its `.ini`), so the `DefaultSort`
-        // flags only pick the starting state of a table that has none.
-        if let Some((orders, directions)) = self.table_sort_state.get(id) {
-            if orders.len() == columns && directions.len() == columns {
-                table.sort_orders.clone_from(orders);
-                table.sort_directions.clone_from(directions);
-                table.sort_state_loaded = true;
-            }
+        // `TableLoadSettings`: the sort state the table ended the previous frame with (the reference
+        // keeps it in the table it reuses and reloads it from its `.ini`), so the `DefaultSort` flags
+        // only pick the starting state of a table that has none. The specs start dirty on the first
+        // frame, which is what tells the caller to sort.
+        table.sort_specs_dirty = true;
+        if let Some(state) = self.table_sort_state.get(id) {
+            table.restore_sort_state(state);
         }
         self.table = Some(table);
         self.table_id = Some(id.to_string());
@@ -3398,13 +3397,15 @@ impl Context {
             self.header_hovered_next = Some(key);
         }
         let hovered = over && key.is_some() && self.header_hovered_last == key;
-        // `ButtonBehavior`: pressing a hovered header takes `ActiveId` until the button is released.
+        // `ButtonBehavior`: pressing a hovered header takes `ActiveId` until the button is released,
+        // and the release over the item is the press that changes the sort order.
+        let mut pressed = false;
         if self.io.mouse_down[0] {
             if hovered {
                 self.header_active = key.clone();
             }
-        } else {
-            self.header_active = None;
+        } else if let Some(active) = self.header_active.take() {
+            pressed = hovered && key.as_ref() == Some(&active);
         }
         let held = key.is_some() && self.header_active == key;
         // A hovered cell takes `HeaderHovered`; a header outside a header row still paints its cell,
@@ -3463,6 +3464,17 @@ impl Context {
                 self.style.symbol_arrow_thickness_factor,
             );
         }
+        // `Handle clicking on column header to adjust Sort Order`, after the arrow was drawn: the
+        // direction the arrow shows changes on the next frame. Shift appends the column to the specs
+        // when the table allows more than one.
+        if pressed && sortable && !no_sort {
+            let shift = self.io.key_shift;
+            if let Some(mut table) = self.table.take() {
+                let next = table.next_sort_direction(column_n);
+                table.set_column_sort_direction(column_n, next, shift);
+                self.table = Some(table);
+            }
+        }
         let colour = self.style.color_u32(crate::style::Col::Text);
         self.draw_list
             .add_text(&font, font.size, label_pos, colour, shown);
@@ -3493,7 +3505,8 @@ impl Context {
     }
 
     /// `ImGui::TableGetSortSpecs`: the columns to sort by and whether they changed, or `None` when the
-    /// table is not sortable. Reading them clears the dirty flag, as the reference does.
+    /// table is not sortable. Reading them clears the internal dirty flag, as the reference does; the
+    /// flag it hands back is `SpecsDirty`, which stays set until the caller clears it.
     ///
     /// The reference locks the layout first, because building the specs is what linearizes the sort
     /// orders; that also makes the call usable before the first row.
@@ -3502,6 +3515,9 @@ impl Context {
         if let Some(mut table) = self.table.take() {
             if table.flags & crate::tables::table_flags::SORTABLE != 0 {
                 self.table_lock_layout(&mut table);
+                // `TableSortSpecsBuild`: a click during the header row changed the orders after the
+                // layout locked, so the specs are rebuilt here before they are handed out.
+                table.build_sort_specs();
             }
             self.table = Some(table);
         }
@@ -3510,9 +3526,17 @@ impl Context {
             return None;
         }
         let specs = table.sort_specs.clone();
-        let dirty = table.sort_specs_dirty;
+        let dirty = table.sort_specs_public_dirty;
         table.sort_specs_dirty = false;
         Some((specs, dirty))
+    }
+
+    /// Writing `specs->SpecsDirty = false` after sorting: only the flag the caller reads is cleared,
+    /// because the specs themselves are already up to date.
+    pub fn table_clear_sort_specs_dirty(&mut self) {
+        if let Some(table) = self.table.as_mut() {
+            table.sort_specs_public_dirty = false;
+        }
     }
 
     /// `ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0)`: the colour of the current row, which
@@ -3717,12 +3741,9 @@ impl Context {
                 .map(|column| column.content_width)
                 .collect();
             self.table_content_max_x.insert(id.clone(), extents);
-            // `TableSaveSettings` for the sort bits: the orders and directions the next frame starts
-            // from, kept by table identifier like the content extents.
-            self.table_sort_state.insert(
-                id,
-                (table.sort_orders.clone(), table.sort_directions.clone()),
-            );
+            // `TableSaveSettings` for the sort bits: the orders, the directions and the dirty flags the
+            // next frame starts from, kept by table identifier like the content extents.
+            self.table_sort_state.insert(id, table.sort_state());
         }
         // Back at the table's top-left and at the host's line start, then laid out as one item.
         if let Some(window) = self.windows.last_mut() {

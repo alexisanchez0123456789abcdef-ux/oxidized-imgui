@@ -67,6 +67,7 @@ pub const SCENARIOS: &[&str] = &[
     "tables_sort_specs",
     "tables_sort_tristate",
     "tables_sort_arrow",
+    "tables_sort_click",
     "tables_column_sorted_flag",
     "tables_after_end",
     "text_draw",
@@ -3331,6 +3332,103 @@ pub fn tables_column_hovered_flag_dump() -> String {
         ctx.end_table();
         if frame == 2 {
             let full = dump("tables_column_hovered_flag", ctx.draw_list());
+            for line in full.lines().skip(2) {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
+        ctx.end_window();
+        ctx.end_frame();
+    }
+    out
+}
+
+/// The `tables_sort_click` scenario: clicking a header cycles its sort direction, twice
+/// (ascending -> descending -> ascending). The frame sequence covers the hover latch the header needs
+/// before it can press, the press, and the release that applies the click — on that frame the arrow
+/// still shows the old direction, because the reference draws it before handling the click.
+///
+/// The specs are handed out right after the header row, so `SpecsDirty` shows what the caller sees:
+/// it is set when the specs are rebuilt and stays set until the caller clears it.
+pub fn tables_sort_click_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2, WindowFlags, column_flags, table_flags};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/tables_sort_click.fixture.txt"
+    );
+    let text = std::fs::read_to_string(path).expect("tables sort click fixture");
+    let font = Font::from_pinned(&text).expect("font fixture");
+    let line_uvs = parse_line_uvs(&text);
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    ctx.set_line_uv_lines(line_uvs);
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario tables_sort_click\n");
+
+    let xs = [
+        0.0f32, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 0.0, 0.0,
+    ];
+    let ys = [
+        0.0f32, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 0.0, 0.0,
+    ];
+    let downs = [
+        false, false, true, true, false, false, true, true, false, false, false, false,
+    ];
+    for frame in 0..12 {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 {
+            x: xs[frame],
+            y: ys[frame],
+        });
+        ctx.io_mut().mouse_down[0] = downs[frame];
+        ctx.begin_frame();
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+        );
+        ctx.begin_window_ex(
+            "S",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+            false,
+        );
+        let began = ctx.begin_table("SORT", 3, table_flags::SORTABLE, Vec2::default());
+        out.push_str(&format!("frame {frame} table begin {}\n", i32::from(began)));
+        ctx.table_setup_column(
+            "A",
+            column_flags::WIDTH_FIXED | column_flags::DEFAULT_SORT,
+            60.0,
+        );
+        ctx.table_setup_column("B", column_flags::WIDTH_FIXED, 80.0);
+        ctx.table_setup_column(
+            "C",
+            column_flags::WIDTH_FIXED | column_flags::NO_SORT,
+            100.0,
+        );
+        ctx.table_headers_row();
+        match ctx.table_get_sort_specs() {
+            Some((specs, dirty)) => {
+                out.push_str(&format!(
+                    "frame {frame} specs 1 count {} dirty {}",
+                    specs.len(),
+                    i32::from(dirty)
+                ));
+                for (column, direction) in &specs {
+                    out.push_str(&format!(" {column}:{direction}"));
+                }
+                out.push('\n');
+            }
+            None => out.push_str(&format!("frame {frame} specs 0 count -1 dirty -1\n")),
+        }
+        ctx.end_table();
+        if matches!(frame, 0 | 2 | 4 | 5 | 8 | 9) {
+            out.push_str(&format!("frame {frame} dump\n"));
+            let full = dump("tables_sort_click", ctx.draw_list());
             for line in full.lines().skip(2) {
                 out.push_str(line);
                 out.push('\n');
@@ -6761,6 +6859,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "tables_sort_specs" => Some(tables_sort_specs_dump()),
         "tables_sort_tristate" => Some(tables_sort_tristate_dump()),
         "tables_sort_arrow" => Some(tables_sort_arrow_dump()),
+        "tables_sort_click" => Some(tables_sort_click_dump()),
         "tables_column_sorted_flag" => Some(tables_column_sorted_flag_dump()),
         "tables_after_end" => Some(tables_after_end_dump()),
         "text_draw" => Some(text_draw_dump()),

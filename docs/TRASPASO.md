@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **101 escenarios** más la **prueba negativa**.
+   que ejecuta **102 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **108 PRs** fusionados.
-- **101 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **109 PRs** fusionados.
+- **102 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 68.1 %.** Proyecto (contando el arnés): **70.3 %**.
 - 32 tests unitarios en 6 binarios.
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
@@ -135,7 +135,9 @@ contenido; `tables_headers`: la fila de cabecera con su banda y sus nombres, con
 `tables_hovered`: `TableGetHoveredColumn` (inmediato) y `TableGetHoveredRow` (un frame de retraso);
 `tables_row_height`: la altura mínima de fila de `TableNextRow`, que gana al contenido;
 `tables_sort_arrow`: la flecha de orden que dibuja la cabecera de una tabla ordenable (trazo AA con la
-tabla de líneas en el fixture), con ascendente/descendente y el número de orden del segundo criterio.
+tabla de líneas en el fixture), con ascendente/descendente y el número de orden del segundo criterio;
+`tables_sort_click`: el clic de cabecera que alterna la dirección, con el frame del clic (flecha vieja)
+y el siguiente (flecha nueva).
 
 La tabla completa, con el nombre del golden de cada fila, está en `rust/README.md`.
 El detalle por pieza y su peso, en `docs/progress.json`.
@@ -152,23 +154,25 @@ Están hechos el primer corte (`tables_basic`), las cabeceras (`tables_headers`)
 `tables_borders_outer`), las columnas stretch (`tables_stretch` y `tables_stretch_weights`), la API
 de columnas (`tables_set_column`, `tables_names` y `tables_header_id`), el recorte de celda con sus
 comandos por columna (`tables_clip`), las specs de orden (`tables_sort_specs`, `tables_sort_tristate`
-y `tables_column_sorted_flag`) y la **flecha de orden** (`tables_sort_arrow`, con el número del
-segundo criterio y la dirección descendente). El resto del sistema, por orden de coste:
+y `tables_column_sorted_flag`), la **flecha de orden** (`tables_sort_arrow`, con el número del
+segundo criterio y la dirección descendente) y el **clic** que alterna la dirección
+(`tables_sort_click`). El resto del sistema, por orden de coste:
 
 - **Políticas de tamaño**: `SizingStretchSame`, los pesos explícitos y el ancho automático por
   contenido ya están; falta el peso de `SizingStretchProp` derivado del contenido (no el declarado).
 
-- **Reordenar, congelar y el scroll propio de la tabla** (la tabla con `ScrollX`/`ScrollY` crea una
-  ventana hija, con todo lo que eso arrastra). Medido: `TableSetupScrollFreeze(0, 1)` en una tabla sin
-  scroll deja el volcado **idéntico** al de no usarlo, así que su golden necesita recorte o scroll.
+- **Reordenar por arrastre** (la cabecera pulsada mueve la columna al lado del ratón, con
+  `TableQueueSetColumnDisplayOrder`), **congelar** filas/columnas y el **scroll propio de la tabla**
+  (la tabla con `ScrollX`/`ScrollY` crea una ventana hija, con todo lo que eso arrastra). Medido:
+  `TableSetupScrollFreeze(0, 1)` en una tabla sin scroll deja el volcado **idéntico** al de no usarlo,
+  así que su golden necesita recorte o scroll.
 - Abierto: con `RowBg` y **dos** columnas, la banda alterna del volcado de referencia sólo cubre
   `68..132` (la primera columna) en vez de `68..220`; hace falta medir de dónde sale ese recorte antes
   de portarlo. Con una columna el golden `tables_rowbg_headers` cuadra.
-- El **clic** de cabecera que cambia las specs (el estado y la flecha ya están: `TableGetSortSpecs`,
-  `tables_sort_tristate`, `IsSorted` y `tables_sort_arrow`), arrastrar para reordenar, y
-  `TableGetHoveredColumn`/`Row`. Hover (`tables_header_hover`) y pulsado (`tables_header_active`) ya
-  están: las cabeceras usan `AllowOverlap`, así que sólo reportan hover si ya lo tenían el frame
-  anterior y por eso el resalte aparece en el **tercer** frame.
+- Abierto: `TableGetHoveredColumn`/`Row` ya están (`tables_hovered`); hover
+  (`tables_header_hover`) y pulsado (`tables_header_active`) también: las cabeceras usan
+  `AllowOverlap`, así que sólo reportan hover si ya lo tenían el frame anterior y por eso el resalte
+  aparece en el **tercer** frame. Queda el **menú contextual** de la cabecera.
 
 Cifras ya medidas que sirven de contrato (ventana de 400×300 en (40,40), padding 8, fuente 13 px):
 
@@ -287,6 +291,30 @@ descendente):
   eligen el estado inicial de una tabla que no tiene ninguno. Sin eso, el clic del siguiente corte se
   perdería al re-declarar las columnas.
 
+### Tablas, clic de orden (peso 1): cerrada
+
+El clic de cabecera que cambia las specs, con el golden `tables_sort_click` (12 frames: reposo, entrada
+del ratón, pulsación, mantenido, suelte y el frame siguiente, dos veces para asc → desc → asc):
+
+- El clic es **soltar sobre la cabecera que se pulsó** (`ButtonBehavior` con `AllowOverlap`), y se
+  aplica **después** de dibujar la flecha: el frame del suelte aún muestra la flecha vieja y el
+  siguiente la nueva. Ese desfase es la mitad del golden.
+- `TableGetColumnNextSortDirection`: la lista de direcciones disponibles es `[asc, desc]`
+  (`PreferSortDescending` las intercambia y `SortTristate` añade "none" al final); una columna sin
+  orden toma la primera, la ordenada toma la siguiente de forma cíclica.
+- `TableSetColumnSortDirection`: sin `SortMulti` —o sin Shift— las demás columnas pierden su orden y
+  esta toma 0; con `append` toma `max + 1`.
+- **`SpecsDirty` (el que lee el llamante) no se limpia solo**: se pone al reconstruir las specs y
+  sigue a 1 hasta que el llamante lo escribe a false. El flag interno `IsSortSpecsDirty` es el que se
+  limpia al entregarlas. Por eso el golden imprime `dirty 1` en los 12 frames: el escenario nunca
+  limpia `SpecsDirty`. En el port, `Table::sort_specs_public_dirty` es ese flag y
+  `Context::table_clear_sort_specs_dirty` es la escritura del llamante.
+- La sonda `probe-sortclick` (en `rust/tools/conformance/out/`) fue lo que lo aclaró: leyendo
+  `IsSortSpecsDirty` sale 0 desde el segundo frame, mientras que el `specs->SpecsDirty` que imprime el
+  driver sale 1 siempre.
+- El estado de orden persiste por id de tabla (`Context::table_sort_state`, ya usado por la flecha);
+  sin eso el clic se perdería al re-declarar las columnas en el frame siguiente.
+
 ### Entrada de texto (peso 4): cerrada
 
 La pieza grande que quedó cerrada entre los PRs 71 y 76: estado de edición, cursor, selección,
@@ -378,7 +406,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 101 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 102 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
