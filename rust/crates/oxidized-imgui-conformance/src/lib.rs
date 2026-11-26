@@ -108,6 +108,7 @@ pub const SCENARIOS: &[&str] = &[
     "progress_bar",
     "text_colors",
     "label_text",
+    "bullet_text",
     "window_scroll",
     "window_scrollbar",
     "window_scrollbar_drag",
@@ -6131,6 +6132,66 @@ pub fn label_text_dump() -> String {
     out
 }
 
+/// The `bullet_text` scenario: `BulletText` is one item that holds the disc and the text, with the
+/// text starting at `FontSize + FramePadding.x * 2` from the item's left edge.
+pub fn bullet_text_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2, WindowFlags};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/bullet_text.glyphs.txt"
+    );
+    let glyphs = std::fs::read_to_string(path).expect("bullet text fixture");
+    let font = Font::from_pinned(&glyphs).expect("font fixture");
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario bullet_text\n");
+
+    for frame in 0..2 {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+        ctx.io_mut().mouse_down[0] = false;
+        ctx.begin_frame();
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+        );
+        ctx.begin_window_ex(
+            "W",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+            true,
+        );
+        let window_pos = ctx.window().pos;
+        for (name, text) in [("first", "A"), ("second", "B")] {
+            ctx.bullet_text(text);
+            let (min, max) = (ctx.item_rect_min(), ctx.item_rect_max());
+            out.push_str(&format!(
+                "frame {frame} {name} item {:08x} {:08x} {:08x} {:08x}\n",
+                bits(min.x - window_pos.x),
+                bits(min.y - window_pos.y),
+                bits(max.x - window_pos.x),
+                bits(max.y - window_pos.y)
+            ));
+        }
+        ctx.end_window();
+        if frame == 1 {
+            let body = dump("bullet_text", ctx.draw_list());
+            for line in body.lines().skip(2) {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
+        ctx.end_frame();
+    }
+    out
+}
+
 /// The `windows_move` scenario: dragging one window by its title bar and by its body, and the clamp
 /// that keeps it reachable when it is dragged off the display.
 ///
@@ -8078,6 +8139,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "progress_bar" => Some(progress_bar_dump()),
         "text_colors" => Some(text_colors_dump()),
         "label_text" => Some(label_text_dump()),
+        "bullet_text" => Some(bullet_text_dump()),
         "window_scroll" => Some(window_scroll_dump()),
         "window_scrollbar" => Some(window_scrollbar_dump()),
         "window_scrollbar_drag" => Some(window_scrollbar_drag_dump()),

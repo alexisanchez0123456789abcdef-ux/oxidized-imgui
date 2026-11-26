@@ -2,9 +2,9 @@
 
 _Actualizado: 2026-11-26. Generado desde `docs/progress.json`: no editar a mano._
 
-## Reescritura a Rust: **69.4 %**
+## Reescritura a Rust: **69.7 %**
 
-Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 71.4 %.
+Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 71.6 %.
 
 Qué cuenta como hecho: solo lo que tiene una prueba que lo compara con el código C++ original.
 Un cambio de estado sin evidencia no sube el porcentaje.
@@ -13,7 +13,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 | --- | ---: | ---: |
 | Núcleo: contexto, IO, ventanas, identificadores, layout | 59 | 76 % |
 | Listas de dibujo y primitivas | 18 | 100 % |
-| Widgets | 36 | 97 % |
+| Widgets | 37 | 97 % |
 | Fuentes y texto | 13 | 15 % |
 | Docking y viewports | 10 | 0 % |
 | Backends y ejemplos | 8 | 0 % |
@@ -80,6 +80,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Botón: reposo, hover y activo comparados** — golden button_states
 - **Botón: borde de marco (FrameBorderSize)** — golden button_border
 - **Label y checkbox: rectángulo y alternancia** — golden widgets_basic
+- **BulletText: un solo ítem con el disco y el texto sangrado a FontSize + FramePadding.x*2** — golden bullet_text (dos entradas, con el rectángulo del ítem y la lista)
 - **LabelText: valor en el ancho del ítem y etiqueta al lado con ItemInnerSpacing y FramePadding** — golden label_text (ítem con etiqueta y sin ella, con el rectángulo del ítem y la lista)
 - **TextColored y TextDisabled: color explícito empaquetado con ColorConvertFloat4ToU32 y alfa del estilo** — golden text_colors (Text normal, TextColored en rojo, TextDisabled y Text después, con los colores en la lista)
 - **ProgressBar: marco, parte rellena con PlotHistogram, overlay de porcentaje tras el relleno y ancho por defecto que llena el área de contenido** — golden progress_bar (4 barras: 25%, 75%, overlay propio y ancho por defecto, con el rectángulo del ítem y la lista)
