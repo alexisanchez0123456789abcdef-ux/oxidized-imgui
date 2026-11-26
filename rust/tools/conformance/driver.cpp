@@ -1116,6 +1116,51 @@ static void DumpTablesSetColumn()
     ImGui::EndFrame();
 }
 
+// tables_names: the table's public column API — `TableGetColumnCount`, `TableGetColumnName` and
+// `TableGetColumnIndex` — inside the table and after it closes.
+static void DumpTablesNames()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario tables_names\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground;
+    ImGui::Begin("W", NULL, flags);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+
+    const bool began = ImGui::BeginTable("T", 3, 0, ImVec2(0.0f, 0.0f), 0.0f);
+    printf("table begin %d\n", (int)began);
+    printf("count %d\n", ImGui::TableGetColumnCount());
+    printf("name before declaration %d '%s'\n", 0, ImGui::TableGetColumnName(0));
+    ImGui::TableSetupColumn("Alpha", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+    ImGui::TableSetupColumn("Beta", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+    ImGui::TableSetupColumn("Gamma", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+    for (int n = 0; n < ImGui::TableGetColumnCount(); n++)
+        printf("name %d '%s'\n", n, ImGui::TableGetColumnName(n));
+
+    ImGui::TableNextRow();
+    for (int n = 0; n < 3; n++)
+    {
+        ImGui::TableSetColumnIndex(n);
+        printf("inside name %d '%s' colindex %d\n", n, ImGui::TableGetColumnName(n),
+            ImGui::TableGetColumnIndex());
+    }
+    ImGui::EndTable();
+    printf("after count %d name0 '%s'\n", ImGui::TableGetColumnCount(),
+        ImGui::TableGetColumnName(0));
+
+    DumpDrawListBody(*dl);
+    ImGui::End();
+    ImGui::EndFrame();
+}
 // tables_row_height: `TableNextRow(flags, min_height)` with a minimum taller than the cell contents.
 // Each row is 20 px instead of the 17 its text needs, and the rows below start lower.
 static void DumpTablesRowHeight()
@@ -4860,6 +4905,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "tables_set_column") == 0)
     {
         DumpTablesSetColumn();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "tables_names") == 0)
+    {
+        DumpTablesNames();
         ImGui::DestroyContext();
         return 0;
     }

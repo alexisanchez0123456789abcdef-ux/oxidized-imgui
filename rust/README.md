@@ -94,6 +94,7 @@ instead of against our own expectations:
 | Table stretch columns | `ImGuiTableFlags_SizingStretchSame`: a column declared without a width flag takes the policy, the stretch columns share `width_avail - spacings - fixed requests` by weight, the width is truncated with the reference's `+0.01`, and the rounding remainder goes to the right-most stretch column | `tables_stretch` golden |
 | Table weighted stretch | `SizingStretchProp` with explicit weights: one fixed column keeps its width, then the two stretch columns divide what is left 2:1 (138 and 69, the latter taking the one-pixel remainder) | `tables_stretch_weights` golden |
 | Table explicit column addressing | `TableSetColumnIndex` moves between cells of one row in any order; the row grows to the tallest cell whatever order they are submitted in | `tables_set_column` golden |
+| Table column API | `TableGetColumnCount` reports the declared count, `TableGetColumnName` the label a column was declared with (empty before the declaration, null once the table is closed) and `TableGetColumnIndex` the column being built | `tables_names` golden |
 
 The conformance driver is compiled with `/DIMGUI_DISABLE_SSE`: the reference's default `ImRsqrtPrecise` uses the SSE reciprocal-square-root estimate, whose last bits depend on the CPU model, which would make every AA golden machine-specific. Both sides take the exact `1/sqrt` path instead.
 

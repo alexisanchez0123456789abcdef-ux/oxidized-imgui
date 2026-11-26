@@ -3293,6 +3293,21 @@ impl Context {
         }
     }
 
+    /// `ImGui::TableGetColumnCount`, and 0 when no table is open.
+    pub fn table_get_column_count(&self) -> usize {
+        self.table.as_ref().map(|t| t.columns.len()).unwrap_or(0)
+    }
+
+    /// `ImGui::TableGetColumnName`: the label a column was declared with. It is empty before the
+    /// declaration, and `None` once the table is closed (the reference returns NULL there).
+    pub fn table_get_column_name(&self, column: usize) -> Option<&str> {
+        let table = self.table.as_ref()?;
+        if !table.layout_locked && column >= table.decl_columns {
+            return Some("");
+        }
+        table.columns.get(column).map(|c| c.name.as_str())
+    }
+
     /// `ImGui::EndTable`: closes the row, finishes the table's height and lays the whole table out
     /// as one item, which leaves the cursor below it.
     pub fn end_table(&mut self) {
