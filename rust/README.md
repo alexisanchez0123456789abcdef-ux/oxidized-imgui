@@ -110,6 +110,7 @@ instead of against our own expectations:
 | Table `TableNextColumn` without a row | calling it before any row opens row 0 and its first cell, so a table can be filled without ever calling `TableNextRow` | `tables_column_bounds` golden |
 | Table cell background repetition | a second `TableSetBgColor(CellBg)` on the same cell replaces the first instead of stacking, while the next cell keeps its own colour | `tables_cell_bg_twice` golden |
 | Table hovered column flag | `TableGetColumnFlags` carries `IsHovered` (`1 << 27`) on the column whose clip holds the mouse, set on the same frame `TableGetHoveredColumn` reports it and cleared on the rest | `tables_column_hovered_flag` golden |
+| Table sort specs | a `Sortable` table exposes one spec per column declared with `DefaultSort` (ascending, in column order), `SpecsDirty` is set when the specs are built and cleared when they are handed out; a table that is not sortable returns none | `tables_sort_specs` golden |
 
 The conformance driver is compiled with `/DIMGUI_DISABLE_SSE`: the reference's default `ImRsqrtPrecise` uses the SSE reciprocal-square-root estimate, whose last bits depend on the CPU model, which would make every AA golden machine-specific. Both sides take the exact `1/sqrt` path instead.
 

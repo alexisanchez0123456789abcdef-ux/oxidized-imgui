@@ -1896,6 +1896,48 @@ static void DumpTablesColumnHoveredFlag()
         ImGui::EndFrame();
     }
 }
+// tables_sort_specs: `TableGetSortSpecs` right after the first row, on a sortable table whose second
+// column asked for the default sort.
+static void DumpTablesSortSpecs()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario tables_sort_specs\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground;
+    ImGui::Begin("W", NULL, flags);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+
+    const bool began = ImGui::BeginTable("T", 3, ImGuiTableFlags_Sortable, ImVec2(0.0f, 0.0f), 0.0f);
+    printf("table begin %d\n", (int)began);
+    ImGui::TableSetupColumn("A", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+    ImGui::TableSetupColumn("B", ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_DefaultSort, 80.0f);
+    ImGui::TableSetupColumn("C", ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_NoSort, 100.0f);
+    ImGui::TableNextRow(ImGuiTableRowFlags_None, 20.0f);
+    ImGui::TableNextColumn();
+    ImGui::Dummy(ImVec2(10.0f, 10.0f));
+
+    const ImGuiTableSortSpecs* specs = ImGui::TableGetSortSpecs();
+    printf("specs %d count %d dirty %d\n", specs != NULL, specs ? specs->SpecsCount : -1,
+        specs ? (int)specs->SpecsDirty : -1);
+    if (specs != NULL)
+        for (int n = 0; n < specs->SpecsCount; n++)
+            printf("spec %d column %d direction %d\n", n, specs->Specs[n].ColumnIndex,
+                (int)specs->Specs[n].SortDirection);
+
+    ImGui::EndTable();
+    DumpDrawListBody(*dl);
+    ImGui::End();
+    ImGui::EndFrame();
+}
 // tables_row_height: `TableNextRow(flags, min_height)` with a minimum taller than the cell contents.
 // Each row is 20 px instead of the 17 its text needs, and the rows below start lower.
 static void DumpTablesRowHeight()
@@ -5640,6 +5682,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "tables_set_column") == 0)
     {
         DumpTablesSetColumn();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "tables_sort_specs") == 0)
+    {
+        DumpTablesSortSpecs();
         ImGui::DestroyContext();
         return 0;
     }

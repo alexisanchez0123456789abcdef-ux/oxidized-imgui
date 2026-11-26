@@ -3390,6 +3390,19 @@ impl Context {
         self.table.as_ref().map(|t| t.columns.len()).unwrap_or(0)
     }
 
+    /// `ImGui::TableGetSortSpecs`: the columns to sort by and whether they changed, or `None` when the
+    /// table is not sortable. Reading them clears the dirty flag, as the reference does.
+    pub fn table_get_sort_specs(&mut self) -> Option<(Vec<(usize, i32)>, bool)> {
+        let table = self.table.as_mut()?;
+        if table.flags & crate::tables::table_flags::SORTABLE == 0 {
+            return None;
+        }
+        let specs = table.sort_specs.clone();
+        let dirty = table.sort_specs_dirty;
+        table.sort_specs_dirty = false;
+        Some((specs, dirty))
+    }
+
     /// `ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0)`: the colour of the current row, which
     /// the public call can set without the `RowBg` flag.
     pub fn table_set_row_bg_color(&mut self, color: u32) {
