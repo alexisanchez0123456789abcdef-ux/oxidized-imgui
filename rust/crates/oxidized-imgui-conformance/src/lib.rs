@@ -39,6 +39,7 @@ pub const SCENARIOS: &[&str] = &[
     "cmd_split",
     "aa_circles",
     "tables_basic",
+    "tables_headers",
     "text_draw",
     "button",
     "widgets_basic",
@@ -1376,6 +1377,105 @@ pub fn tables_basic_dump() -> String {
     ));
 
     let full = dump("tables_basic", ctx.draw_list());
+    for line in full.lines().skip(2) {
+        out.push_str(line);
+        out.push('\n');
+    }
+    ctx.end_window();
+    ctx.end_frame();
+    out
+}
+
+/// The `tables_headers` scenario: the same three fixed columns, but opened by `TableHeadersRow`.
+///
+/// It pins the header row (a `TableHeaderBg` band across the table, the column names in their
+/// cells), that the header row counts for `TableGetRowIndex`, and that the two data rows below it
+/// start at `y = 27` and `y = 44`.
+pub fn tables_headers_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2, WindowFlags, column_flags};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/tables_headers.glyphs.txt"
+    );
+    let glyphs = std::fs::read_to_string(path).expect("glyph fixture");
+    let font = Font::from_pinned(&glyphs).expect("glyph fixture");
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    ctx.io_mut().delta_time = 0.1;
+    ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+    ctx.io_mut().mouse_down[0] = false;
+    ctx.begin_frame();
+    ctx.set_next_window_flags(
+        WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+    );
+    ctx.begin_window_ex(
+        "W",
+        Some(Vec2 { x: 60.0, y: 60.0 }),
+        Some(Vec2 { x: 300.0, y: 200.0 }),
+        false,
+    );
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario tables_headers\n");
+
+    let window_pos = ctx.window().pos;
+    let local = |p: Vec2| Vec2 {
+        x: p.x - window_pos.x,
+        y: p.y - window_pos.y,
+    };
+    let began = ctx.begin_table("T", 3, 0, Vec2::default());
+    out.push_str(&format!("table begin {}\n", i32::from(began)));
+    ctx.table_setup_column("A", column_flags::WIDTH_FIXED, 60.0);
+    ctx.table_setup_column("B", column_flags::WIDTH_FIXED, 80.0);
+    ctx.table_setup_column("C", column_flags::WIDTH_FIXED, 100.0);
+
+    ctx.table_headers_row();
+    out.push_str(&format!(
+        "after headers rowindex {}\n",
+        ctx.table_get_row_index()
+    ));
+
+    for row in 0..2 {
+        ctx.table_next_row();
+        for col in 0..3 {
+            let visible = ctx.table_next_column();
+            let cursor = local(ctx.cursor_screen_pos());
+            out.push_str(&format!(
+                "cell {row} {col} visible {} cursor {:08x} {:08x} rowindex {} colindex {}\n",
+                i32::from(visible),
+                bits(cursor.x),
+                bits(cursor.y),
+                ctx.table_get_row_index(),
+                ctx.table_get_column_index()
+            ));
+            ctx.text(&format!("A{row}{col}"));
+            let min = local(ctx.item_rect_min());
+            let max = local(ctx.item_rect_max());
+            out.push_str(&format!(
+                "cell {row} {col} item {:08x} {:08x} {:08x} {:08x}\n",
+                bits(min.x),
+                bits(min.y),
+                bits(max.x),
+                bits(max.y)
+            ));
+        }
+    }
+
+    ctx.end_table();
+    let end_cursor = local(ctx.cursor_screen_pos());
+    out.push_str(&format!(
+        "after cursor {:08x} {:08x} rowindex {}\n",
+        bits(end_cursor.x),
+        bits(end_cursor.y),
+        ctx.table_get_row_index()
+    ));
+
+    let full = dump("tables_headers", ctx.draw_list());
     for line in full.lines().skip(2) {
         out.push_str(line);
         out.push('\n');
@@ -4426,6 +4526,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "cmd_split" => Some(cmd_split_dump()),
         "aa_circles" => Some(aa_circles_dump()),
         "tables_basic" => Some(tables_basic_dump()),
+        "tables_headers" => Some(tables_headers_dump()),
         "text_draw" => Some(text_draw_dump()),
         "button" => Some(button_dump()),
         "widgets_basic" => Some(widgets_basic_dump()),

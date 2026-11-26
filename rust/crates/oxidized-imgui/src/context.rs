@@ -238,6 +238,9 @@ pub struct Context {
     /// cell into its column's channel and merges them in column order at `EndTable`, which is why
     /// the index buffer of a table is *not* in drawing order while its vertices are.
     table_indices: Vec<Vec<crate::draw_list::ImDrawIdx>>,
+    /// The background channel of the splitter (`TABLE_DRAW_CHANNEL_BG0`), which the row backgrounds
+    /// use. It merges before every column channel.
+    table_bg_indices: Vec<crate::draw_list::ImDrawIdx>,
     /// Where the current cell's indices start in the list, so they can be moved to their channel.
     cell_index_start: usize,
     /// Per-window state between frames: position, size, scroll, content size and flags.
@@ -359,6 +362,7 @@ impl Default for Context {
             table: None,
             table_host: None,
             table_indices: Vec::new(),
+            table_bg_indices: Vec::new(),
             cell_index_start: 0,
             memory: Vec::new(),
             next_scroll: None,
@@ -3094,17 +3098,17 @@ impl Context {
         self.push_id(id);
         self.table_host = Some(TableHost { line_start_x });
         self.table_indices = vec![Vec::new(); columns];
+        self.table_bg_indices.clear();
         self.table = Some(crate::tables::Table::new(flags, columns, outer_rect));
         true
     }
 
     /// `ImGui::TableSetupColumn`: declares the next column, in order, before the first row.
     ///
-    /// The `label` is only read by the headers, which are not ported yet.
+    /// The `label` is the column name the headers draw.
     pub fn table_setup_column(&mut self, label: &str, flags: u32, width: f32) {
-        let _ = label;
         if let Some(table) = self.table.as_mut() {
-            table.setup_column(flags, width);
+            table.setup_column(label, flags, width);
         }
     }
 
@@ -3115,6 +3119,11 @@ impl Context {
 
     /// `ImGui::TableNextRow` with an explicit minimum height.
     pub fn table_next_row_min(&mut self, row_min_height: f32) {
+        self.table_next_row_flags(0, row_min_height);
+    }
+
+    /// `ImGui::TableNextRow` with row flags, which is how a header row marks itself.
+    pub fn table_next_row_flags(&mut self, row_flags: u32, row_min_height: f32) {
         let Some(mut table) = self.table.take() else {
             return;
         };
@@ -3123,7 +3132,8 @@ impl Context {
             self.table_end_row(&mut table);
         }
         table.row_cell_padding_y = self.style.cell_padding.y;
-        table.begin_row(row_min_height);
+        let header_bg = self.style.table_header_bg;
+        table.begin_row(row_min_height, row_flags, header_bg);
         // `TableBeginRow` restarts the row's own extent at its top.
         if let Some(window) = self.windows.last_mut() {
             window.cursor_max.y = table.row_pos_y1;
@@ -3149,7 +3159,8 @@ impl Context {
                 self.table_end_row(&mut table);
             }
             table.row_cell_padding_y = self.style.cell_padding.y;
-            table.begin_row(0.0);
+            let header_bg = self.style.table_header_bg;
+            table.begin_row(0.0, 0, header_bg);
             if let Some(window) = self.windows.last_mut() {
                 window.cursor_max.y = table.row_pos_y1;
             }
@@ -3157,6 +3168,101 @@ impl Context {
         }
         self.table = Some(table);
         true
+    }
+
+    /// `ImGui::TableSetColumnIndex`: moves to a specific column, closing the current cell first.
+    pub fn table_set_column_index(&mut self, column: usize) -> bool {
+        let Some(mut table) = self.table.take() else {
+            return false;
+        };
+        self.table_lock_layout(&mut table);
+        if column >= table.columns.len() {
+            self.table = Some(table);
+            return false;
+        }
+        if table.current_column != column as i32 {
+            if table.current_column != -1 {
+                self.table_end_cell(&mut table);
+            }
+            self.table_begin_cell(&mut table, column);
+        }
+        self.table = Some(table);
+        true
+    }
+
+    /// `ImGui::TableHeadersRow`: one header row holding the declared column names.
+    ///
+    /// The row is as tall as the tallest name plus two cell paddings, it paints `TableHeaderBg`
+    /// across the whole table width, and it counts for [`Self::table_get_row_index`].
+    pub fn table_headers_row(&mut self) {
+        let Some(mut table) = self.table.take() else {
+            return;
+        };
+        self.table_lock_layout(&mut table);
+        let mut row_height = self.font.size;
+        for column in &table.columns {
+            row_height = row_height.max(self.font.calc_text_size(&column.name, self.font.size).y);
+        }
+        row_height += self.style.cell_padding.y * 2.0;
+        let names: Vec<String> = table.columns.iter().map(|c| c.name.clone()).collect();
+        self.table = Some(table);
+        self.table_next_row_flags(crate::tables::table_flags::ROW_HEADERS, row_height);
+        for (n, name) in names.iter().enumerate() {
+            if !self.table_set_column_index(n) {
+                continue;
+            }
+            self.table_header(name);
+        }
+    }
+
+    /// `ImGui::TableHeader`: the label of one header cell. Its item is the whole cell, not the text
+    /// box, which is what `GetItemRect` reports while the label is being submitted.
+    ///
+    /// Hover, click, sorting and the reorder drag are not ported: this only lays the label out.
+    pub fn table_header(&mut self, label: &str) {
+        let (cell, row_min_height, row_padding_y) = {
+            let Some(table) = self.table.as_ref() else {
+                return;
+            };
+            if table.current_column < 0 {
+                return;
+            }
+            let column_n = table.current_column as usize;
+            (
+                table.cell_rect(column_n),
+                table.row_min_height,
+                table.row_cell_padding_y,
+            )
+        };
+        let font = self.font.clone();
+        let label_pos = self.window().cursor;
+        let label_size = font.calc_text_size(label, font.size);
+        // A label is as tall as its text, or as the row minus its padding, whichever is more.
+        let label_height = label_size.y.max(row_min_height - row_padding_y * 2.0);
+        let bb = (
+            cell.0,
+            Vec2 {
+                x: cell.1.x,
+                y: cell
+                    .1
+                    .y
+                    .max(cell.0.y + label_height + self.style.cell_padding.y * 2.0),
+            },
+        );
+        let colour = self.style.color_u32(crate::style::Col::Text);
+        self.draw_list
+            .add_text(&font, font.size, label_pos, colour, label);
+        self.dummy(Vec2 {
+            x: 0.0,
+            y: label_height,
+        });
+        if let Some(window) = self.windows.last_mut() {
+            window.last_min = bb.0;
+            window.last_max = bb.1;
+            window.has_item = true;
+            // `window->DC.CursorPos.y -= ItemSpacing.y * 0.5f`.
+            window.cursor.y -= self.style.item_spacing.y * 0.5;
+        }
     }
 
     /// `ImGui::EndTable`: closes the row, finishes the table's height and lays the whole table out
@@ -3172,8 +3278,15 @@ impl Context {
         // `ImCeil(RowPosY2)`: the table is as tall as the bottom of its last row.
         let inner_content_max_y = table.row_pos_y2.ceil();
         table.outer_rect.1.y = table.outer_rect.1.y.max(inner_content_max_y);
-        // `ImDrawListSplitter::Merge`: the column channels go back to the list in column order, so
+        // `ImDrawListSplitter::Merge`: the background channel first, then the column channels, so
         // the vertices stay where they were drawn and only the indices are regrouped.
+        let background = core::mem::take(&mut self.table_bg_indices);
+        if !background.is_empty() {
+            self.draw_list.idx_buffer.extend_from_slice(&background);
+            if let Some(cmd) = self.draw_list.cmd_buffer.last_mut() {
+                cmd.elem_count += background.len() as u32;
+            }
+        }
         for channel in core::mem::take(&mut self.table_indices) {
             self.draw_list.idx_buffer.extend_from_slice(&channel);
             if let Some(cmd) = self.draw_list.cmd_buffer.last_mut() {
@@ -3224,6 +3337,28 @@ impl Context {
         }
         if let Some(window) = self.windows.last_mut() {
             window.cursor.y = table.row_pos_y2;
+        }
+        // `TableEndRow` paints the row background, soft-clipped to `BgClipRect`, into the background
+        // channel so it merges before the columns.
+        if let Some(color) = table.row_bg0 {
+            let clip = table.bg_clip;
+            let min = Vec2 {
+                x: table.work_rect.0.x.max(clip.0.x),
+                y: table.row_pos_y1.max(clip.0.y),
+            };
+            let max = Vec2 {
+                x: table.work_rect.1.x.min(clip.1.x),
+                y: table.row_pos_y2.min(clip.1.y),
+            };
+            if min.y < max.y {
+                let start = self.draw_list.idx_buffer.len();
+                self.draw_list.add_rect_filled(min, max, color);
+                let tail = self.draw_list.idx_buffer.split_off(start);
+                if let Some(cmd) = self.draw_list.cmd_buffer.last_mut() {
+                    cmd.elem_count -= tail.len() as u32;
+                }
+                self.table_bg_indices.extend_from_slice(&tail);
+            }
         }
         table.is_inside_row = false;
     }

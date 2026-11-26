@@ -97,7 +97,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Barra de menús: franja, recorte propio, layout horizontal y entradas** — golden menu_bar (5 frames, 23068 bytes)
 - **Columnas de menú: anchos por columna acumulados en el frame y bloqueados desde el anterior, espaciado solo entre columnas que existen** — menu_columns::tests (6 casos) + golden submenu
 - **Submenús desplegables: ventana hija propia bajo la barra, filas a todo el ancho con etiqueta y atajo en sus columnas, cierre al elegir y foco del anfitrión** — golden submenu (11 frames, lista completa de 72305 bytes)
-- **Tablas, primer corte: columnas fijas, filas que crecen con su contenido, relleno y espaciado de celda, y los índices agrupados por columna como el splitter** — golden tables_basic (3 columnas de 60/80/100 y dos filas de texto: cursor, rect de ítem, índices y cursor final)
+- **Tablas, primer corte: columnas fijas, filas que crecen con su contenido, relleno y espaciado de celda, índices agrupados por columna como el splitter y cabeceras (banda TableHeaderBg, nombres en sus celdas y su fila contada por TableGetRowIndex)** — goldens tables_basic y tables_headers
 - **UVs de texto con el atlas fijado por fixture** — golden text_draw con UVs + fixture text_draw.glyphs.txt
 - **Medida de texto (CalcTextSize) con tabla de avances fijada** — golden font_metrics
 - **Oráculo de constantes y layouts desde el C++** — rust/tools/oracle

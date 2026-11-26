@@ -20,6 +20,8 @@ pub mod table_flags {
     pub const NO_PAD_OUTER_X: u32 = 1 << 22;
     /// `ImGuiTableFlags_NoPadInnerX`.
     pub const NO_PAD_INNER_X: u32 = 1 << 23;
+    /// `ImGuiTableRowFlags_Headers`: the row holds column headers.
+    pub const ROW_HEADERS: u32 = 1 << 0;
 }
 
 /// `ImGuiTableColumnFlags`: the column bits the layout reads.
@@ -34,8 +36,10 @@ pub mod column_flags {
 const BORDER_SIZE: f32 = 1.0;
 
 /// One column, `ImGuiTableColumn`, with the geometry `TableUpdateLayout` resolves for it.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct TableColumn {
+    /// `column->NameOffset` resolved: the label `TableSetupColumn` was given.
+    pub name: String,
     pub flags: u32,
     /// `column->WidthRequest`: what `TableSetupColumn` asked for.
     pub width_request: f32,
@@ -85,6 +89,15 @@ pub struct Table {
     pub layout_locked: bool,
     /// `table->DeclColumnsCount`: how many `TableSetupColumn` calls the layout may use.
     pub decl_columns: usize,
+    /// `table->RowFlags` and `table->RowMinHeight` of the row being built.
+    pub row_flags: u32,
+    pub row_min_height: f32,
+    /// `table->RowBgColor[0]`: the background the row paints before the next one starts.
+    pub row_bg0: Option<u32>,
+    /// `table->WorkRect`: the table's work rectangle, which is the outer one in a plain table.
+    pub work_rect: (Vec2, Vec2),
+    /// `table->BgClipRect`: where the row backgrounds are clipped, `InnerClipRect` here.
+    pub bg_clip: (Vec2, Vec2),
 }
 
 impl Table {
@@ -102,12 +115,13 @@ impl Table {
     }
 
     /// `ImGui::TableSetupColumn`: the columns are declared in order, before the first row.
-    pub fn setup_column(&mut self, flags: u32, width: f32) {
+    pub fn setup_column(&mut self, label: &str, flags: u32, width: f32) {
         let index = self.decl_columns;
         if index >= self.columns.len() {
             return;
         }
         self.columns[index] = TableColumn {
+            name: label.to_string(),
             flags,
             width_request: width,
             ..TableColumn::default()
@@ -189,6 +203,8 @@ impl Table {
             min_x = column.max_x;
         }
 
+        self.work_rect = self.outer_rect;
+        self.bg_clip = self.inner_clip;
         self.row_cell_padding_y = cell_padding.y;
         self.row_pos_y1 = self.outer_rect.0.y;
         self.row_pos_y2 = self.outer_rect.0.y;
@@ -197,10 +213,18 @@ impl Table {
 
     /// `TableBeginRow` plus the height part of `TableNextRow`: the row starts where the previous one
     /// ended and reserves its vertical padding up front.
-    pub fn begin_row(&mut self, row_min_height: f32) {
+    pub fn begin_row(&mut self, row_min_height: f32, row_flags: u32, header_bg: u32) {
         self.current_row += 1;
         self.current_column = -1;
         self.is_inside_row = true;
+        self.row_flags = row_flags;
+        self.row_min_height = row_min_height;
+        // `TableBeginRow` clears the background, and a header row sets it to `TableHeaderBg`.
+        self.row_bg0 = if row_flags & table_flags::ROW_HEADERS != 0 {
+            Some(header_bg)
+        } else {
+            None
+        };
         self.row_pos_y1 = self.row_pos_y2;
         self.row_pos_y2 += self.row_cell_padding_y * 2.0;
         self.row_pos_y2 = self.row_pos_y2.max(self.row_pos_y1 + row_min_height);
@@ -209,6 +233,21 @@ impl Table {
     /// The `TableEndCell` part that grows the row: the cell's content plus its vertical padding.
     pub fn end_cell(&mut self, cursor_max_y: f32) {
         self.row_pos_y2 = self.row_pos_y2.max(cursor_max_y + self.row_cell_padding_y);
+    }
+
+    /// `TableGetCellBgRect`: the column's span clipped to the work rectangle, over the current row.
+    pub fn cell_rect(&self, column: usize) -> (Vec2, Vec2) {
+        let column = &self.columns[column];
+        (
+            Vec2 {
+                x: column.min_x.max(self.work_rect.0.x),
+                y: self.row_pos_y1,
+            },
+            Vec2 {
+                x: column.max_x.min(self.work_rect.1.x),
+                y: self.row_pos_y2,
+            },
+        )
     }
 
     /// The top of the content of the cell in `column`, which is where its first item goes.
@@ -230,8 +269,8 @@ mod tests {
             2,
             (Vec2 { x: 68.0, y: 68.0 }, Vec2 { x: 352.0, y: 68.0 }),
         );
-        table.setup_column(column_flags::WIDTH_FIXED, 60.0);
-        table.setup_column(column_flags::WIDTH_FIXED, 80.0);
+        table.setup_column("A", column_flags::WIDTH_FIXED, 60.0);
+        table.setup_column("B", column_flags::WIDTH_FIXED, 80.0);
         table.update_layout(Vec2 { x: 4.0, y: 2.0 }, [61.0, 61.0, 359.0, 259.0]);
         table
     }
@@ -255,7 +294,7 @@ mod tests {
     #[test]
     fn a_row_grows_to_its_content_plus_padding() {
         let mut table = table();
-        table.begin_row(0.0);
+        table.begin_row(0.0, 0, 0);
         assert_eq!(table.row_pos_y1, 68.0);
         assert_eq!(table.row_pos_y2, 72.0);
         table.end_cell(83.0);

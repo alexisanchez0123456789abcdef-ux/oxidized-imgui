@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **70 escenarios** más la **prueba negativa**.
+   que ejecuta **71 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **77 PRs** fusionados.
-- **70 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **78 PRs** fusionados.
+- **71 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 68.1 %.** Proyecto (contando el arnés): **70.3 %**.
 - 32 tests unitarios en 6 binarios.
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
@@ -104,8 +104,9 @@ Widgets: botón (geometría, dibujo, estados, borde), label y checkbox, slider,
 borde en la lista del padre, scroll con rueda y arrastre), **Selectable**, **popup**,
 **clic en fila de popup**, **combo**, **tooltip**, **barra de menús**, **submenús
 desplegables** (ventana hija, columnas de menú, filas con etiqueta y atajo) y el
-**primer corte de las tablas** (`tables_basic`: columnas fijas, filas que crecen con su
-contenido y los índices agrupados por columna como el splitter).
+**primer corte de las tablas** (`tables_basic`: columnas fijas y filas que crecen con su
+contenido; `tables_headers`: la fila de cabecera con su banda y sus nombres, contada por
+`TableGetRowIndex`).
 
 La tabla completa, con el nombre del golden de cada fila, está en `rust/README.md`.
 El detalle por pieza y su peso, en `docs/progress.json`.
@@ -117,12 +118,10 @@ cerradas y su sección queda más abajo como referencia de lo ya medido. Lo que 
 
 ### Tablas: lo que falta (peso 1)
 
-El primer corte (`tables_basic`: `BeginTable`, `TableSetupColumn`, `TableNextRow`,
-`TableNextColumn`, `EndTable` con columnas fijas y textos en las celdas) ya está. El resto del
-sistema, por orden de coste:
+Están hechos el primer corte (`tables_basic`: `BeginTable`, `TableSetupColumn`, `TableNextRow`,
+`TableNextColumn`, `EndTable` con columnas fijas y textos en las celdas) y las cabeceras
+(`tables_headers`). El resto del sistema, por orden de coste:
 
-- **Cabeceras** (`TableHeadersRow`/`TableHeader`): ocupan la primera fila de 17 px y
-  `TableGetRowIndex()` las cuenta (tras dos filas de datos vale **2**).
 - **Bordes** (`Borders`): desplazan el contenido 5 px al principio (borde exterior + celda) y 6 entre
   columnas; con ellas la primera columna empieza en **13** y la segunda en **82** (medido en la
   ventana de 400×300 en (40,40)).
@@ -130,7 +129,8 @@ sistema, por orden de coste:
   columnas de 192, la segunda empieza en **204**); falta también stretch y auto-fit.
 - **Reordenar, congelar y el scroll propio de la tabla** (la tabla con `ScrollX`/`ScrollY` crea una
   ventana hija, con todo lo que eso arrastra).
-- `TableGetHoveredColumn`/`Row`, `TableSetBgColor` y los colores de fila.
+- Hover y clic de la cabecera (resalte `HeaderHovered`/`HeaderActive`, ordenar y arrastrar para
+  reordenar), `TableGetHoveredColumn`/`Row`, `TableSetBgColor` de celda y los colores de fila.
 
 Cifras ya medidas que sirven de contrato (ventana de 400×300 en (40,40), padding 8, fuente 13 px):
 
@@ -207,6 +207,12 @@ Lo que costó, para no repetirlo:
   Sin ese detalle el golden falla sólo en la sección `idx`.
 - **El recorte de la tabla no parte comandos**: `PushClipRect` empuja el `InnerClipRect` de la
   ventana, que es el clip en el que la lista ya está.
+- **La banda de una cabecera va al canal de fondo**, no al de la columna: se dibuja al cerrar la fila
+  (`TableEndRow`) y el splitter la fusiona **antes** que las columnas. El color por defecto es
+  `ImGuiCol_TableHeaderBg` = `0xFF4A4747` (0,28/0,28/0,29), y la fila mide 13 + 2·`CellPadding.y`.
+- **El ítem de una cabecera es la celda entera** (`bb` va de `cell_r.Min` a `cell_r.Max`, con la
+  altura del texto si es mayor), no la caja del texto; y tras `ItemSize` el cursor se corrige con
+  `-ItemSpacing.y * 0.5`.
 
 ### Entrada de texto (peso 4): cerrada
 
@@ -299,7 +305,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 70 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 71 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
