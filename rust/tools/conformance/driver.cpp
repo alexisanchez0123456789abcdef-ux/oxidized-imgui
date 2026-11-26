@@ -5151,6 +5151,8 @@ static void DumpCursorPosXY()
         ImGui::SetCursorPosX(10.0f);
         p = ImGui::GetCursorPos();
         printf("frame %d after x %08x %08x\n", frame, Bits(p.x), Bits(p.y));
+        // The reference asserts if a manual cursor position is not followed by an item.
+        ImGui::Dummy(ImVec2(10.0f, 10.0f));
         ImGui::SetCursorPosY(30.0f);
         p = ImGui::GetCursorPos();
         printf("frame %d after y %08x %08x\n", frame, Bits(p.x), Bits(p.y));
@@ -5226,6 +5228,54 @@ static void DumpItemWidth()
         printf("frame %d negative item %08x %08x %08x %08x\n", frame, Bits(mn.x), Bits(mn.y),
             Bits(mx.x), Bits(mx.y));
         ImGui::PopItemWidth();
+        ImGui::End();
+        if (frame == 1)
+            DumpDrawListBody(*dl);
+        ImGui::EndFrame();
+    }
+}
+
+// content_avail: GetContentRegionAvail is the content region from the cursor to its far corner, so it
+// shrinks as the cursor advances and when it moves right.
+static void DumpContentAvail()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario content_avail\n");
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[1] = { 'A' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    WriteGlyphFixture(font, bake_order, 1);
+
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
+    for (int frame = 0; frame < 2; frame++)
+    {
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+        ImGui::Begin("W", NULL, flags);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 a = ImGui::GetContentRegionAvail();
+        printf("frame %d start %08x %08x\n", frame, Bits(a.x), Bits(a.y));
+        ImGui::Text("A");
+        a = ImGui::GetContentRegionAvail();
+        printf("frame %d after text %08x %08x\n", frame, Bits(a.x), Bits(a.y));
+        // Indent moves the line start right without needing an item to satisfy the reference check.
+        ImGui::Indent(50.0f);
+        a = ImGui::GetContentRegionAvail();
+        printf("frame %d after indent %08x %08x\n", frame, Bits(a.x), Bits(a.y));
+        ImGui::Unindent(50.0f);
         ImGui::End();
         if (frame == 1)
             DumpDrawListBody(*dl);
@@ -7121,6 +7171,13 @@ int main(int argc, char** argv)
         return 0;
     }
 
+
+    if (strcmp(name, "content_avail") == 0)
+    {
+        DumpContentAvail();
+        ImGui::DestroyContext();
+        return 0;
+    }
 
     if (strcmp(name, "item_width") == 0)
     {
