@@ -438,7 +438,7 @@ Golden `item_heights`: las cuatro consultas de altura del reference, con los bit
 `GetFrameHeightWithSpacing` = **23**, es decir font mas `ItemSpacing.y` (4) y font mas `FramePadding.y * 2`
 (6) respectivamente.
 
-El port los expone como `text_line_height`, `text_line_height_with_spacing`, `frame_height_pub` y
+El port los expone como `text_line_height`, `text_line_height_with_spacing`, `get_frame_height` y
 `frame_height_with_spacing`; los dos ultimos reutilizan el `frame_height()` interno que ya usaban los
 widgets enmarcados.
 ### Fondo de ventana translúcido (peso 1): cerrada

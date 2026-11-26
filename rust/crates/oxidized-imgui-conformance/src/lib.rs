@@ -6842,7 +6842,7 @@ pub fn item_heights_dump() -> String {
         "text line with spacing {:08x}\n",
         bits(ctx.text_line_height_with_spacing())
     ));
-    out.push_str(&format!("frame {:08x}\n", bits(ctx.frame_height_pub())));
+    out.push_str(&format!("frame {:08x}\n", bits(ctx.get_frame_height())));
     out.push_str(&format!(
         "frame with spacing {:08x}\n",
         bits(ctx.frame_height_with_spacing())

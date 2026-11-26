@@ -3077,7 +3077,7 @@ impl Context {
     }
 
     /// `GetFrameHeight`: `FontSize + FramePadding.y * 2`, the height of a framed widget.
-    pub fn frame_height_pub(&self) -> f32 {
+    pub fn get_frame_height(&self) -> f32 {
         self.frame_height()
     }
 
