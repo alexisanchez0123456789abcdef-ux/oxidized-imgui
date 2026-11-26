@@ -1,0 +1,5 @@
+header imgui 1.93.1 WIP 19303
+scenario calc_text_size
+one 40e00000 41500000
+three 41a80000 41500000
+spaced 41a80000 41500000

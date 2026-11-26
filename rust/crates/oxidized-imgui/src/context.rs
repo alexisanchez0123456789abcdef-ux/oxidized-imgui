@@ -3223,6 +3223,12 @@ impl Context {
         self.window().last_max
     }
 
+    /// `ImGui::CalcTextSize`: the size the text takes with the current font, which is what a custom
+    /// widget measures before laying itself out.
+    pub fn calc_text_size(&self, text: &str) -> Vec2 {
+        self.font.calc_text_size(text, self.font.size)
+    }
+
     /// `GetTextLineHeight`: one line of text, which is the font size.
     pub fn text_line_height(&self) -> f32 {
         self.font.size
