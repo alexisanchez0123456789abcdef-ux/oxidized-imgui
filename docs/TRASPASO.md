@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **74 escenarios** más la **prueba negativa**.
+   que ejecuta **75 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **81 PRs** fusionados.
-- **74 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **82 PRs** fusionados.
+- **75 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 68.1 %.** Proyecto (contando el arnés): **70.3 %**.
 - 32 tests unitarios en 6 binarios.
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
@@ -108,7 +108,8 @@ desplegables** (ventana hija, columnas de menú, filas con etiqueta y atajo) y e
 contenido; `tables_headers`: la fila de cabecera con su banda y sus nombres, contada por
 `TableGetRowIndex`; `tables_rowbg`: las bandas alternas de `RowBg`, que saltan la cabecera;
 `tables_cellbg`: el fondo de celda de `TableSetBgColor`, pintado al cerrar la fila;
-`tables_borders`: la rejilla interior de `BordersInner`, con la línea fuerte bajo la cabecera).
+`tables_borders`: la rejilla interior de `BordersInner`, con la línea fuerte bajo la cabecera;
+`tables_row_height`: la altura mínima de fila de `TableNextRow`, que gana al contenido).
 
 La tabla completa, con el nombre del golden de cada fila, está en `rust/README.md`.
 El detalle por pieza y su peso, en `docs/progress.json`.
@@ -311,7 +312,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 74 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 75 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
