@@ -5079,6 +5079,81 @@ impl Context {
         self.dummy(size);
     }
 
+    /// `ImGui::LabelText`: a value aligned to the item width, then its label on the same line after
+    /// `ItemInnerSpacing.x`, both offset by `FramePadding` from the item's top.
+    pub fn label_text(&mut self, label: &str, value: &str) {
+        if self
+            .windows
+            .last()
+            .map(|window| window.collapsed)
+            .unwrap_or(false)
+        {
+            return;
+        }
+        let width = self.calc_item_width();
+        let frame_padding = self.style.frame_padding;
+        let inner_spacing = self.style.item_inner_spacing;
+        let font = self.font.clone();
+        let value_size = font.calc_text_size(value, font.size);
+        let label_shown = rendered_text(label);
+        let label_size = font.calc_text_size(label_shown, font.size);
+        let pos = self.window().cursor;
+        let value_bb = (
+            pos,
+            Vec2 {
+                x: pos.x + width,
+                y: pos.y + value_size.y + frame_padding.y * 2.0,
+            },
+        );
+        let total_size = Vec2 {
+            x: width
+                + if label_size.x > 0.0 {
+                    inner_spacing.x + label_size.x
+                } else {
+                    0.0
+                },
+            y: value_size.y.max(label_size.y) + frame_padding.y * 2.0,
+        };
+        // `ItemSize(total_bb, FramePadding.y)` then `ItemAdd(total_bb, 0)`.
+        self.dummy(total_size);
+        if let Some(window) = self.windows.last_mut() {
+            window.last_max = Vec2 {
+                x: pos.x + total_size.x,
+                y: pos.y + total_size.y,
+            };
+            window.has_item = true;
+        }
+        let colour = self.style.color_u32(crate::style::Col::Text);
+        let clip = self.window().clip_rect;
+        // `RenderTextClipped` with `align (0, 0)` over the value's box.
+        self.draw_list.add_text_in(
+            &font,
+            font.size,
+            Vec2 {
+                x: pos.x + frame_padding.x,
+                y: pos.y + frame_padding.y,
+            },
+            colour,
+            value,
+            clip,
+            Some((value_bb.0, value_bb.1)),
+        );
+        if label_size.x > 0.0 {
+            self.draw_list.add_text_in(
+                &font,
+                font.size,
+                Vec2 {
+                    x: value_bb.1.x + inner_spacing.x,
+                    y: pos.y + frame_padding.y,
+                },
+                colour,
+                label_shown,
+                clip,
+                None,
+            );
+        }
+    }
+
     /// `ImGui::Text` with the text actually painted, which is what a tooltip shows.
     pub fn text(&mut self, text: &str) {
         let colour = self.style.color_u32(crate::style::Col::Text);

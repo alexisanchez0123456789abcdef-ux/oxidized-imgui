@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **116 escenarios** más la **prueba negativa**.
+   que ejecuta **117 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,9 +46,9 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **125 PRs** fusionados.
-- **116 escenarios** con golden propio, todos en verde, más la prueba negativa.
-- **Reescritura: 69.2 %.** Proyecto (contando el arnés): **71.2 %**.
+- `master` limpio, **126 PRs** fusionados.
+- **117 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- **Reescritura: 69.4 %.** Proyecto (contando el arnés): **71.4 %**.
 - 39 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
@@ -248,6 +248,18 @@ Golden `separator`: tres etiquetas con un separador entre ellas en una ventana d
 - El rectángulo del ítem es la línea (`(8,25)-(292,26)`), no la caja del texto: el golden lo imprime
   tras cada `Separator`.
 - La forma **vertical** (la barra de menús) tiene su propia sección más abajo.
+
+### LabelText (peso 1): cerrada
+
+Golden `label_text`: `LabelText("N", "42")` y `LabelText("", "7")` en una ventana de 300×200.
+
+- El ítem se mide con **`total_bb`**: ancho `w + (etiqueta > 0 ? ItemInnerSpacing.x + etiqueta : 0)`
+  y alto `max(valor, etiqueta) + FramePadding.y*2`, donde `w` es `CalcItemWidth` (195 = 65 % del
+  ancho de la ventana). Medido: con etiqueta `(8,8)-(214,27)` = 195 + 4 + 7; sin etiqueta
+  `(8,31)-(203,50)` = 195.
+- El valor va en `pos + FramePadding` (3,3) recortado a su caja de ancho `w`; la etiqueta en
+  `x = pos + w + ItemInnerSpacing.x` e `y = pos + FramePadding.y`.
+- El `SetNextItemWidth` sigue aplicándose: `label_text` consume `calc_item_width` antes de medir.
 
 ### Textos con color (peso 1): cerrada
 
@@ -689,7 +701,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 116 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 117 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
