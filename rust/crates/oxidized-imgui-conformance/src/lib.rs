@@ -6982,6 +6982,11 @@ pub fn item_width_dump() -> String {
         ctx.pop_item_width();
         ctx.label_text("N", "42");
         report(&ctx, &mut out, "popped");
+        // A negative width is that much less than the content available from the cursor.
+        ctx.push_item_width(-20.0);
+        ctx.label_text("N", "42");
+        report(&ctx, &mut out, "negative");
+        ctx.pop_item_width();
         ctx.end_window();
         if frame == 1 {
             let body = dump("item_width", ctx.draw_list());
