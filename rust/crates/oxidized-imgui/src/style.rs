@@ -185,6 +185,13 @@ impl Style {
         (packed & 0x00FF_FFFF) | (scaled << 24)
     }
 
+    /// `GetColorU32(vec4)`: an explicit floating-point colour packed as `IM_COL32`, with `Style::Alpha` folded into its alpha channel the way `PushStyleColor` + `GetColorU32` does.
+    pub fn color_u32_from(&self, colour: [f32; 4]) -> u32 {
+        let pack = |value: f32| (value * 255.0 + 0.5).clamp(0.0, 255.0) as u32;
+        let alpha = pack(colour[3] * self.alpha);
+        pack(colour[0]) | (pack(colour[1]) << 8) | (pack(colour[2]) << 16) | (alpha << 24)
+    }
+
     /// `GetColorU32(col, alpha_mul)`: the packed colour with its alpha scaled, computed the way the
     /// reference does it — through floats and `ColorConvertFloat4ToU32`, which rounds with `+ 0.5`, so
     /// `Text` at `0.70` gives `0xB3`, not `0xB2`. `Style::Alpha` multiplies on top of `alpha_mul`.
