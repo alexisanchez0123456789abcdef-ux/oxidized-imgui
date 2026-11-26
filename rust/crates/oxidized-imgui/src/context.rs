@@ -305,6 +305,8 @@ pub struct Context {
     /// How many `BeginDisabled` are open, and the `Style::Alpha` the outermost one found.
     disabled_depth: u32,
     disabled_alpha_backup: Option<f32>,
+    /// `SetNextWindowBgAlpha`: the alpha the next window background is painted with.
+    next_bg_alpha: Option<f32>,
     /// `SetNextWindowCollapsed`: the state `Begin` applies to the window it starts.
     next_collapsed: Option<bool>,
     /// `g.Windows`, back to front: the order the lists are rendered in. It survives frames.
@@ -426,6 +428,7 @@ impl Default for Context {
             next_focus: false,
             disabled_depth: 0,
             disabled_alpha_backup: None,
+            next_bg_alpha: None,
             next_collapsed: None,
             wheeling_window: None,
             wheeling_ref_mouse: Vec2::default(),
@@ -686,6 +689,11 @@ impl Context {
     /// `ImGui::SetMouseCursor`: what the backend should show for the rest of the frame.
     pub fn set_mouse_cursor(&mut self, cursor: crate::io::MouseCursor) {
         self.io.mouse_cursor = cursor;
+    }
+
+    /// SetNextWindowBgAlpha: the alpha the next window background is painted with.
+    pub fn set_next_window_bg_alpha(&mut self, alpha: f32) {
+        self.next_bg_alpha = Some(alpha);
     }
 
     /// `ImGui::SetNextWindowFocus`: the next window `Begin` raises to the front and focuses.
@@ -1397,6 +1405,10 @@ impl Context {
                 },
                 if flags.contains(WindowFlags::POPUP) {
                     self.style.popup_bg
+                } else if let Some(alpha) = self.next_bg_alpha.take() {
+                    // ``SetNextWindowBgAlpha``: the same background with its alpha scaled.
+                    self.style
+                        .color_u32_alpha(crate::style::Col::WindowBg, alpha)
                 } else {
                     self.style.color_u32(crate::style::Col::WindowBg)
                 },
