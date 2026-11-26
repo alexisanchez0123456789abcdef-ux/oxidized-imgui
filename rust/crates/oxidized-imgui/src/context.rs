@@ -3832,6 +3832,35 @@ impl Context {
         };
     }
 
+    /// `ImGui::SameLine(offset, spacing)`: with a non-zero offset the next item starts that far from the
+    /// window edge (plus a non-negative spacing); with a zero offset it follows the previous item at
+    /// the given spacing, where a negative spacing means `ItemSpacing.x`.
+    pub fn same_line_with(&mut self, offset_from_start_x: f32, spacing_w: f32) {
+        let item_spacing_x = self.style.item_spacing.x;
+        let Some(window) = self.windows.last_mut() else {
+            return;
+        };
+        if !window.has_item {
+            return;
+        }
+        window.cursor = if offset_from_start_x != 0.0 {
+            Vec2 {
+                x: window.pos.x + offset_from_start_x + spacing_w.max(0.0),
+                y: window.last_min.y,
+            }
+        } else {
+            let spacing = if spacing_w < 0.0 {
+                item_spacing_x
+            } else {
+                spacing_w
+            };
+            Vec2 {
+                x: window.last_max.x + spacing,
+                y: window.last_min.y,
+            }
+        };
+    }
+
     /// `ImGui::SameLine`: the next item goes to the right of the previous one.
     pub fn same_line(&mut self) {
         let spacing = self.style.item_spacing;
