@@ -693,6 +693,19 @@ impl Context {
         self.next_collapsed = Some(collapsed);
     }
 
+    /// `ImGui::SetWindowPos(name, pos, cond)` without the condition: the window moves now, which the
+    /// port keeps in the memory it reads at the next `Begin`. The reference truncates the position,
+    /// and moving a window that is not submitted this frame still takes effect on its next frame.
+    pub fn set_window_pos(&mut self, name: &str, pos: Vec2) {
+        let pos = Vec2 {
+            x: pos.x.trunc(),
+            y: pos.y.trunc(),
+        };
+        if let Some(memory) = WindowMemory::find_mut(&mut self.memory, name) {
+            memory.pos = pos;
+        }
+    }
+
     /// The `ImGuiWindowFlags` of the next window, as `ImGui::Begin` takes them.
     pub fn set_next_window_flags(&mut self, flags: WindowFlags) {
         self.next_flags = Some(flags);
