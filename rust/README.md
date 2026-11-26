@@ -78,6 +78,7 @@ instead of against our own expectations:
 | Full scene | titled window with a button: background, band, border, title, fill, label and the three commands | `scene_window_button` golden |
 | Label, checkbox | text item rect; checkbox box from frame height plus inner spacing, toggling on release | `widgets_basic` golden |
 | Item heights | `GetTextLineHeight` is the font size, the `WithSpacing` variants add `ItemSpacing.y`, and `GetFrameHeight` is `FontSize + FramePadding.y * 2` | `item_heights` golden |
+| Cursor by axis | `SetCursorPosX` and `SetCursorPosY` move one axis and leave the other where it was, which is how a custom layout nudges a single direction | `cursor_pos_xy` golden |
 | Cursor position | `GetCursorPos` reports the cursor relative to the window and `SetCursorPos` places it there without moving the line left edge, so the next item returns to the line start | `cursor_pos` golden |
 | Indent / Unindent | `Indent` and `Unindent` move the line's left edge by `IndentSpacing` (21) or the width given and put the cursor back at that edge, so the next items start further in (or out) | `indent` golden |
 | NewLine | `NewLine` reserves one font height (`ItemSize((0, FontSize))`), so the cursor moves below the line; the reference branches on `CurrLineSize.y`, which every `ItemSize` resets, so both cases amount to the same advance | `new_line` golden |

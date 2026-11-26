@@ -3053,6 +3053,31 @@ impl Context {
             y: window.pos.y + pos.y,
         };
     }
+
+    /// `SetCursorPosX`: move only the cursor x, leaving the y where it is.
+    pub fn set_cursor_pos_x(&mut self, local_x: f32) {
+        let Some(window) = self.windows.last_mut() else {
+            return;
+        };
+        let y = window.cursor.y;
+        window.cursor = Vec2 {
+            x: window.pos.x + local_x,
+            y,
+        };
+    }
+
+    /// `SetCursorPosY`: move only the cursor y, leaving the x where it is.
+    pub fn set_cursor_pos_y(&mut self, local_y: f32) {
+        let Some(window) = self.windows.last_mut() else {
+            return;
+        };
+        let x = window.cursor.x;
+        window.cursor = Vec2 {
+            x,
+            y: window.pos.y + local_y,
+        };
+    }
+
     /// `GetCursorScreenPos`.
     pub fn cursor_screen_pos(&self) -> Vec2 {
         self.window().cursor
