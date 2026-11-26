@@ -105,7 +105,63 @@ El detalle por pieza y su peso, en `docs/progress.json`.
 
 ### 1. Entrada de texto (peso 4)
 
-La pieza grande que queda: cursor, selección, teclado y portapapeles.
+La pieza grande que queda: estado de edición, cursor, selección, teclado, ratón, portapapeles y
+scroll interno. **Ya está medido con una sonda** (`InputText` de una línea, etiqueta `##field`,
+`SetNextItemWidth(150)`, ventana de 300×200 en (60,60), fuente 13, 7 px por avance):
+
+**Geometría**
+
+- `frame_size = (150, label_size.y + FramePadding.y * 2)` = `(150, 19)`; rect del ítem
+  `(68,68)–(218,87)`; `draw_pos = frame_bb.Min + FramePadding` = `(72, 71)`.
+- El marco es **siempre** `FrameBg` (`ff1a1a1a`): no cambia al pasar por encima ni al estar activo
+  (`RenderFrame(min, max, FrameBg, true, FrameRounding)`). `FrameRounding` y `FrameBorderSize`
+  valen 0 por defecto, así que es un solo relleno.
+- El recorte del texto es `(frame_bb.Min, frame_bb.Min + frame_size)` = `(68,68)–(218,87)` y se
+  aplica **glifo a glifo** (`CpuFineClip`), no como comando de recorte: la lista sigue con los
+  mismos 2 comandos. Hacen falta 17 glifos de 21 letras para 150 px (los espacios no pintan quad).
+- Orden dentro del comando de contenido: **marco, selección, texto, cursor**.
+
+**Cursor**
+
+- `cursor_offset.y = (línea + 1) * FontSize` → 13 en una línea.
+- `cursor_screen_pos = trunc(draw_pos + cursor_offset - Scroll)`.
+- Quad del cursor = `(x, y - FontSize + 1)–(x + 1, y - 1)` = `(x,72)–(x+1,83)`: 1 px de ancho, con
+  el **UV del píxel blanco**, o sea un `prim_rect` normal. Se pinta **después** del texto.
+- Color `ImGuiCol_InputTextCursor` = blanco (`ffffffff`), el mismo que `Text`: no se distingue por
+  color. Visibilidad: `CursorAnim` empieza en −0.20, crece con `DeltaTime`, y el cursor se ve
+  mientras `fmod(CursorAnim, 1.20) <= 0.80`.
+
+**Selección**
+
+- Rect por línea: `Min = (draw_pos.x - Scroll.x + CalcTextSize(línea..inicio_selección).x,
+  draw_pos.y - 1)`, `Max = (Min.x + ancho, draw_pos.y + 2 + FontSize)` → una letra seleccionada da
+  `(72,70)–(79,86)`.
+- Color `ImGuiCol_TextSelectedBg` (`59fa9642`), pintado **antes** del texto.
+
+**Scroll horizontal**
+
+- Sólo lo mueve el teclado (`state->CursorFollow`); un clic coloca el cursor **sin** desplazar.
+- `scroll_increment = inner_width * 0.25` = 37.5; `visible_width = inner_width - FramePadding.x` = 146.
+  Si `offset.x < Scroll` → `Scroll = trunc(max(0, offset.x - increment))`;
+  si no, si `offset.x - visible_width >= Scroll` → `Scroll = trunc(offset.x - visible_width + increment)`.
+- Medido: cursor al final (offset 189) → `Scroll = 80`, cursor pintado en x = 181.
+
+**Clic** (una línea): `mouse_y = FontSize * 0.5`, y el carácter sale de `mouse_x - draw_pos.x`
+(7 px por avance). Clic en x = 100 → desplazamiento 28 → carácter 4 → cursor en x = 100.
+
+**Lo que hay que construir, en este orden** (cada paso con su golden):
+
+1. `Io`: el juego completo de `ImGuiKey` (hoy sólo hay `A` y los modificadores) y la cola
+   `InputQueueCharacters` con `AddInputCharacter(s)`, vaciada en `NewFrame`. Sin esto no hay nada
+   que medir.
+2. `add_text` con `CpuFineClip`: descartar quads fuera del rectángulo **sin** partir comandos.
+3. `InputTextState`: copia del buffer (`TextA`), `TextLen`, `Stb` (cursor, `select_start/end`),
+   `Scroll`, `CursorAnim`, `CursorFollow`, y el manejo de teclas de `stb_textedit`
+   (`ImStb::STB_TexteditState`).
+4. El widget: marco, `draw_pos`, selección, texto, cursor y scroll.
+
+Quedan fuera de este primer corte: multilínea, `Password`, `Hint`, `ReadOnly`, callbacks y
+portapapeles.
 
 ### 2. Tablas (peso 2)
 
