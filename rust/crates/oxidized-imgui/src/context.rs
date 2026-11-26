@@ -256,6 +256,8 @@ pub struct Context {
     header_hovered_last: Option<(String, usize)>,
     /// The header the mouse is over on this frame, which becomes the previous frame's id at once.
     header_hovered_next: Option<(String, usize)>,
+    /// `g.ActiveId` for the header cells: the one held with the mouse, until the button is released.
+    header_active: Option<(String, usize)>,
     /// Per-window state between frames: position, size, scroll, content size and flags.
     memory: Vec<WindowMemory>,
     /// `SetNextWindowScroll` for the window about to start.
@@ -377,6 +379,7 @@ impl Default for Context {
             table_content_max_x: std::collections::HashMap::new(),
             header_hovered_last: None,
             header_hovered_next: None,
+            header_active: None,
             table_host: None,
             table_indices: Vec::new(),
             table_bg_indices: Vec::new(),
@@ -3318,6 +3321,15 @@ impl Context {
             self.header_hovered_next = Some(key);
         }
         let hovered = over && key.is_some() && self.header_hovered_last == key;
+        // `ButtonBehavior`: pressing a hovered header takes `ActiveId` until the button is released.
+        if self.io.mouse_down[0] {
+            if hovered {
+                self.header_active = key.clone();
+            }
+        } else {
+            self.header_active = None;
+        }
+        let held = key.is_some() && self.header_active == key;
         // A hovered cell takes `HeaderHovered`; a header outside a header row still paints its cell,
         // or the row would look plain where `TableHeadersRow` painted the others.
         let not_a_header_row = self
@@ -3325,7 +3337,9 @@ impl Context {
             .as_ref()
             .map(|table| table.row_flags & crate::tables::table_flags::ROW_HEADERS == 0)
             .unwrap_or(false);
-        let bg = if hovered {
+        let bg = if held {
+            Some(self.style.header_active)
+        } else if hovered {
             Some(self.style.header_hovered)
         } else if not_a_header_row {
             Some(self.style.table_header_bg)

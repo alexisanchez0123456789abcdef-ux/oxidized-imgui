@@ -1585,6 +1585,52 @@ static void DumpTablesHeaderHover()
         ImGui::EndFrame();
     }
 }
+// tables_header_active: the mouse presses the header of a one-column table after hovering it long
+// enough, so the cell takes `ImGuiCol_HeaderActive` for as long as the button stays down.
+static void DumpTablesHeaderActive()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario tables_header_active\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[1] = { 'A' };
+    baked->FindGlyph((ImWchar)bake_order[0]);
+    WriteGlyphFixture(font, bake_order, 1);
+
+    io.DeltaTime = 0.1f;
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground;
+    for (int frame = 0; frame < 4; frame++)
+    {
+        io.MousePos = ImVec2(100.0f, 75.0f);
+        io.MouseDown[0] = (frame == 3);
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+        ImGui::Begin("W", NULL, flags);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+
+        const bool began = ImGui::BeginTable("T", 1, 0, ImVec2(0.0f, 100.0f), 0.0f);
+        ImGui::TableSetupColumn("A", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+        ImGui::TableHeadersRow();
+        ImGui::EndTable();
+        if (frame == 3)
+        {
+            printf("table begin %d\n", (int)began);
+            DumpDrawListBody(*dl);
+        }
+        ImGui::End();
+        ImGui::EndFrame();
+    }
+}
 // tables_row_height: `TableNextRow(flags, min_height)` with a minimum taller than the cell contents.
 // Each row is 20 px instead of the 17 its text needs, and the rows below start lower.
 static void DumpTablesRowHeight()
@@ -5329,6 +5375,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "tables_set_column") == 0)
     {
         DumpTablesSetColumn();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "tables_header_active") == 0)
+    {
+        DumpTablesHeaderActive();
         ImGui::DestroyContext();
         return 0;
     }
