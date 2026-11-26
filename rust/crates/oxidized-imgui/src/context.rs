@@ -3298,6 +3298,17 @@ impl Context {
                     .max(cell.0.y + label_height + self.style.cell_padding.y * 2.0),
             },
         );
+        // A header submitted outside a header row still paints its cell, or the row would look
+        // plain where `TableHeadersRow` painted the others.
+        let not_a_header_row = self
+            .table
+            .as_ref()
+            .map(|table| table.row_flags & crate::tables::table_flags::ROW_HEADERS == 0)
+            .unwrap_or(false);
+        if not_a_header_row {
+            let header_bg = self.style.table_header_bg;
+            self.table_set_cell_bg_color(header_bg);
+        }
         let colour = self.style.color_u32(crate::style::Col::Text);
         self.draw_list
             .add_text(&font, font.size, label_pos, colour, shown);

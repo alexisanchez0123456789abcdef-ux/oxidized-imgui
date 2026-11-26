@@ -1335,6 +1335,68 @@ static void DumpTablesAutoWidth()
         ImGui::EndFrame();
     }
 }
+// tables_header_inrow: `TableHeader` outside a header row. The reference fills that cell with
+// `TableHeaderBg` (the else branch of TableHeader), which is the only background a plain row gets.
+static void DumpTablesHeaderInRow()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario tables_header_inrow\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[2] = { 'A', 'B' };
+    for (int i = 0; i < 2; i++)
+        baked->FindGlyph((ImWchar)bake_order[i]);
+    WriteGlyphFixture(font, bake_order, 2);
+
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground;
+    ImGui::Begin("W", NULL, flags);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const ImVec2 window_pos = ImGui::GetWindowPos();
+
+    const bool began = ImGui::BeginTable("T", 2, 0, ImVec2(0.0f, 0.0f), 0.0f);
+    printf("table begin %d\n", (int)began);
+    ImGui::TableSetupColumn("A", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+    ImGui::TableSetupColumn("B", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+
+    ImGui::TableNextRow(ImGuiTableRowFlags_None, 20.0f);
+    ImGui::TableSetColumnIndex(0);
+    ImGui::TableHeader("A");
+    {
+        const ImVec2 imin = PSub(ImGui::GetItemRectMin(), window_pos);
+        const ImVec2 imax = PSub(ImGui::GetItemRectMax(), window_pos);
+        printf("header item %08x %08x %08x %08x\n", Bits(imin.x), Bits(imin.y), Bits(imax.x),
+            Bits(imax.y));
+    }
+    ImGui::TableSetColumnIndex(1);
+    {
+        const ImVec2 cursor = PSub(ImGui::GetCursorScreenPos(), window_pos);
+        printf("cell 1 cursor %08x %08x\n", Bits(cursor.x), Bits(cursor.y));
+        ImGui::Text("B");
+    }
+
+    ImGui::EndTable();
+    const ImVec2 end_cursor = PSub(ImGui::GetCursorScreenPos(), window_pos);
+    printf("after cursor %08x %08x\n", Bits(end_cursor.x), Bits(end_cursor.y));
+
+    DumpDrawListBody(*dl);
+    ImGui::End();
+    ImGui::EndFrame();
+}
 // tables_row_height: `TableNextRow(flags, min_height)` with a minimum taller than the cell contents.
 // Each row is 20 px instead of the 17 its text needs, and the rows below start lower.
 static void DumpTablesRowHeight()
@@ -5079,6 +5141,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "tables_set_column") == 0)
     {
         DumpTablesSetColumn();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "tables_header_inrow") == 0)
+    {
+        DumpTablesHeaderInRow();
         ImGui::DestroyContext();
         return 0;
     }

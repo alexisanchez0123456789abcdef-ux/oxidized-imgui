@@ -65,6 +65,7 @@ $fixture_names = @{
     'tables_header_id'    = 'tables_header_id.glyphs.txt'
     'tables_clip'         = 'tables_clip.glyphs.txt'
     'tables_auto_width'   = 'tables_auto_width.glyphs.txt'
+    'tables_header_inrow' = 'tables_header_inrow.glyphs.txt'
     'tables_stretch'      = 'tables_stretch.glyphs.txt'
     'tables_stretch_weights' = 'tables_stretch_weights.glyphs.txt'
     'tables_set_column'   = 'tables_set_column.glyphs.txt'
