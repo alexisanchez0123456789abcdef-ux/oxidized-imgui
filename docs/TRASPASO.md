@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **129 escenarios** más la **prueba negativa**.
+   que ejecuta **130 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **144 PRs** fusionados (el número sale de la búsqueda de la API: `is:pr is:merged`).
-- **129 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **146 PRs** fusionados (el número sale de la búsqueda de la API: `is:pr is:merged`).
+- **130 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 69.9 %.** Proyecto (contando el arnés): **71.8 %**.
 - 42 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
@@ -457,6 +457,19 @@ redondeo no pase desapercibido hasta el CI:
 - `color_u32_alpha(Text, 0.70)` da `0xB3FFFFFF` y no `0xB2`: es el redondeo por floats del reference.
 
 Los tests subieron de 39 a **42**.
+### Ancho de item (peso 1): cerrada
+
+Golden `item_width`: cuatro `LabelText` con el ancho por defecto, con `PushItemWidth(100)`, con
+`PushItemWidth(0)` y tras dos `PopItemWidth`. Medido en el rectangulo del item: **206** (195 mas
+`ItemInnerSpacing.x` 4 mas la etiqueta 7), **111** (100 mas 4 mas 7), **206** otra vez para el cero
+y **206** tras sacar la pila.
+
+- `PushItemWidth` guarda el ancho en una **pila** y `PopItemWidth` la deshace; un **0 significa el
+  ancho por defecto** de la ventana (65 por ciento de la ventana con tamano explicito, 16 tamaños de
+  fuente si la ventana se ajusta sola).
+- `CalcItemWidth` mira primero el `SetNextItemWidth` pendiente, luego la pila y luego el defecto; un
+  ancho **negativo** es ese margen menos lo que queda de area de contenido desde el cursor (la misma
+  regla que `calc_item_size` usa para sus ejes negativos). El caso negativo no tiene golden propio.
 ### Cursor por eje (peso 1): cerrada
 
 Golden `cursor_pos_xy`: `SetCursorPosX(10)` y luego `SetCursorPosY(30)` en una ventana de 300x200.
@@ -849,7 +862,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 129 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 130 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```

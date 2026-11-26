@@ -80,7 +80,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Botón dibujado: relleno por estado, etiqueta y UVs** — golden button_draw
 - **Botón: reposo, hover y activo comparados** — golden button_states
 - **Botón: borde de marco (FrameBorderSize)** — golden button_border
-- **Label y checkbox: rectángulo y alternancia** — golden widgets_basic, spacing, new_line, indent, cursor_pos (GetCursorPos/SetCursorPos en coordenadas de ventana) y cursor_pos_xy (SetCursorPosX/Y por eje)
+- **Label y checkbox: rectángulo y alternancia** — golden widgets_basic, spacing, new_line, indent, cursor_pos (GetCursorPos/SetCursorPos en coordenadas de ventana) cursor_pos_xy (SetCursorPosX/Y por eje) e item_width (PushItemWidth/PopItemWidth con 0 = ancho por defecto)
 - **BulletText: un solo ítem con el disco y el texto sangrado a FontSize + FramePadding.x*2** — golden bullet_text (dos entradas, con el rectángulo del ítem y la lista)
 - **LabelText: valor en el ancho del ítem y etiqueta al lado con ItemInnerSpacing y FramePadding** — golden label_text (ítem con etiqueta y sin ella, con el rectángulo del ítem y la lista)
 - **TextColored y TextDisabled: color explícito empaquetado con ColorConvertFloat4ToU32 y alfa del estilo** — golden text_colors (Text normal, TextColored en rojo, TextDisabled y Text después, con los colores en la lista)
