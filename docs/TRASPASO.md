@@ -479,6 +479,28 @@ tamano. Asi, olvidar el cuarto sitio ya no puede pasar en silencio.
 Regla que queda: al anadir un escenario hay que tocar **cuatro** sitios (driver, ``dump_for``,
 `SCENARIOS` y `gen-golden.ps1`); si falta `SCENARIOS` el golden es decorativo y el `cargo test` no
 lo nota.
+### Plan medido para el relleno AA (siguiente unidad grande)
+
+Leido en `imgui_draw.cpp`, no de memoria:
+
+- `AddRectFilled` (linea 2535) con `rounding = 0` y coordenadas **fraccionarias** no toma el atajo
+  `PrimRect`: cae en `AddConvexPolyFilled(points, 4, col, JoinMiter)` (linea 2620). Con coordenadas
+  enteras y `_FringeScaleIsInteger` si toma `PrimRect` (2576-2583), que es lo que el port ya modela.
+- `AddConvexPolyFilled` (linea 1327), rama `AAFill`: `half_aa = _FringeScale * 0.5`; por cada lado calcula
+  la normal del segmento como `(dy, -dx)` normalizada (1364-1365, con `inv_len = ImRsqrtPrecise(d2)`);
+  reserva `points_count` vertices internos mas `points_count` externos (mas biseles, que con `JoinMiter` y
+  un rectangulo son **0**); los externos van en `punto + normal * half_aa` y con el color **sin alfa**
+  (`col_trans = col & ~A_MASK`, 1337).
+- Conteo para un rectangulo: **8 vertices** (4 internos opacos + 4 externos con alfa 0) y **30 indices**
+  (2 triangulos de relleno + 8 de franja). Ese 30 coincide con el `elems 30` que aparece en los goldens de
+  `Button`/`popup`, que es una comprobacion cruzada util.
+- **Por confirmar contra el golden** (no lo he leido): el orden exacto de los indices de la franja y si el
+  primer vertice externo se parchea al final (`prev_outer_idx`, 1374). Hay que medirlo con un escenario
+  de un solo `AddRectFilled` fraccionario antes de escribirlo.
+
+Ruta propuesta: `add_rect_filled` del port mira si alguna coordenada es fraccionaria; si lo es, delega en
+un `add_convex_poly_filled_aa` con las cuatro esquinas, y el primer golden es un relleno de 0.5 px de
+desplazamiento (y la barra de progreso indeterminada despues).
 ### `CloseButton` no es una unidad pendiente (nota para no repetir trabajo)
 
 `ImGui::CloseButton(id, pos)` **no es API de usuario**: es el ayudante interno con el que una ventana
