@@ -521,6 +521,23 @@ reference (`cross_extent = FontSize * 0.5 * 0.7071 - 1`).
 Lo cubren los goldens `window_icons`, `window_icons_states` y `window_icons_drag` (hover, pulsado y
 arrastre sobre el aspa). Consecuencia: **no hay que "portar CloseButton"**; si alguna vez hace falta un aspa
 suelta, lo correcto es exponer un `button` con ese dibujo, no duplicar el de la ventana.
+### DECISION: el golden del marco redondeado queda aparcado
+
+Tras cinco rondas (54, 57, 60, 62, 63) y tres hipotesis descartadas con medicion -- el **paso** de arco, el
+**recorrido** y la **tabla** de segmentos, todas ya iguales a las del reference -- lo que queda por explicar
+es el numero exacto de puntos que produce `_PathArcToFastEx` para arcos cuyos extremos no caen en la tabla,
+dentro de un caso que es **cosmetico**: el marco redondeado de un boton.
+
+Coste/beneficio: cada intento cuesta una ronda entera (implementar, montar el escenario, medir, revertir)
+mientras el backlog que si mueve la aguja -- **splitter por canal**, **barra indeterminada**, **TextWrapped** --
+no avanza. Por eso se aparca, con estas condiciones al reanudarlo:
+
+- Estado real: el marco redondeado se dibuja; lo unico que no esta verificado contra el reference es el
+  **numero de puntos** del arco. Lo cubre el test de enrutado, no un golden.
+- Para reanudarlo hace falta una sesion con presupuesto para instrumentar el reference (imprimir el `_Path`
+  resultante de un `AddRectFilled` redondeado) en vez de razonar sobre el conteo de `elems`, que es lo que ha
+  consumido estas rondas.
+- Nadie debe volver a proponerlo como "unidad pequena": no lo es con el presupuesto actual.
 ### Golden pendiente del marco redondeado: medido y acotado
 
 Intento de golden `frame_rounding` (dos botones, cuadrado y con `PushStyleVar(ImGuiStyleVar_FrameRounding, 6)`):
