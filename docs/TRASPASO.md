@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **118 escenarios** más la **prueba negativa**.
+   que ejecuta **119 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **127 PRs** fusionados.
-- **118 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **128 PRs** fusionados.
+- **119 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 69.7 %.** Proyecto (contando el arnés): **71.6 %**.
 - 39 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
@@ -373,7 +373,8 @@ Golden `separator_text`: "A", `SeparatorText("S")` y "B" en la misma ventana de 
 - Medición: "A" en `y 8..21`, ítem `25..44`, "B" en `48..61` y el cursor acaba en `y 65`; 20 vértices
   (A, dos líneas, S y B).
 - `SeparatorText` recorta la etiqueta a `bb.Max.x` y usa `ItemSpacing.x` a cada lado; sin etiqueta
-  dibuja una sola línea de extremo a extremo (no hay golden de ese caso).
+  dibuja **una sola línea** de extremo a extremo, con su propio golden (`separator_text_empty`):
+  el ítem sigue midiendo `max(label + padding, border)` de alto, así que el cursor avanza igual.
 
 ### Colapso de ventana por API (peso 1): cerrada
 
@@ -711,7 +712,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 118 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 119 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
