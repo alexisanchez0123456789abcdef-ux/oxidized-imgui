@@ -80,9 +80,10 @@
     {
       "id": "widgets",
       "title": "Widgets",
-      "weight": 37,
+      "weight": 38,
       "infra": false,
       "items": [
+        { "id": "w_invisible_button", "label": "InvisibleButton: ítem del tamaño pedido que no dibuja nada pero hovera y pulsa al soltar", "weight": 1, "done": true, "evidence": "golden invisible_button (4 frames con el valor de retorno y la lista sin geometría propia)" },
         { "id": "w_button", "label": "Botón: geometría, hover, estado activo y valor de retorno", "weight": 2, "done": true, "evidence": "golden button" },
         { "id": "w_button_draw", "label": "Botón dibujado: relleno por estado, etiqueta y UVs", "weight": 1, "done": true, "evidence": "golden button_draw" },
         { "id": "w_button_states", "label": "Botón: reposo, hover y activo comparados", "weight": 2, "done": true, "evidence": "golden button_states" },
