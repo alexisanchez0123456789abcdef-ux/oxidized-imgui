@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **86 escenarios** más la **prueba negativa**.
+   que ejecuta **87 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **93 PRs** fusionados.
-- **86 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **94 PRs** fusionados.
+- **87 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 68.1 %.** Proyecto (contando el arnés): **70.3 %**.
 - 32 tests unitarios en 6 binarios.
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
@@ -119,6 +119,7 @@ contenido; `tables_headers`: la fila de cabecera con su banda y sus nombres, con
 `tables_auto_width`: el ancho automático por contenido, que se ajusta en el segundo frame;
 `tables_header_inrow`: el fondo `TableHeaderBg` de una cabecera fuera de su fila;
 `tables_column_flags`: los flags derivados de cada columna y sus bits de estado;
+`tables_rowbg_headers`: las bandas de `RowBg` cuando la primera fila es de cabecera;
 `tables_row_height`: la altura mínima de fila de `TableNextRow`, que gana al contenido).
 
 La tabla completa, con el nombre del golden de cada fila, está en `rust/README.md`.
@@ -141,7 +142,11 @@ comandos por columna (`tables_clip`). El resto del sistema, por orden de coste:
   contenido ya están; falta el peso de `SizingStretchProp` derivado del contenido (no el declarado).
 
 - **Reordenar, congelar y el scroll propio de la tabla** (la tabla con `ScrollX`/`ScrollY` crea una
-  ventana hija, con todo lo que eso arrastra).
+  ventana hija, con todo lo que eso arrastra). Medido: `TableSetupScrollFreeze(0, 1)` en una tabla sin
+  scroll deja el volcado **idéntico** al de no usarlo, así que su golden necesita recorte o scroll.
+- Abierto: con `RowBg` y **dos** columnas, la banda alterna del volcado de referencia sólo cubre
+  `68..132` (la primera columna) en vez de `68..220`; hace falta medir de dónde sale ese recorte antes
+  de portarlo. Con una columna el golden `tables_rowbg_headers` cuadra.
 - Hover y clic de la cabecera (resalte `HeaderHovered`/`HeaderActive`, ordenar y arrastrar para
   reordenar) y `TableGetHoveredColumn`/`Row`.
 
@@ -321,7 +326,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 86 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 87 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```

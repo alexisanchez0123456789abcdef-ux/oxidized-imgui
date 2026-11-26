@@ -54,6 +54,7 @@ pub const SCENARIOS: &[&str] = &[
     "tables_auto_width",
     "tables_header_inrow",
     "tables_column_flags",
+    "tables_rowbg_headers",
     "text_draw",
     "button",
     "widgets_basic",
@@ -2722,6 +2723,61 @@ pub fn tables_column_flags_dump() -> String {
     ctx.end_table();
 
     let full = dump("tables_column_flags", ctx.draw_list());
+    for line in full.lines().skip(2) {
+        out.push_str(line);
+        out.push('\n');
+    }
+    ctx.end_window();
+    ctx.end_frame();
+    out
+}
+
+/// The `tables_rowbg_headers` scenario: `ImGuiTableFlags_RowBg` with a header row first, so the
+/// bands of the data rows are decided by the counter the header leaves alone.
+pub fn tables_rowbg_headers_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2, WindowFlags, column_flags, table_flags};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/tables_rowbg_headers.glyphs.txt"
+    );
+    let glyphs = std::fs::read_to_string(path).expect("glyph fixture");
+    let font = Font::from_pinned(&glyphs).expect("glyph fixture");
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    ctx.io_mut().delta_time = 0.1;
+    ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+    ctx.io_mut().mouse_down[0] = false;
+    ctx.begin_frame();
+    ctx.set_next_window_flags(
+        WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+    );
+    ctx.begin_window_ex(
+        "W",
+        Some(Vec2 { x: 60.0, y: 60.0 }),
+        Some(Vec2 { x: 300.0, y: 200.0 }),
+        false,
+    );
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario tables_rowbg_headers\n");
+
+    let began = ctx.begin_table("T", 1, table_flags::ROW_BG, Vec2::default());
+    out.push_str(&format!("table begin {}\n", i32::from(began)));
+    ctx.table_setup_column("A", column_flags::WIDTH_FIXED, 60.0);
+    ctx.table_headers_row();
+    for _ in 0..2 {
+        ctx.table_next_row_min(20.0);
+        ctx.table_next_column();
+        ctx.dummy(Vec2 { x: 10.0, y: 10.0 });
+    }
+    ctx.end_table();
+
+    let full = dump("tables_rowbg_headers", ctx.draw_list());
     for line in full.lines().skip(2) {
         out.push_str(line);
         out.push('\n');
@@ -5787,6 +5843,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "tables_auto_width" => Some(tables_auto_width_dump()),
         "tables_header_inrow" => Some(tables_header_inrow_dump()),
         "tables_column_flags" => Some(tables_column_flags_dump()),
+        "tables_rowbg_headers" => Some(tables_rowbg_headers_dump()),
         "text_draw" => Some(text_draw_dump()),
         "button" => Some(button_dump()),
         "widgets_basic" => Some(widgets_basic_dump()),
