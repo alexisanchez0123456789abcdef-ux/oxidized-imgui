@@ -20,6 +20,8 @@ pub mod table_flags {
     pub const NO_PAD_OUTER_X: u32 = 1 << 22;
     /// `ImGuiTableFlags_NoPadInnerX`.
     pub const NO_PAD_INNER_X: u32 = 1 << 23;
+    /// `ImGuiTableFlags_RowBg`: every other row gets `TableRowBgAlt`.
+    pub const ROW_BG: u32 = 1 << 6;
     /// `ImGuiTableRowFlags_Headers`: the row holds column headers.
     pub const ROW_HEADERS: u32 = 1 << 0;
 }
@@ -94,6 +96,8 @@ pub struct Table {
     pub row_min_height: f32,
     /// `table->RowBgColor[0]`: the background the row paints before the next one starts.
     pub row_bg0: Option<u32>,
+    /// `table->RowBgColorCounter`: the odd/even counter of `RowBg`, which skips header rows.
+    pub row_bg_counter: u32,
     /// `table->WorkRect`: the table's work rectangle, which is the outer one in a plain table.
     pub work_rect: (Vec2, Vec2),
     /// `table->BgClipRect`: where the row backgrounds are clipped, `InnerClipRect` here.
@@ -213,18 +217,18 @@ impl Table {
 
     /// `TableBeginRow` plus the height part of `TableNextRow`: the row starts where the previous one
     /// ended and reserves its vertical padding up front.
-    pub fn begin_row(&mut self, row_min_height: f32, row_flags: u32, header_bg: u32) {
+    pub fn begin_row(&mut self, row_min_height: f32, row_flags: u32, row_bg: Option<u32>) {
         self.current_row += 1;
         self.current_column = -1;
         self.is_inside_row = true;
         self.row_flags = row_flags;
         self.row_min_height = row_min_height;
-        // `TableBeginRow` clears the background, and a header row sets it to `TableHeaderBg`.
-        self.row_bg0 = if row_flags & table_flags::ROW_HEADERS != 0 {
-            Some(header_bg)
-        } else {
-            None
-        };
+        self.row_bg0 = row_bg;
+        // `TableEndRow` only counts the rows that are not headers, which is what makes the bands of
+        // `RowBg` alternate over the data rows while the header keeps its own colour.
+        if row_flags & table_flags::ROW_HEADERS == 0 {
+            self.row_bg_counter += 1;
+        }
         self.row_pos_y1 = self.row_pos_y2;
         self.row_pos_y2 += self.row_cell_padding_y * 2.0;
         self.row_pos_y2 = self.row_pos_y2.max(self.row_pos_y1 + row_min_height);
@@ -294,7 +298,7 @@ mod tests {
     #[test]
     fn a_row_grows_to_its_content_plus_padding() {
         let mut table = table();
-        table.begin_row(0.0, 0, 0);
+        table.begin_row(0.0, 0, None);
         assert_eq!(table.row_pos_y1, 68.0);
         assert_eq!(table.row_pos_y2, 72.0);
         table.end_cell(83.0);
