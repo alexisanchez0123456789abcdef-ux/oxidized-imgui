@@ -114,6 +114,7 @@ pub const SCENARIOS: &[&str] = &[
     "new_line",
     "indent",
     "invisible_button",
+    "windows_set_collapsed",
     "window_scroll",
     "window_scrollbar",
     "window_scrollbar_drag",
@@ -6505,6 +6506,88 @@ pub fn invisible_button_dump() -> String {
     out
 }
 
+/// The `windows_set_collapsed` scenario: `SetWindowCollapsed` by name applies the state at the
+/// window's next `Begin`, the remembered one, so the bar-only frame comes without touching the arrow.
+pub fn windows_set_collapsed_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/windows_set_collapsed.glyphs.txt"
+    );
+    let glyphs = std::fs::read_to_string(path).expect("windows set collapsed fixture");
+    let font = Font::from_pinned(&glyphs).expect("font fixture");
+    let line_uvs = parse_line_uvs(&glyphs);
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    ctx.set_line_uv_lines(line_uvs);
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario windows_set_collapsed\n");
+
+    let frame = |ctx: &mut Context,
+                 out: &mut String,
+                 n: usize,
+                 tag: &str,
+                 collapsed: Option<bool>,
+                 record: bool| {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+        ctx.io_mut().mouse_down[0] = false;
+        ctx.begin_frame();
+        if let Some(collapsed) = collapsed {
+            ctx.set_window_collapsed("C", collapsed);
+        }
+        ctx.begin_window_titled_with_icons("C", "C", None, None, None, true);
+        ctx.button("B");
+        ctx.end_window();
+        let hovered = ctx.hovered_window_name().unwrap_or("-").to_string();
+        ctx.end_frame();
+        if !record {
+            return;
+        }
+        let lists = ctx.render_lists();
+        out.push_str(&format!(
+            "frame {n} {tag} hovered {hovered} lists {}\n",
+            lists.len()
+        ));
+        for (i, (name, list)) in lists.iter().enumerate() {
+            out.push_str(&format!("list {i} {name}\n"));
+            let body = dump("windows_set_collapsed", list);
+            for line in body.lines().skip(2) {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
+    };
+
+    for _ in 0..6 {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.begin_frame();
+        ctx.begin_window_titled_with_icons(
+            "C",
+            "C",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+            None,
+            true,
+        );
+        ctx.button("B");
+        ctx.end_window();
+        ctx.end_frame();
+    }
+    frame(&mut ctx, &mut out, 0, "expanded", None, true);
+    frame(&mut ctx, &mut out, 1, "collapse_api", Some(true), true);
+    frame(&mut ctx, &mut out, 2, "collapsed", None, true);
+    frame(&mut ctx, &mut out, 3, "expand_api", Some(false), true);
+    frame(&mut ctx, &mut out, 4, "expanded_again", None, true);
+    out
+}
+
 /// The `windows_move` scenario: dragging one window by its title bar and by its body, and the clamp
 /// that keeps it reachable when it is dragged off the display.
 ///
@@ -8458,6 +8541,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "new_line" => Some(new_line_dump()),
         "indent" => Some(indent_dump()),
         "invisible_button" => Some(invisible_button_dump()),
+        "windows_set_collapsed" => Some(windows_set_collapsed_dump()),
         "window_scroll" => Some(window_scroll_dump()),
         "window_scrollbar" => Some(window_scrollbar_dump()),
         "window_scrollbar_drag" => Some(window_scrollbar_drag_dump()),
