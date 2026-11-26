@@ -30,6 +30,7 @@ pub const SCENARIOS: &[&str] = &[
     "io_keyboard_events",
     "io_text_events",
     "text_clip",
+    "input_text",
     "font_metrics",
     "clip_stack",
     "text_draw",
@@ -613,6 +614,88 @@ pub fn text_clip_dump() -> String {
     let out = dump("text_clip", ctx.draw_list());
     ctx.end_window();
     ctx.end_frame();
+    out
+}
+
+/// The `input_text` scenario: a single-line field across a click, a second click that moves the
+/// caret, and a click elsewhere that releases it.
+pub fn input_text_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2, WindowFlags};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/input_text.glyphs.txt"
+    );
+    let text = std::fs::read_to_string(path).expect("input_text fixture");
+    let font = Font::from_pinned(&text).expect("font fixture");
+    let line_uvs = parse_line_uvs(&text);
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    ctx.set_line_uv_lines(line_uvs);
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario input_text\n");
+
+    // The field runs from (68,68) to (218,87). A click at x=100 lands on the caret after "Hell"
+    // (28 pixels in, seven per character); a click at x=150 goes past the end of the line; the last
+    // click lands on the window body, which releases the focus.
+    let steps = [
+        (0.0f32, 0.0f32, false),
+        (100.0, 75.0, false),
+        (100.0, 75.0, true),
+        (100.0, 75.0, false),
+        (150.0, 75.0, true),
+        (150.0, 75.0, false),
+        (75.0, 75.0, true),
+        (75.0, 75.0, false),
+        (300.0, 200.0, true),
+        (300.0, 200.0, false),
+    ];
+    let mut buffer = String::from("Hello world");
+    for (frame, (mx, my, down)) in steps.iter().enumerate() {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: *mx, y: *my });
+        ctx.io_mut().mouse_down[0] = *down;
+        ctx.begin_frame();
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+        );
+        ctx.begin_window_ex(
+            "W",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+            false,
+        );
+        let id = ctx.get_id("##field");
+        ctx.set_next_item_width(150.0);
+        ctx.input_text("##field", &mut buffer);
+        out.push_str(&format!(
+            "frame {frame} active {} clicked {}",
+            (ctx.active_id() == Some(id)) as u8,
+            ctx.io().mouse_clicked[0] as u8
+        ));
+        // `GetInputTextState(id)`: the state outlives the focus, so it answers after the release.
+        if let Some(state) = ctx.input_text_state().filter(|state| state.id == id) {
+            out.push_str(&format!(
+                " len {} sel {} scroll {:08x} anim {:08x}",
+                state.text.len(),
+                state.has_selection() as u8,
+                bits(state.scroll_x),
+                bits(state.cursor_anim)
+            ));
+        }
+        out.push('\n');
+        let body = dump("input_text", ctx.draw_list());
+        for line in body.lines().skip(2) {
+            out.push_str(line);
+            out.push('\n');
+        }
+        ctx.end_window();
+        ctx.end_frame();
+    }
     out
 }
 
@@ -3746,6 +3829,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "io_keyboard_events" => Some(io_keyboard_dump()),
         "io_text_events" => Some(io_text_dump()),
         "text_clip" => Some(text_clip_dump()),
+        "input_text" => Some(input_text_dump()),
         "font_metrics" => Some(font_metrics_dump()),
         "clip_stack" => Some(clip_stack_dump()),
         "text_draw" => Some(text_draw_dump()),

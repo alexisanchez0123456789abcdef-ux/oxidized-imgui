@@ -291,6 +291,10 @@ pub struct Context {
     menu_bar_clip_max_y: Option<f32>,
     /// The popup name egin_popup opened, carried to nd_popup for the rectangle.
     last_popup_name: Option<String>,
+    /// `g.InputTextState`: the edit state of the field that owns the keyboard, if any.
+    input_text_state: Option<crate::input_text::InputTextState>,
+    /// `SetNextItemWidth`: the width the next item asks for, consumed by the item that reads it.
+    next_item_width: Option<f32>,
     /// `g.HoveredIdTimer`: how long the border under the mouse has been hovered. The reference
     /// waits WINDOWS_RESIZE_FROM_EDGES_FEEDBACK_TIMER before it reports a border, so brushing past
     /// an edge on the way to a widget does not light it up.
@@ -357,6 +361,8 @@ impl Default for Context {
             child_menu_host: None,
             menu_depth: 0,
             menu_bar_clip_max_y: None,
+            input_text_state: None,
+            next_item_width: None,
             last_popup_name: None,
             resize_grip_cols: [0; 2],
             resize_hover_timer: 0.0,
@@ -2624,6 +2630,56 @@ impl Context {
         self.windows.last_mut().expect("no window is open")
     }
 
+    /// `g.InputTextState`: the edit state of the field that owns the keyboard, if any.
+    pub fn input_text_state(&self) -> Option<&crate::input_text::InputTextState> {
+        self.input_text_state.as_ref()
+    }
+
+    /// `g.ActiveId`: the item that owns the mouse or the keyboard, if any.
+    pub fn active_id(&self) -> Option<ImGuiID> {
+        self.active_id
+    }
+
+    /// `ImGui::SetNextItemWidth`: the width the next item asks for.
+    pub fn set_next_item_width(&mut self, width: f32) {
+        self.next_item_width = Some(width);
+    }
+
+    /// `ImGui::CalcItemWidth`: the width the next item takes when it does not ask for one. A window
+    /// with an explicit size gives 65 % of it, an auto-sized one sixteen font sizes.
+    fn calc_item_width(&mut self) -> f32 {
+        if let Some(width) = self.next_item_width.take() {
+            return width;
+        }
+        let window = self.window();
+        let resizable =
+            window.size.x > 0.0 && !window.flags.contains(WindowFlags::ALWAYS_AUTO_RESIZE);
+        if resizable {
+            (window.size.x * 0.65).trunc()
+        } else {
+            (self.font.size * 16.0).trunc()
+        }
+    }
+
+    /// The whole of `ItemHoverable` as far as the mouse is concerned: the mouse is inside the
+    /// rectangle *and* its window is the one under the pointer.
+    fn hovered_in(&self, min: Vec2, max: Vec2) -> bool {
+        let window = self.window();
+        let own_window = self.hovered_window.as_deref() == Some(window.name.as_str());
+        let Some(mouse) = self.io.mouse_pos else {
+            return false;
+        };
+        own_window
+            && mouse.x >= window.pos.x
+            && mouse.x < window.pos.x + window.size.x
+            && mouse.y >= window.pos.y
+            && mouse.y < window.pos.y + window.size.y
+            && mouse.x >= min.x
+            && mouse.x < max.x
+            && mouse.y >= min.y
+            && mouse.y < max.y
+    }
+
     /// `GetContentRegionAvail` inside the current window.
     pub fn content_avail(&self) -> Vec2 {
         self.window().content_size
@@ -4070,6 +4126,177 @@ impl Context {
             .list_stack
             .pop()
             .unwrap_or_else(|| self.new_window_draw_list());
+    }
+
+    /// `ImGui::InputText`, single line: the framed field, its text, and the caret while the field
+    /// owns the keyboard. Returns true when the value changed.
+    ///
+    /// Only the mouse half is modelled so far: a click activates the field and drops the caret where
+    /// it landed (rounded to the nearest character boundary), a click elsewhere releases it, and the
+    /// text is written back to the caller's buffer when that happens. Typing, the arrow keys, the
+    /// selection and its keyboard-driven scroll are the next step.
+    pub fn input_text(&mut self, label: &str, buffer: &mut String) -> bool {
+        let id = self.get_id(label);
+        let pad = self.style.frame_padding;
+        let shown = rendered_text(label);
+        let label_size = self.font.calc_text_size(shown, self.font.size);
+        let frame_size = Vec2 {
+            x: self.calc_item_width(),
+            y: label_size.y + pad.y * 2.0,
+        };
+        let total = Vec2 {
+            x: frame_size.x
+                + if label_size.x > 0.0 {
+                    self.style.item_inner_spacing.x + label_size.x
+                } else {
+                    0.0
+                },
+            y: frame_size.y,
+        };
+        let frame_min = self.window().cursor;
+        let frame_max = Vec2 {
+            x: frame_min.x + frame_size.x,
+            y: frame_min.y + frame_size.y,
+        };
+        // `ItemSize(total_bb, FramePadding.y)` then `ItemAdd(total_bb, id, ..., Inputable)`.
+        self.dummy(total);
+
+        let hovered = self.hovered_in(frame_min, frame_max);
+        if hovered {
+            // `SetMouseCursor(ImGuiMouseCursor_TextInput)`.
+            self.set_mouse_cursor(crate::io::MouseCursor::TextInput);
+        }
+        let user_clicked = hovered && self.io.mouse_clicked[0];
+        // `g.ActiveId == id`: the field owns the keyboard. The state stays in the context after the
+        // focus is released (the reference only replaces it when another field takes over), so the
+        // frame that releases it can still draw its caret.
+        let mut active = self.active_id == Some(id);
+        if user_clicked && !active {
+            // `Init state`: the field takes a copy of the caller's buffer. Coming back to the same
+            // field recycles the cursor, as `recycle_state` does.
+            let mut state = match self.input_text_state.take() {
+                Some(state) if state.id == id && state.text == *buffer => {
+                    let mut state = state;
+                    state.cursor_clamp();
+                    state
+                }
+                _ => crate::input_text::InputTextState::new(id, buffer),
+            };
+            state.cursor_anim_reset();
+            self.input_text_state = Some(state);
+            self.active_id = Some(id);
+            active = true;
+        }
+        // `Release focus when we click outside`. The frame still draws as if active: the reference
+        // clears the active id at the end of the function, after the render block.
+        let release = active && self.io.mouse_clicked[0] && !user_clicked;
+        if active && user_clicked {
+            // `mouse_x = (MousePos.x - frame_bb.Min.x - FramePadding.x) + Scroll.x`, then
+            // `stb_textedit_click` drops the caret there and clears the selection.
+            let mouse = self.io.mouse_pos.unwrap_or_default();
+            let (text, scroll_x) = {
+                let state = self.input_text_state.as_ref().expect("active state");
+                (state.text.clone(), state.scroll_x)
+            };
+            let mouse_x = mouse.x - frame_min.x - pad.x + scroll_x;
+            let cursor =
+                crate::input_text::locate_coord_in(&text, mouse_x, &self.font, self.font.size);
+            if let Some(state) = self.input_text_state.as_mut() {
+                state.cursor = cursor;
+                state.select_start = cursor;
+                state.select_end = cursor;
+                state.cursor_anim_reset();
+            }
+        }
+
+        // Render. `RenderFrame(frame_bb.Min, frame_bb.Max, FrameBg, true, FrameRounding)`: with the
+        // default style there is no border and no rounding, so it is one filled rectangle.
+        self.draw_list.prim_rect(
+            frame_min,
+            frame_max,
+            self.style.color_u32(crate::style::Col::FrameBg),
+        );
+        if self.style.frame_border_size > 0.0 {
+            self.draw_list.add_aligned_rect_border(
+                frame_min,
+                frame_max,
+                self.style.color_u32(crate::style::Col::Border),
+                self.style.frame_border_size,
+            );
+        }
+        // `draw_pos = frame_bb.Min + FramePadding`, and the clip is the frame itself.
+        let draw_pos = Vec2 {
+            x: frame_min.x + pad.x,
+            y: frame_min.y + pad.y,
+        };
+        let clip = (frame_min, frame_max);
+        let (text, scroll_x, cursor_anim) = match (&self.input_text_state, active) {
+            (Some(state), true) => (state.text.clone(), state.scroll_x, state.cursor_anim),
+            _ => (buffer.clone(), 0.0, 0.0),
+        };
+        let text_x = draw_pos.x - scroll_x;
+        let font = self.font.clone();
+        let text_col = self.style.color_u32(crate::style::Col::Text);
+        let text_pos = Vec2 {
+            x: text_x,
+            y: draw_pos.y,
+        };
+        self.draw_list
+            .add_text_clipped(&font, font.size, text_pos, text_col, &text, clip);
+
+        // The caret: `trunc(draw_pos + cursor_offset - draw_scroll)`, one pixel wide, from
+        // `y - FontSize + 1` to `y - 1`.
+        if active {
+            // `state->CursorAnim += io.DeltaTime`, then the blink rule.
+            let anim = cursor_anim + self.io.delta_time;
+            if let Some(state) = self.input_text_state.as_mut() {
+                state.cursor_anim = anim;
+            }
+            let visible =
+                !self.io.config_input_text_cursor_blink || anim <= 0.0 || (anim % 1.20) <= 0.80;
+            let cursor = self
+                .input_text_state
+                .as_ref()
+                .map(|state| state.cursor)
+                .unwrap_or(0);
+            // `cursor_offset.x`: the width of the text before the caret, rounded up a whole pixel.
+            let offset_x = (font.calc_text_size(&text[..cursor], font.size).x + 0.999_99).trunc();
+            let caret_x = (text_x + offset_x).trunc();
+            let caret_y = draw_pos.y + font.size;
+            let caret = (
+                Vec2 {
+                    x: caret_x,
+                    y: caret_y - font.size + 1.0,
+                },
+                Vec2 {
+                    x: caret_x + 1.0,
+                    y: caret_y - 1.0,
+                },
+            );
+            let overlaps = caret.0.x <= clip.1.x
+                && caret.1.x >= clip.0.x
+                && caret.0.y <= clip.1.y
+                && caret.1.y >= clip.0.y;
+            if visible && overlaps {
+                self.draw_list.prim_rect(
+                    caret.0,
+                    caret.1,
+                    self.style.color_u32(crate::style::Col::InputTextCursor),
+                );
+            }
+        }
+
+        if release {
+            // Write the edit back and let go of the keyboard. The state itself stays until another
+            // field takes it, which is what lets this same frame still draw the caret.
+            if let Some(state) = self.input_text_state.as_ref() {
+                *buffer = state.text.clone();
+            }
+            if self.active_id == Some(id) {
+                self.active_id = None;
+            }
+        }
+        false
     }
 
     /// `ImGui::Checkbox`: a square box plus a label. Returns true on the frame it is toggled.

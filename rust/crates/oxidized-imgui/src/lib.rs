@@ -25,6 +25,7 @@ pub mod context;
 pub mod draw_list;
 pub mod font;
 pub mod id;
+pub mod input_text;
 pub mod io;
 pub mod menu_columns;
 pub mod style;
@@ -41,6 +42,7 @@ pub use draw_list::{
 };
 pub use font::{Font, Glyph};
 pub use id::{ImGuiID, hash_data, hash_str, hash_str_utf8};
+pub use input_text::InputTextState;
 pub use io::{Io, Key, KeyData};
 pub use menu_columns::MenuColumns;
 pub use style::{Col, Style};

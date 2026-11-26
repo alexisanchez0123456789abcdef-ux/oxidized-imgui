@@ -38,10 +38,14 @@ pub enum Col {
     SeparatorActive,
     HeaderHovered,
     HeaderActive,
+    /// `ImGuiCol_TextSelectedBg`: the background of a text selection.
+    TextSelectedBg,
+    /// `ImGuiCol_InputTextCursor`: the caret of a text field.
+    InputTextCursor,
 }
 
 impl Col {
-    pub const COUNT: usize = 29;
+    pub const COUNT: usize = 31;
 
     pub(crate) fn index(self) -> usize {
         match self {
@@ -74,6 +78,8 @@ impl Col {
             Col::ResizeGripActive => 26,
             Col::SeparatorHovered => 27,
             Col::SeparatorActive => 28,
+            Col::TextSelectedBg => 29,
+            Col::InputTextCursor => 30,
         }
     }
 }
@@ -203,6 +209,8 @@ impl Default for Style {
                 0xF2FA_9642, // ResizeGripActive (pinned from the reference)
                 0xC7BF_661A, // SeparatorHovered (pinned from the reference)
                 0xFFBF_661A, // SeparatorActive (pinned from the reference)
+                0x59FA_9642, // TextSelectedBg (pinned from the reference)
+                0xFFFF_FFFF, // InputTextCursor (pinned from the reference)
             ],
         }
     }
