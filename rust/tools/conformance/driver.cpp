@@ -1897,6 +1897,76 @@ static void DumpTablesColumnHoveredFlag()
         ImGui::EndFrame();
     }
 }
+// tables_scroll_child: a table with `ScrollY` builds its rows in an inner child window (no padding,
+// no border) with a draw list of its own, so the frame's draw data carries two lists: the host's
+// empty one and the child's with the table. The content fits, so no scrollbar shows yet.
+static void DumpTablesScrollChild()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario tables_scroll_child\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[6] = { 'A', 'B', 'C', 'R', '0', '1' };
+    for (int i = 0; i < 6; i++)
+        baked->FindGlyph((ImWchar)bake_order[i]);
+    WriteGlyphFixture(font, bake_order, 6);
+
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground;
+    for (int frame = 0; frame < 2; frame++)
+    {
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+        ImGui::Begin("S", NULL, flags);
+        const bool began = ImGui::BeginTable("SCROLL", 3,
+            ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg, ImVec2(0.0f, 400.0f), 0.0f);
+        printf("frame %d table begin %d\n", frame, (int)began);
+        ImGui::TableSetupColumn("A", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+        ImGui::TableSetupColumn("B", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        ImGui::TableSetupColumn("C", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+        ImGui::TableHeadersRow();
+        for (int row = 0; row < 2; row++)
+        {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            char text[8];
+            snprintf(text, sizeof(text), "R%d", row);
+            ImGui::Text("%s", text);
+            ImGui::TableNextColumn();
+            ImGui::Dummy(ImVec2(10.0f, 10.0f));
+            ImGui::TableNextColumn();
+            ImGui::Dummy(ImVec2(10.0f, 10.0f));
+        }
+        ImGui::EndTable();
+        ImGui::End();
+        ImGui::Render();
+        ImDrawData* dd = ImGui::GetDrawData();
+        ImGuiContext& g = *GImGui;
+        printf("frame %d lists %d\n", frame, dd->CmdListsCount);
+        for (int i = 0; i < dd->CmdListsCount; i++)
+        {
+            const ImDrawList* list = dd->CmdLists[i];
+            const char* name = "?";
+            for (int w = 0; w < g.Windows.Size; w++)
+                if (g.Windows[w]->DrawList == list)
+                    name = g.Windows[w]->Name;
+            printf("list %d %s\n", i, name);
+            DumpDrawListBody(*list);
+        }
+    }
+}
 // tables_sort_multi: a Shift+click adds a second sorting column when the table is `SortMulti`. First
 // a plain click on A turns its default ascending sort into descending, then a Shift+click on B
 // appends it as the second spec, which makes B draw its order number "2".
@@ -6081,6 +6151,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "tables_sort_tristate") == 0)
     {
         DumpTablesSortTristate();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "tables_scroll_child") == 0)
+    {
+        DumpTablesScrollChild();
         ImGui::DestroyContext();
         return 0;
     }

@@ -264,6 +264,12 @@ pub struct Context {
     table_last_outer_height: std::collections::HashMap<String, f32>,
     /// `table_instance->HoveredRowNext` from the last frame, which is what the next layout reads.
     table_hovered_row_next: std::collections::HashMap<String, i32>,
+    /// The size of the inner child window a scrolling table opened, `None` for a plain table: it is
+    /// what `EndTable` must close and the size the host advances by.
+    table_child_size: Option<Vec2>,
+    /// `Bg0ClipRectForDrawCmd`: the host window's clip, which the row backgrounds carry and which is
+    /// only different from the table's own clip when the table scrolls inside an inner window.
+    table_outer_clip: Option<[f32; 4]>,
     /// `column->SortOrder`, `column->SortDirection` and the two dirty flags of the sort specs from the
     /// last frame a table was built, by table identifier: the reference keeps them in the `ImGuiTable`
     /// it reuses (and reloads them from its settings), so a sort applied by a click survives to the
@@ -398,6 +404,8 @@ impl Default for Context {
             header_hovered_next: None,
             table_last_outer_height: std::collections::HashMap::new(),
             table_hovered_row_next: std::collections::HashMap::new(),
+            table_child_size: None,
+            table_outer_clip: None,
             table_sort_state: std::collections::HashMap::new(),
             table_column_order: std::collections::HashMap::new(),
             header_active: None,
@@ -1914,6 +1922,146 @@ impl Context {
         self.pending_child_host = Some(host);
     }
 
+    /// `BeginChildEx` for the inner window of a scrolling table: no padding, no border, its own draw
+    /// list, and the content scrolled by the offset the child had on the previous frame.
+    fn begin_table_child(&mut self, id: &str, outer_rect: (Vec2, Vec2), host_clip: [f32; 4]) {
+        let Some(parent) = self.windows.last() else {
+            return;
+        };
+        let host = parent.name.clone();
+        let table_id = self.get_id(id);
+        let child_name = format!("{host}/{id}_{table_id:08X}");
+        let size = Vec2 {
+            x: outer_rect.1.x - outer_rect.0.x,
+            y: outer_rect.1.y - outer_rect.0.y,
+        };
+        let pos = outer_rect.0;
+        // `ImGuiChildFlags_None` with the table's zero padding and border: the child's rectangle is
+        // exactly the table's, and the content starts at its top-left corner.
+        let inner_rect = outer_rect;
+        let content_before = self
+            .child_memory
+            .iter()
+            .find(|(name, _, _, _)| *name == child_name)
+            .map(|(_, _, content, _)| *content)
+            .unwrap_or_default();
+        let scroll_before = self
+            .child_memory
+            .iter()
+            .find(|(name, _, _, _)| *name == child_name)
+            .map(|(_, scroll, _, _)| *scroll)
+            .unwrap_or_default();
+        let scroll_max = Vec2 {
+            x: (content_before.x - size.x).max(0.0),
+            y: (content_before.y - size.y).max(0.0),
+        };
+        let scroll = Vec2 {
+            x: scroll_before.x.clamp(0.0, scroll_max.x),
+            y: scroll_before.y.clamp(0.0, scroll_max.y),
+        };
+        let content_origin = Vec2 {
+            x: inner_rect.0.x - scroll.x,
+            y: inner_rect.0.y - scroll.y,
+        };
+        let content_size = size;
+        let child_list = self.new_window_draw_list();
+        let host_list = core::mem::replace(&mut self.draw_list, child_list);
+        self.parent_list = Some(host_list);
+        self.windows.push(Window {
+            name: child_name,
+            pos,
+            size,
+            size_full: size,
+            collapsed: false,
+            want_collapse_toggle: false,
+            flags: WindowFlags::NONE,
+            scroll,
+            scroll_max,
+            content_extent: content_before,
+            scrollbar_y: false,
+            scrollbar_x: false,
+            inner_rect,
+            menu_bar_height: 0.0,
+            layout_horizontal: false,
+            is_child: true,
+            content_origin,
+            content_size,
+            menu_columns: crate::menu_columns::MenuColumns::default(),
+            cursor: content_origin,
+            cursor_start: content_origin,
+            cursor_max: content_origin,
+            line_start_x: content_origin.x,
+            line_height: 0.0,
+            last_min: Vec2::default(),
+            last_max: Vec2::default(),
+            has_item: false,
+            clip_rect: None,
+        });
+        // The reference's `BeginChildEx` pushes the child's window id, which for a table is the
+        // instance id the caller handed in: the table's own id.
+        self.push_override_id(table_id);
+        // `window->InnerClipRect`: the child's rectangle clipped to the parent's clip, floored, which
+        // is the first clip its list carries.
+        let clip = (
+            Vec2 {
+                x: (0.5 + inner_rect.0.x).floor().max(host_clip[0]),
+                y: (0.5 + inner_rect.0.y).floor().max(host_clip[1]),
+            },
+            Vec2 {
+                x: inner_rect.1.x.floor().min(host_clip[2]),
+                y: inner_rect.1.y.floor().min(host_clip[3]),
+            },
+        );
+        self.draw_list.push_clip_rect(clip.0, clip.1, false);
+        self.pending_child_host = Some(host);
+        self.table_child_size = Some(size);
+    }
+
+    /// `EndChild` for the inner window of a scrolling table: the child's extents are what its next
+    /// frame's scroll range uses, and the host advances past the table as one item.
+    fn end_table_child(&mut self) {
+        let Some(size) = self.table_child_size.take() else {
+            return;
+        };
+        self.draw_list.pop_clip_rect();
+        if let Some(child) = self.windows.pop() {
+            let content = Vec2 {
+                x: (child.cursor_max.x - child.cursor_start.x).trunc(),
+                y: (child.cursor_max.y - child.cursor_start.y).trunc(),
+            };
+            let rect = (
+                child.pos,
+                Vec2 {
+                    x: child.pos.x + child.size.x,
+                    y: child.pos.y + child.size.y,
+                },
+            );
+            match self
+                .child_memory
+                .iter_mut()
+                .find(|(name, _, _, _)| *name == child.name)
+            {
+                Some(slot) => {
+                    slot.1 = child.scroll;
+                    slot.2 = content;
+                    slot.3 = rect;
+                }
+                None => self
+                    .child_memory
+                    .push((child.name.clone(), child.scroll, content, rect)),
+            }
+            let child_list = core::mem::take(&mut self.draw_list);
+            self.frame_lists.push((child.name.clone(), child_list));
+            self.list_parents.push(self.pending_child_host.take());
+            self.draw_list = self
+                .parent_list
+                .take()
+                .unwrap_or_else(|| self.new_window_draw_list());
+        }
+        self.pop_id();
+        self.dummy(size);
+    }
+
     /// `ImGui::EndChild`: close the region's list, hand the host's list back, and advance the host
     /// past the region as an item of its size.
     pub fn end_child(&mut self) {
@@ -3128,21 +3276,46 @@ impl Context {
             },
         );
         let host_clip = self.draw_list.current_clip_rect();
-        // `BeginTableEx` pushes the window's inner clip on the list. Inside a plain window that is
-        // the clip the list is already on, so this neither changes nor splits a command.
-        self.draw_list.push_clip_rect(
-            Vec2 {
-                x: host_clip[0],
-                y: host_clip[1],
-            },
-            Vec2 {
-                x: host_clip[2],
-                y: host_clip[3],
-            },
-            false,
-        );
+        // `BeginTableEx`: a table with `ScrollX`/`ScrollY` builds its rows in an inner child window
+        // with no padding and no border, so the content scrolls and clips inside the table's
+        // rectangle. The host's list keeps the item; the child gets a list of its own.
+        let use_child = flags
+            & (crate::tables::table_flags::SCROLL_X | crate::tables::table_flags::SCROLL_Y)
+            != 0;
+        if use_child {
+            self.begin_table_child(id, outer_rect, host_clip);
+            // `TableUpdateLayout` pushes `inner_window->InnerClipRect`, which for an inner window is
+            // the clip the child already carries: same rectangle, no command split.
+            let clip = self.draw_list.current_clip_rect();
+            self.draw_list.push_clip_rect(
+                Vec2 {
+                    x: clip[0],
+                    y: clip[1],
+                },
+                Vec2 {
+                    x: clip[2],
+                    y: clip[3],
+                },
+                false,
+            );
+        } else {
+            // `BeginTableEx` pushes the window's inner clip on the list. Inside a plain window that is
+            // the clip the list is already on, so this neither changes nor splits a command.
+            self.draw_list.push_clip_rect(
+                Vec2 {
+                    x: host_clip[0],
+                    y: host_clip[1],
+                },
+                Vec2 {
+                    x: host_clip[2],
+                    y: host_clip[3],
+                },
+                false,
+            );
+        }
         self.push_id(id);
         self.table_host = Some(TableHost { line_start_x });
+        self.table_outer_clip = Some(host_clip);
         self.table_indices = vec![Vec::new(); columns];
         self.table_bg_indices.clear();
         let mut table = crate::tables::Table::new(flags, columns, outer_rect);
@@ -3650,9 +3823,12 @@ impl Context {
         if table.is_inside_row {
             self.table_end_row(&mut table);
         }
-        // `ImCeil(RowPosY2)`: the table is as tall as the bottom of its last row.
+        // `ImCeil(RowPosY2)`: a plain table is as tall as the bottom of its last row. A scrolling one
+        // keeps the size it was asked for; its rows grow the inner child's content instead.
         let inner_content_max_y = table.row_pos_y2.ceil();
-        table.outer_rect.1.y = table.outer_rect.1.y.max(inner_content_max_y);
+        if self.table_child_size.is_none() {
+            table.outer_rect.1.y = table.outer_rect.1.y.max(inner_content_max_y);
+        }
         // `TableDrawBorders`: the outer rectangle first, then one vertical line at the right edge of
         // every column but the last, from the top of the content to the bottom of the table. All of
         // it goes to the background channel.
@@ -3752,23 +3928,45 @@ impl Context {
         let fits: Vec<bool> = (0..table.columns.len())
             .map(|n| table.column_content_fits(n))
             .collect();
+        // `Bg0ClipRectForDrawCmd` is the **host** window's clip (`TableEndRow` overwrites the command
+        // clip with it), which only differs from the table's own clip when the table scrolls inside
+        // an inner window. The splitter's merge then joins channels that share a clip, so for a plain
+        // table the background and the fitting columns stay in one command.
+        let bg_clip = self.table_outer_clip.unwrap_or(window_clip);
+        let mut known_clip: Option<[f32; 4]> = None;
         // The command opened when the table began holds no geometry of its own (the cells moved
         // their indices to the channels), so the merge drops it before rebuilding the list.
         self.draw_list.pop_all_unused_commands();
+        if !background.is_empty() {
+            self.draw_list.start_command(bg_clip);
+            self.draw_list.idx_buffer.extend_from_slice(&background);
+            if let Some(cmd) = self.draw_list.cmd_buffer.last_mut() {
+                cmd.elem_count += background.len() as u32;
+            }
+            known_clip = Some(bg_clip);
+        }
         // `TableMergeDrawChannels` walks the columns **by index** to build the groups and the merge
         // copies the channels in channel-number order, which is the index order (the display order
         // only decides where the geometry was placed, not how the channels are merged).
-        let mut shared = background;
+        let mut shared: Vec<crate::draw_list::ImDrawIdx> = Vec::new();
         for (n, channel) in channels.iter().enumerate() {
             if fits[n] {
                 shared.extend_from_slice(channel);
             }
         }
         if !shared.is_empty() {
-            self.draw_list.start_command(window_clip);
-            self.draw_list.idx_buffer.extend_from_slice(&shared);
-            if let Some(cmd) = self.draw_list.cmd_buffer.last_mut() {
-                cmd.elem_count += shared.len() as u32;
+            if known_clip == Some(window_clip) {
+                // The splitter's merge joins the channels that share a clip into one command.
+                if let Some(cmd) = self.draw_list.cmd_buffer.last_mut() {
+                    cmd.elem_count += shared.len() as u32;
+                }
+                self.draw_list.idx_buffer.extend_from_slice(&shared);
+            } else {
+                self.draw_list.start_command(window_clip);
+                self.draw_list.idx_buffer.extend_from_slice(&shared);
+                if let Some(cmd) = self.draw_list.cmd_buffer.last_mut() {
+                    cmd.elem_count += shared.len() as u32;
+                }
             }
         }
         for (n, channel) in channels.iter().enumerate() {
@@ -3819,6 +4017,15 @@ impl Context {
             );
         }
         // Back at the table's top-left and at the host's line start, then laid out as one item.
+        if self.table_child_size.is_some() {
+            // `EndChild`: the inner window closes and the host advances by the child's size. The host's
+            // cursor and line start were never moved: the rows drew into the child's window.
+            self.table_host.take();
+            self.end_table_child();
+            self.table_outer_clip = None;
+            self.table = None;
+            return;
+        }
         if let Some(window) = self.windows.last_mut() {
             window.cursor = table.outer_rect.0;
             // `EndTable` pops the clip, so the items after the table see the window's again.
@@ -3832,6 +4039,7 @@ impl Context {
             y: table.outer_rect.1.y - table.outer_rect.0.y,
         };
         self.dummy(size);
+        self.table_outer_clip = None;
         self.table = None;
     }
 
