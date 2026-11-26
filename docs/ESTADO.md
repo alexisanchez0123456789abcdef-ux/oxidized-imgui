@@ -2,9 +2,9 @@
 
 _Actualizado: 2026-11-26. Generado desde `docs/progress.json`: no editar a mano._
 
-## Reescritura a Rust: **69.7 %**
+## Reescritura a Rust: **69.9 %**
 
-Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 71.6 %.
+Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 71.8 %.
 
 Qué cuenta como hecho: solo lo que tiene una prueba que lo compara con el código C++ original.
 Un cambio de estado sin evidencia no sube el porcentaje.
@@ -13,7 +13,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 | --- | ---: | ---: |
 | Núcleo: contexto, IO, ventanas, identificadores, layout | 59 | 76 % |
 | Listas de dibujo y primitivas | 18 | 100 % |
-| Widgets | 37 | 97 % |
+| Widgets | 38 | 97 % |
 | Fuentes y texto | 13 | 15 % |
 | Docking y viewports | 10 | 0 % |
 | Backends y ejemplos | 8 | 0 % |
@@ -75,6 +75,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Texto dibujado en la lista (geometría, sin UVs)** — golden text_draw (geometría; UVs omitidos por no ser reproducibles)
 - **Texto con CpuFineClip: glifos descartados fuera del recorte y quads y UVs recortados en el borde** — golden text_clip (5 recortes, 4279 bytes, con UVs)
 - **Cortes de comando y recorte por comando** — golden cmd_split (3 comandos: el clip que no cambia no parte, el que cambia sí, y el push/pop sin geometría se fusiona)
+- **InvisibleButton: ítem del tamaño pedido que no dibuja nada pero hovera y pulsa al soltar** — golden invisible_button (4 frames con el valor de retorno y la lista sin geometría propia)
 - **Botón: geometría, hover, estado activo y valor de retorno** — golden button
 - **Botón dibujado: relleno por estado, etiqueta y UVs** — golden button_draw
 - **Botón: reposo, hover y activo comparados** — golden button_states

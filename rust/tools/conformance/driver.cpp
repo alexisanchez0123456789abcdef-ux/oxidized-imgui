@@ -4786,6 +4786,65 @@ static void DumpIndent()
     }
 }
 
+// invisible_button: the widget draws nothing, it only takes an item of the given size; the return
+// value is the proof, and the draw list holds nothing but the window.
+static void DumpInvisibleButton()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario invisible_button\n");
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[1] = { 'A' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    WriteGlyphFixture(font, bake_order, 1);
+
+    const float steps[4][3] = {
+        { 0.0f, 0.0f, 0.0f },
+        { 70.0f, 70.0f, 1.0f },
+        { 70.0f, 70.0f, 0.0f },
+        { 0.0f, 0.0f, 0.0f },
+    };
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
+    for (int frame = 0; frame < 4; frame++)
+    {
+        io.DeltaTime = 0.1f;
+        io.MousePos = ImVec2(steps[frame][0], steps[frame][1]);
+        io.MouseDown[0] = steps[frame][2] != 0.0f;
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+        ImGui::Begin("W", NULL, flags);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        const bool pressed = ImGui::InvisibleButton("hit", ImVec2(50.0f, 20.0f));
+        ImGui::Text("A");
+        ImGui::End();
+        printf("frame %d pressed %d\n", frame, pressed ? 1 : 0);
+        ImGui::Render();
+        ImDrawData* dd = ImGui::GetDrawData();
+        ImGuiContext& g = *GImGui;
+        printf("frame %d lists %d\n", frame, dd->CmdListsCount);
+        for (int i = 0; i < dd->CmdListsCount; i++)
+        {
+            const ImDrawList* list = dd->CmdLists[i];
+            const char* name = "?";
+            for (int w = 0; w < g.Windows.Size; w++)
+                if (g.Windows[w]->DrawList == list)
+                    name = g.Windows[w]->Name;
+            printf("list %d %s\n", i, name);
+            DumpDrawListBody(*list);
+        }
+        ImGui::EndFrame();
+    }
+}
+
 // windows_move: dragging a window by its title bar and by its body, and the clamp that keeps it
 // reachable when it is dragged off the display. Only the positions are dumped: the geometry of a
 // window is what windows_order already covers.
@@ -6674,6 +6733,13 @@ int main(int argc, char** argv)
         return 0;
     }
 
+
+    if (strcmp(name, "invisible_button") == 0)
+    {
+        DumpInvisibleButton();
+        ImGui::DestroyContext();
+        return 0;
+    }
 
     if (strcmp(name, "indent") == 0)
     {

@@ -5118,6 +5118,16 @@ impl Context {
         window.cursor.x = window.line_start_x;
     }
 
+    /// `ImGui::InvisibleButton`: an item of the given size that draws nothing but hovers and reports
+    /// a press, which is what a custom widget builds on.
+    pub fn invisible_button(&mut self, id_str: &str, size: Vec2) -> bool {
+        if size.x == 0.0 || size.y == 0.0 {
+            return false;
+        }
+        let id = self.get_id(id_str);
+        self.interact(id, size)
+    }
+
     /// `ButtonBehavior` over a rectangle, with the item's own width for `ItemSize`: the row a tree
     /// node reacts to is narrower than the highlight it paints.
     fn interact_rect_spanning(
