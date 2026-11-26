@@ -50,6 +50,7 @@ pub const SCENARIOS: &[&str] = &[
     "tables_set_column",
     "tables_names",
     "tables_header_id",
+    "tables_clip",
     "text_draw",
     "button",
     "widgets_basic",
@@ -2378,6 +2379,90 @@ pub fn tables_header_id_dump() -> String {
     ctx.end_table();
 
     let full = dump("tables_header_id", ctx.draw_list());
+    for line in full.lines().skip(2) {
+        out.push_str(line);
+        out.push('\n');
+    }
+    ctx.end_window();
+    ctx.end_frame();
+    out
+}
+
+/// The `tables_clip` scenario: a 10 px column whose text is wider than the column. The items of a
+/// cell are clipped to the column, and because the content overflows its clip the column ends up in
+/// a draw command of its own carrying the column's clip.
+pub fn tables_clip_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2, WindowFlags, column_flags};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/tables_clip.glyphs.txt"
+    );
+    let glyphs = std::fs::read_to_string(path).expect("glyph fixture");
+    let font = Font::from_pinned(&glyphs).expect("glyph fixture");
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    ctx.io_mut().delta_time = 0.1;
+    ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+    ctx.io_mut().mouse_down[0] = false;
+    ctx.begin_frame();
+    ctx.set_next_window_flags(
+        WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+    );
+    ctx.begin_window_ex(
+        "W",
+        Some(Vec2 { x: 60.0, y: 60.0 }),
+        Some(Vec2 { x: 300.0, y: 200.0 }),
+        false,
+    );
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario tables_clip\n");
+
+    let window_pos = ctx.window().pos;
+    let local = |p: Vec2| Vec2 {
+        x: p.x - window_pos.x,
+        y: p.y - window_pos.y,
+    };
+    let began = ctx.begin_table("T", 2, 0, Vec2::default());
+    out.push_str(&format!("table begin {}\n", i32::from(began)));
+    ctx.table_setup_column("A", column_flags::WIDTH_FIXED, 10.0);
+    ctx.table_setup_column("B", column_flags::WIDTH_FIXED, 100.0);
+
+    ctx.table_next_row_min(20.0);
+    for col in 0..2 {
+        ctx.table_next_column();
+        let cursor = local(ctx.cursor_screen_pos());
+        out.push_str(&format!(
+            "cell {col} cursor {:08x} {:08x}\n",
+            bits(cursor.x),
+            bits(cursor.y)
+        ));
+        ctx.text("A00");
+        let min = local(ctx.item_rect_min());
+        let max = local(ctx.item_rect_max());
+        out.push_str(&format!(
+            "cell {col} item {:08x} {:08x} {:08x} {:08x}\n",
+            bits(min.x),
+            bits(min.y),
+            bits(max.x),
+            bits(max.y)
+        ));
+    }
+
+    ctx.end_table();
+    let end_cursor = local(ctx.cursor_screen_pos());
+    out.push_str(&format!(
+        "after cursor {:08x} {:08x}\n",
+        bits(end_cursor.x),
+        bits(end_cursor.y)
+    ));
+
+    let full = dump("tables_clip", ctx.draw_list());
     for line in full.lines().skip(2) {
         out.push_str(line);
         out.push('\n');
@@ -5439,6 +5524,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "tables_set_column" => Some(tables_set_column_dump()),
         "tables_names" => Some(tables_names_dump()),
         "tables_header_id" => Some(tables_header_id_dump()),
+        "tables_clip" => Some(tables_clip_dump()),
         "text_draw" => Some(text_draw_dump()),
         "button" => Some(button_dump()),
         "widgets_basic" => Some(widgets_basic_dump()),

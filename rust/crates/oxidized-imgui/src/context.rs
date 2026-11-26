@@ -213,6 +213,9 @@ pub struct Window {
     last_min: Vec2,
     last_max: Vec2,
     has_item: bool,
+    /// `window->ClipRect` as far as the items of a table cell need it: the reference narrows it to
+    /// the column while cells are submitted, so text outside the column is dropped in software.
+    clip_rect: Option<[f32; 4]>,
 }
 
 /// Frame state, identifier stack, style, input state and the open window stack.
@@ -1428,6 +1431,7 @@ impl Context {
             last_min: Vec2::default(),
             last_max: Vec2::default(),
             has_item: false,
+            clip_rect: None,
         });
         // `window->DC.MenuColumns.Update(style.ItemSpacing.x, window_just_activated_by_user)`: the
         // offsets are locked from the previous frame before any item of this one is submitted.
@@ -1851,6 +1855,7 @@ impl Context {
             last_min: Vec2::default(),
             last_max: Vec2::default(),
             has_item: false,
+            clip_rect: None,
         });
         self.push_id(id);
         // `InnerClipRect`: the child's own list starts clipped to its rectangle, shrunk by half a
@@ -3409,26 +3414,59 @@ impl Context {
             }
             self.table_bg_indices.extend_from_slice(&tail);
         }
-        // `ImDrawListSplitter::Merge`: the background channel first, then the column channels, so
-        // the vertices stay where they were drawn and only the indices are regrouped.
+        self.draw_list.pop_clip_rect();
+        // `TableMergeDrawChannels` + `ImDrawListSplitter::Merge`: the columns whose content stayed
+        // inside their clip share one command carrying the window's clip, with the background
+        // first; a column whose content overflowed keeps a command of its own with the column's
+        // clip, and the merge leaves a trailing command behind when the last one closed.
+        let window_clip = self.draw_list.current_clip_rect();
         let background = core::mem::take(&mut self.table_bg_indices);
-        if !background.is_empty() {
-            self.draw_list.idx_buffer.extend_from_slice(&background);
-            if let Some(cmd) = self.draw_list.cmd_buffer.last_mut() {
-                cmd.elem_count += background.len() as u32;
+        let channels = core::mem::take(&mut self.table_indices);
+        let fits: Vec<bool> = (0..table.columns.len())
+            .map(|n| table.column_content_fits(n))
+            .collect();
+        // The command opened when the table began holds no geometry of its own (the cells moved
+        // their indices to the channels), so the merge drops it before rebuilding the list.
+        self.draw_list.pop_all_unused_commands();
+        let mut shared = background;
+        for (channel, fits) in channels.iter().zip(&fits) {
+            if *fits {
+                shared.extend_from_slice(channel);
             }
         }
-        for channel in core::mem::take(&mut self.table_indices) {
-            self.draw_list.idx_buffer.extend_from_slice(&channel);
+        if !shared.is_empty() {
+            self.draw_list.start_command(window_clip);
+            self.draw_list.idx_buffer.extend_from_slice(&shared);
+            if let Some(cmd) = self.draw_list.cmd_buffer.last_mut() {
+                cmd.elem_count += shared.len() as u32;
+            }
+        }
+        for (n, channel) in channels.iter().enumerate() {
+            if fits[n] || channel.is_empty() {
+                continue;
+            }
+            let clip = table.columns[n].clip;
+            self.draw_list.start_command(clip);
+            self.draw_list.idx_buffer.extend_from_slice(channel);
             if let Some(cmd) = self.draw_list.cmd_buffer.last_mut() {
                 cmd.elem_count += channel.len() as u32;
             }
         }
-        self.draw_list.pop_clip_rect();
+        let needs_trailing = self
+            .draw_list
+            .cmd_buffer
+            .last()
+            .map(|cmd| cmd.elem_count != 0 && cmd.clip_rect != window_clip)
+            .unwrap_or(true);
+        if needs_trailing {
+            self.draw_list.start_command(window_clip);
+        }
         self.pop_id();
         // Back at the table's top-left and at the host's line start, then laid out as one item.
         if let Some(window) = self.windows.last_mut() {
             window.cursor = table.outer_rect.0;
+            // `EndTable` pops the clip, so the items after the table see the window's again.
+            window.clip_rect = None;
             if let Some(host) = self.table_host.take() {
                 window.line_start_x = host.line_start_x;
             }
@@ -3538,20 +3576,30 @@ impl Context {
     fn table_begin_cell(&mut self, table: &mut crate::tables::Table, column: usize) {
         table.current_column = column as i32;
         let start = table.cell_min(column);
+        let clip = table.columns[column].clip;
         self.cell_index_start = self.draw_list.idx_buffer.len();
         if let Some(window) = self.windows.last_mut() {
             window.cursor = start;
             window.line_start_x = start.x;
             window.line_height = 0.0;
             window.cursor_max.x = start.x;
+            // `SetWindowClipRectBeforeSetChannel`: the items of a cell are clipped to its column.
+            window.clip_rect = Some(clip);
         }
     }
 
     /// `TableEndCell`: the furthest content of the cell grows the row by one cell padding, and the
     /// indices the cell drew move to their column's draw channel.
     fn table_end_cell(&mut self, table: &mut crate::tables::Table) {
-        let max_y = self.window().cursor_max.y;
+        let (max_x, max_y) = {
+            let cursor_max = self.window().cursor_max;
+            (cursor_max.x, cursor_max.y)
+        };
         table.end_cell(max_y);
+        let column = table.current_column.max(0) as usize;
+        if let Some(col) = table.columns.get_mut(column) {
+            col.content_max_x = col.content_max_x.max(max_x);
+        }
         let column = table.current_column.max(0) as usize;
         let tail = self.draw_list.idx_buffer.split_off(self.cell_index_start);
         if let Some(cmd) = self.draw_list.cmd_buffer.last_mut() {
@@ -4119,9 +4167,11 @@ impl Context {
     pub fn text(&mut self, text: &str) {
         let font = self.font.clone();
         let pos = self.window().cursor;
+        let clip = self.window().clip_rect;
         let size = font.calc_text_size(text, font.size);
         let colour = self.style.color_u32(crate::style::Col::Text);
-        self.draw_list.add_text(&font, font.size, pos, colour, text);
+        self.draw_list
+            .add_text_in(&font, font.size, pos, colour, text, clip, None);
         self.dummy(size);
     }
 

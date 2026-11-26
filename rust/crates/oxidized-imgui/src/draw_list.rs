@@ -226,6 +226,30 @@ impl DrawList {
         }
     }
 
+    /// `_PopUnusedDrawCmd` without keeping one behind: the draw splitter's merge drops every
+    /// trailing command that carries no geometry, and adds one back later if it needs it.
+    pub fn pop_all_unused_commands(&mut self) {
+        while self
+            .cmd_buffer
+            .last()
+            .map(|cmd| cmd.elem_count == 0)
+            .unwrap_or(false)
+        {
+            self.cmd_buffer.pop();
+        }
+    }
+
+    /// `ImDrawList::AddDrawCmd` with an explicit clip: opens a command for the indices that follow,
+    /// which is how the draw splitter hands each table column its own command.
+    pub fn start_command(&mut self, clip: [f32; 4]) {
+        let cmd = DrawCmd {
+            clip_rect: clip,
+            idx_offset: self.idx_buffer.len() as u32,
+            ..DrawCmd::default()
+        };
+        self.cmd_buffer.push(cmd);
+    }
+
     /// Sets the current clip on the command being built, without opening a new one. The window
     /// draw list starts with the fullscreen clip before its background is drawn.
     pub fn set_current_clip(&mut self, rect: [f32; 4]) {
