@@ -479,6 +479,17 @@ tamano. Asi, olvidar el cuarto sitio ya no puede pasar en silencio.
 Regla que queda: al anadir un escenario hay que tocar **cuatro** sitios (driver, ``dump_for``,
 `SCENARIOS` y `gen-golden.ps1`); si falta `SCENARIOS` el golden es decorativo y el `cargo test` no
 lo nota.
+### `CloseButton` no es una unidad pendiente (nota para no repetir trabajo)
+
+`ImGui::CloseButton(id, pos)` **no es API de usuario**: es el ayudante interno con el que una ventana
+dibuja su aspa (`imgui_widgets.cpp:910`), y su unico consumidor es la decoracion de ventana. El port **ya
+lo tiene** ahi: `context.rs` (~1761-1800) elige el color con `held`/`hovered`, rellena solo si hay hover y
+dibuja las dos diagonales con `add_line` y `extent = half * 0.7071 - 1`, exactamente la formula del
+reference (`cross_extent = FontSize * 0.5 * 0.7071 - 1`).
+
+Lo cubren los goldens `window_icons`, `window_icons_states` y `window_icons_drag` (hover, pulsado y
+arrastre sobre el aspa). Consecuencia: **no hay que "portar CloseButton"**; si alguna vez hace falta un aspa
+suelta, lo correcto es exponer un `button` con ese dibujo, no duplicar el de la ventana.
 ### ArrowButton (peso 1): cerrada
 
 Golden `arrow_button`: dos `ArrowButton` (izquierda y derecha) en la misma ventana. Medido: cada uno mide
