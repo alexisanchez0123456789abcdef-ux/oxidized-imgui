@@ -3254,9 +3254,14 @@ impl Context {
                 table.row_cell_padding_y,
             )
         };
+        // `FindRenderedTextEnd`: everything after "##" identifies the column but is not drawn.
+        let shown = match label.find("##") {
+            Some(at) => &label[..at],
+            None => label,
+        };
         let font = self.font.clone();
         let label_pos = self.window().cursor;
-        let label_size = font.calc_text_size(label, font.size);
+        let label_size = font.calc_text_size(shown, font.size);
         // A label is as tall as its text, or as the row minus its padding, whichever is more.
         let label_height = label_size.y.max(row_min_height - row_padding_y * 2.0);
         let bb = (
@@ -3271,7 +3276,7 @@ impl Context {
         );
         let colour = self.style.color_u32(crate::style::Col::Text);
         self.draw_list
-            .add_text(&font, font.size, label_pos, colour, label);
+            .add_text(&font, font.size, label_pos, colour, shown);
         self.dummy(Vec2 {
             x: 0.0,
             y: label_height,
