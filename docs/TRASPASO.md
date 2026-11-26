@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **90 escenarios** más la **prueba negativa**.
+   que ejecuta **91 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **97 PRs** fusionados.
-- **90 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **98 PRs** fusionados.
+- **91 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 68.1 %.** Proyecto (contando el arnés): **70.3 %**.
 - 32 tests unitarios en 6 binarios.
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
@@ -123,6 +123,7 @@ contenido; `tables_headers`: la fila de cabecera con su banda y sus nombres, con
 `tables_next_column`: `TableNextColumn` recorriendo la fila y abriendo otra al pasar la última columna;
 `tables_header_hover`: el resalte `HeaderHovered` de una cabecera, que llega al tercer frame;
 `tables_header_active`: el `HeaderActive` de una cabecera pulsada;
+`tables_hovered`: `TableGetHoveredColumn` (inmediato) y `TableGetHoveredRow` (un frame de retraso);
 `tables_row_height`: la altura mínima de fila de `TableNextRow`, que gana al contenido).
 
 La tabla completa, con el nombre del golden de cada fila, está en `rust/README.md`.
@@ -331,7 +332,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 90 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 91 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```

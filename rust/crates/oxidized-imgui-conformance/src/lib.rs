@@ -58,6 +58,7 @@ pub const SCENARIOS: &[&str] = &[
     "tables_next_column",
     "tables_header_hover",
     "tables_header_active",
+    "tables_hovered",
     "text_draw",
     "button",
     "widgets_basic",
@@ -2956,6 +2957,66 @@ pub fn tables_header_active_dump() -> String {
         if frame == 3 {
             out.push_str(&format!("table begin {}\n", i32::from(began)));
             let full = dump("tables_header_active", ctx.draw_list());
+            for line in full.lines().skip(2) {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
+        ctx.end_window();
+        ctx.end_frame();
+    }
+    out
+}
+
+/// The `tables_hovered` scenario: `TableGetHoveredColumn` and `TableGetHoveredRow` with the mouse
+/// over the second column. The column is immediate, the row has one frame of latency.
+pub fn tables_hovered_dump() -> String {
+    use oxidized_imgui::{Context, Vec2, WindowFlags, column_flags};
+
+    let mut ctx = Context::new();
+    ctx.io_mut().delta_time = 0.1;
+    ctx.io_mut().mouse_down[0] = false;
+
+    let mut out = String::new();
+    for frame in 0..4 {
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: 150.0, y: 95.0 });
+        ctx.begin_frame();
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+        );
+        ctx.begin_window_ex(
+            "W",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+            false,
+        );
+        if frame == 0 {
+            out.push_str(&format!(
+                "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+            ));
+            out.push_str("scenario tables_hovered\n");
+        }
+        let began = ctx.begin_table("T", 2, 0, Vec2::default());
+        if frame == 0 {
+            out.push_str(&format!("table begin {}\n", i32::from(began)));
+        }
+        ctx.table_setup_column("A", column_flags::WIDTH_FIXED, 60.0);
+        ctx.table_setup_column("B", column_flags::WIDTH_FIXED, 80.0);
+        for _ in 0..2 {
+            ctx.table_next_row_min(20.0);
+            for _ in 0..2 {
+                ctx.table_next_column();
+                ctx.dummy(Vec2 { x: 10.0, y: 10.0 });
+            }
+        }
+        out.push_str(&format!(
+            "frame {frame} hovered col {} row {}\n",
+            ctx.table_get_hovered_column(),
+            ctx.table_get_hovered_row()
+        ));
+        ctx.end_table();
+        if frame == 3 {
+            let full = dump("tables_hovered", ctx.draw_list());
             for line in full.lines().skip(2) {
                 out.push_str(line);
                 out.push('\n');
@@ -6027,6 +6088,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "tables_next_column" => Some(tables_next_column_dump()),
         "tables_header_hover" => Some(tables_header_hover_dump()),
         "tables_header_active" => Some(tables_header_active_dump()),
+        "tables_hovered" => Some(tables_hovered_dump()),
         "text_draw" => Some(text_draw_dump()),
         "button" => Some(button_dump()),
         "widgets_basic" => Some(widgets_basic_dump()),

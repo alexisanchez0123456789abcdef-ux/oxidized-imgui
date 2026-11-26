@@ -156,6 +156,13 @@ pub struct Table {
     pub row_cells: Vec<(usize, u32)>,
     /// `table->RowBgColorCounter`: the odd/even counter of `RowBg`, which skips header rows.
     pub row_bg_counter: u32,
+    /// `table->HoveredColumnBody`: the column under the mouse, `-1` outside the table and the column
+    /// count in the unused space right of the last one.
+    pub hovered_column_body: i32,
+    /// `table_instance->HoveredRowLast`: the hovered row, one frame behind.
+    pub hovered_row_last: i32,
+    /// `table_instance->HoveredRowNext`: the row under the mouse on this frame.
+    pub hovered_row_next: i32,
     /// `table->WorkRect`: the table's work rectangle, which is the outer one in a plain table.
     pub work_rect: (Vec2, Vec2),
     /// `table->BgClipRect`: where the row backgrounds are clipped, `InnerClipRect` here.
@@ -172,6 +179,9 @@ impl Table {
             outer_rect,
             current_row: -1,
             current_column: -1,
+            hovered_column_body: -1,
+            hovered_row_last: 0,
+            hovered_row_next: 0,
             ..Self::default()
         }
     }

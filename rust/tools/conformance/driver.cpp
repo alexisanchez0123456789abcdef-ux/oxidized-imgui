@@ -1631,6 +1631,51 @@ static void DumpTablesHeaderActive()
         ImGui::EndFrame();
     }
 }
+// tables_hovered: `TableGetHoveredColumn` and `TableGetHoveredRow` with the mouse over the second
+// column. The column is immediate, the row has one frame of latency.
+static void DumpTablesHovered()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario tables_hovered\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MouseDown[0] = false;
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground;
+    for (int frame = 0; frame < 4; frame++)
+    {
+        io.MousePos = ImVec2(150.0f, 95.0f);
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+        ImGui::Begin("W", NULL, flags);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+
+        const bool began = ImGui::BeginTable("T", 2, 0, ImVec2(0.0f, 0.0f), 0.0f);
+        if (frame == 0)
+            printf("table begin %d\n", (int)began);
+        ImGui::TableSetupColumn("A", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+        ImGui::TableSetupColumn("B", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        for (int row = 0; row < 2; row++)
+        {
+            ImGui::TableNextRow(ImGuiTableRowFlags_None, 20.0f);
+            for (int col = 0; col < 2; col++)
+            {
+                ImGui::TableNextColumn();
+                ImGui::Dummy(ImVec2(10.0f, 10.0f));
+            }
+        }
+        printf("frame %d hovered col %d row %d\n", frame, ImGui::TableGetHoveredColumn(),
+            ImGui::TableGetHoveredRow());
+        ImGui::EndTable();
+        if (frame == 3)
+            DumpDrawListBody(*dl);
+        ImGui::End();
+        ImGui::EndFrame();
+    }
+}
 // tables_row_height: `TableNextRow(flags, min_height)` with a minimum taller than the cell contents.
 // Each row is 20 px instead of the 17 its text needs, and the rows below start lower.
 static void DumpTablesRowHeight()
@@ -5375,6 +5420,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "tables_set_column") == 0)
     {
         DumpTablesSetColumn();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "tables_hovered") == 0)
+    {
+        DumpTablesHovered();
         ImGui::DestroyContext();
         return 0;
     }

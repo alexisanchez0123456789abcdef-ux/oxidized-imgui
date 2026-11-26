@@ -256,6 +256,11 @@ pub struct Context {
     header_hovered_last: Option<(String, usize)>,
     /// The header the mouse is over on this frame, which becomes the previous frame's id at once.
     header_hovered_next: Option<(String, usize)>,
+    /// `table_instance->LastOuterHeight`: the height the table had on the previous frame, which the
+    /// hover test of the next one uses because the current height is not known yet.
+    table_last_outer_height: std::collections::HashMap<String, f32>,
+    /// `table_instance->HoveredRowNext` from the last frame, which is what the next layout reads.
+    table_hovered_row_next: std::collections::HashMap<String, i32>,
     /// `g.ActiveId` for the header cells: the one held with the mouse, until the button is released.
     header_active: Option<(String, usize)>,
     /// Per-window state between frames: position, size, scroll, content size and flags.
@@ -379,6 +384,8 @@ impl Default for Context {
             table_content_max_x: std::collections::HashMap::new(),
             header_hovered_last: None,
             header_hovered_next: None,
+            table_last_outer_height: std::collections::HashMap::new(),
+            table_hovered_row_next: std::collections::HashMap::new(),
             header_active: None,
             table_host: None,
             table_indices: Vec::new(),
@@ -3124,7 +3131,12 @@ impl Context {
         self.table_host = Some(TableHost { line_start_x });
         self.table_indices = vec![Vec::new(); columns];
         self.table_bg_indices.clear();
-        self.table = Some(crate::tables::Table::new(flags, columns, outer_rect));
+        let mut table = crate::tables::Table::new(flags, columns, outer_rect);
+        // The instance data of a table outlives the frame that built it.
+        if let Some(&next) = self.table_hovered_row_next.get(id) {
+            table.hovered_row_next = next;
+        }
+        self.table = Some(table);
         self.table_id = Some(id.to_string());
         true
     }
@@ -3378,6 +3390,23 @@ impl Context {
         self.table.as_ref().map(|t| t.columns.len()).unwrap_or(0)
     }
 
+    /// `ImGui::TableGetHoveredColumn`: the column under the mouse, `-1` when the table is not
+    /// hovered and the column count in the unused space after the last column.
+    pub fn table_get_hovered_column(&self) -> i32 {
+        self.table
+            .as_ref()
+            .map(|table| table.hovered_column_body)
+            .unwrap_or(-1)
+    }
+
+    /// `ImGui::TableGetHoveredRow`: the row under the mouse, one frame behind.
+    pub fn table_get_hovered_row(&self) -> i32 {
+        self.table
+            .as_ref()
+            .map(|table| table.hovered_row_last)
+            .unwrap_or(-1)
+    }
+
     /// `ImGui::TableGetColumnFlags`: the flags the column ended up with, after the table policy
     /// filled in the width kind, the resize and indentation bits.
     pub fn table_get_column_flags(&self, column: usize) -> u32 {
@@ -3545,6 +3574,10 @@ impl Context {
         // The content extents are what sizes the columns on the next frame, so they outlive the
         // table instance; the reference keeps them in the `ImGuiTable` it reuses.
         if let Some(id) = self.table_id.take() {
+            let height = table.outer_rect.1.y - table.outer_rect.0.y;
+            self.table_last_outer_height.insert(id.clone(), height);
+            let next_row = table.hovered_row_next;
+            self.table_hovered_row_next.insert(id.clone(), next_row);
             let extents = table
                 .columns
                 .iter()
@@ -3590,10 +3623,52 @@ impl Context {
             host_clip,
             self.style.frame_padding.x,
         );
+        // The hover detection of `TableUpdateLayout`: the row is one frame behind, and the column is
+        // the one whose clip holds the mouse, or the column count after the last one.
+        table.hovered_row_last = table.hovered_row_next;
+        table.hovered_row_next = -1;
+        table.hovered_column_body = -1;
+        let last_height = self
+            .table_id
+            .as_ref()
+            .and_then(|id| self.table_last_outer_height.get(id))
+            .copied()
+            .unwrap_or(0.0);
+        let hit_max = Vec2 {
+            x: table.outer_rect.1.x,
+            y: table.outer_rect.1.y.max(table.outer_rect.0.y + last_height),
+        };
+        if self.hovered_in(table.outer_rect.0, hit_max) {
+            if let Some(mouse) = self.io.mouse_pos {
+                for (n, column) in table.columns.iter().enumerate() {
+                    if mouse.x >= column.clip[0] && mouse.x < column.clip[2] {
+                        table.hovered_column_body = n as i32;
+                    }
+                }
+                if table.hovered_column_body == -1 {
+                    let unused_x1 = table.columns.last().map(|c| c.clip[2]).unwrap_or(0.0);
+                    if mouse.x >= unused_x1 {
+                        table.hovered_column_body = table.columns.len() as i32;
+                    }
+                }
+            }
+        }
     }
 
     /// `TableEndRow`: closes the open cell and leaves the cursor at the row's bottom.
     fn table_end_row(&mut self, table: &mut crate::tables::Table) {
+        // `TableGetHoveredRow` data: the first row whose span holds the mouse while a column is
+        // hovered.
+        if table.hovered_column_body != -1 {
+            if let Some(mouse) = self.io.mouse_pos {
+                if mouse.y >= table.row_pos_y1
+                    && mouse.y < table.row_pos_y2
+                    && table.hovered_row_next < 0
+                {
+                    table.hovered_row_next = table.current_row;
+                }
+            }
+        }
         if table.current_column != -1 {
             self.table_end_cell(table);
             table.current_column = -1;
