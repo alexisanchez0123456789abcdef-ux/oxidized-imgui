@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **111 escenarios** más la **prueba negativa**.
+   que ejecuta **112 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **120 PRs** fusionados.
-- **111 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **121 PRs** fusionados.
+- **112 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 68.3 %.** Proyecto (contando el arnés): **70.5 %**.
 - 39 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
@@ -245,7 +245,26 @@ Golden `separator`: tres etiquetas con un separador entre ellas en una ventana d
   separador en `47..48`, "C" en `52..65` y el cursor queda en `y 69`.
 - El rectángulo del ítem es la línea (`(8,25)-(292,26)`), no la caja del texto: el golden lo imprime
   tras cada `Separator`.
-- La forma **vertical** (layout horizontal, la barra de menús) no está portada.
+- La forma **vertical** (la barra de menús) tiene su propia sección más abajo.
+
+### Separador vertical en la barra de menús (peso 1): cerrada
+
+Golden `menu_bar_separator`: `MenuItem("File")`, `Separator()` y `MenuItem("Edit")` dentro de
+`BeginMenuBar`, cinco frames.
+
+- Dentro de un layout horizontal `Separator` es **vertical**: `x1 = cursor.x`, `x2 = x1 + grosor`,
+  `y1 = cursor.y`, `y2 = cursor.y + CurrLineSize.y`, y **sólo el ancho** entra en el layout
+  (`ItemSize((grosor, 0))`), así que la x avanza `grosor + ItemSpacing.x`.
+- La altura del ítem no es el texto: la barra hace `AlignTextToFramePadding` al empezar, así que
+  `CurrLineSize.y = FontSize + FramePadding.y * 2 = 19`. Medido: el separador va de `y 0` a `y 19`
+  (relativo a la ventana) y el cursor queda en `x 61` (52 + 1 + 8).
+- **Corrección de modelo**: el port ponía `line_height = 0` al abrir la barra; ningún golden lo
+  miraba hasta ahora (los ítems de la barra se colocan con el desfase de línea, no con la altura).
+  Ahora `begin_menu_bar` fija esa altura, y `menu_bar`, `menu_submenu`, `combo` y compañía siguen en
+  verde.
+- **Trampa del fixture**: el botón del cuerpo usa la "x", que el reference hornea al vuelo; el
+  `bake_order` del escenario tiene que incluir **todas** las letras de todas las cadenas (las de la
+  barra y las de los ítems del cuerpo), o el golden sale con el glifo de más.
 
 ### SeparatorText (peso 1): cerrada
 
@@ -602,7 +621,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 111 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 112 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```

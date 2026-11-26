@@ -102,6 +102,7 @@ pub const SCENARIOS: &[&str] = &[
     "windows_set_size",
     "separator",
     "separator_text",
+    "menu_bar_separator",
     "window_scroll",
     "window_scrollbar",
     "window_scrollbar_drag",
@@ -5710,6 +5711,81 @@ pub fn separator_text_dump() -> String {
     out
 }
 
+/// The `menu_bar_separator` scenario: a `Separator` inside a menu bar takes the vertical form, a line
+/// as tall as the line the bar already laid out, one pixel wide, which only advances the horizontal
+/// layout.
+pub fn menu_bar_separator_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2, WindowFlags};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/menu_bar_separator.glyphs.txt"
+    );
+    let glyphs = std::fs::read_to_string(path).expect("menu bar separator fixture");
+    let font = Font::from_pinned(&glyphs).expect("font fixture");
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario menu_bar_separator\n");
+
+    for frame in 0..5 {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+        ctx.io_mut().mouse_down[0] = false;
+        ctx.begin_frame();
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE
+                | WindowFlags::NO_SCROLLBAR
+                | WindowFlags::NO_RESIZE
+                | WindowFlags::MENU_BAR,
+        );
+        ctx.begin_window(
+            "W",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        let window_pos = ctx.window().pos;
+        ctx.begin_menu_bar();
+        ctx.menu_item("File");
+        ctx.separator();
+        let (min, max, cursor) = (
+            ctx.item_rect_min(),
+            ctx.item_rect_max(),
+            ctx.cursor_screen_pos(),
+        );
+        out.push_str(&format!(
+            "frame {frame} sep item {:08x} {:08x} {:08x} {:08x} cursor {:08x} {:08x}\n",
+            bits(min.x - window_pos.x),
+            bits(min.y - window_pos.y),
+            bits(max.x - window_pos.x),
+            bits(max.y - window_pos.y),
+            bits(cursor.x - window_pos.x),
+            bits(cursor.y - window_pos.y)
+        ));
+        ctx.menu_item("Edit");
+        ctx.end_menu_bar();
+        ctx.button("x");
+        ctx.end_window();
+        ctx.end_frame();
+        let lists = ctx.render_lists();
+        out.push_str(&format!("frame {frame} lists {}\n", lists.len()));
+        for (i, (name, list)) in lists.iter().enumerate() {
+            out.push_str(&format!("list {i} {name}\n"));
+            let body = dump("menu_bar_separator", list);
+            for line in body.lines().skip(2) {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
+    }
+    out
+}
+
 /// The `windows_move` scenario: dragging one window by its title bar and by its body, and the clamp
 /// that keeps it reachable when it is dragged off the display.
 ///
@@ -7651,6 +7727,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "windows_set_size" => Some(windows_set_size_dump()),
         "separator" => Some(separator_dump()),
         "separator_text" => Some(separator_text_dump()),
+        "menu_bar_separator" => Some(menu_bar_separator_dump()),
         "window_scroll" => Some(window_scroll_dump()),
         "window_scrollbar" => Some(window_scrollbar_dump()),
         "window_scrollbar_drag" => Some(window_scrollbar_drag_dump()),

@@ -4854,9 +4854,9 @@ impl Context {
         self.dummy(size);
     }
 
-    /// `ImGui::Separator`: a line of `Style::SeparatorSize` pixels across the window's work width,
-    /// laid out as an item of its thickness. The vertical form only appears in a horizontal layout
-    /// (the menu bar), which no golden needs yet.
+    /// `ImGui::Separator`: in a vertical layout, a line of `Style::SeparatorSize` pixels across the
+    /// window's work width laid out as an item of its thickness; in a horizontal one (the menu bar) a
+    /// vertical line between the items of the current line.
     pub fn separator(&mut self) {
         let thickness = self.style.separator_size.max(1.0);
         let Some(window) = self.windows.last() else {
@@ -4864,6 +4864,29 @@ impl Context {
         };
         // `SkipItems`: a collapsed window lays nothing out.
         if window.collapsed {
+            return;
+        }
+        // `SeparatorEx` with `ImGuiSeparatorFlags_Vertical`: the line spans the height the current
+        // line already reached, and only its width goes into the layout.
+        if window.layout_horizontal {
+            let bb = (
+                window.cursor,
+                Vec2 {
+                    x: window.cursor.x + thickness,
+                    y: window.cursor.y + window.line_height,
+                },
+            );
+            let colour = self.style.color_u32(crate::style::Col::Separator);
+            self.draw_list.add_rect_filled(bb.0, bb.1, colour);
+            self.dummy(Vec2 {
+                x: thickness,
+                y: 0.0,
+            });
+            if let Some(window) = self.windows.last_mut() {
+                window.last_min = bb.0;
+                window.last_max = bb.1;
+                window.has_item = true;
+            }
             return;
         }
         let bb = (
@@ -5022,7 +5045,9 @@ impl Context {
             y: bar_min.y,
         };
         window.line_start_x = window.cursor.x;
-        window.line_height = 0.0;
+        // `AlignTextToFramePadding`: the bar's line is already as tall as a framed item, so an item
+        // that reads the current line height (a vertical Separator) spans the whole bar.
+        window.line_height = self.font.size + self.style.frame_padding.y * 2.0;
     }
 
     /// `ImGui::EndMenuBar`: back to a vertical layout, with the content starting below the bar.
