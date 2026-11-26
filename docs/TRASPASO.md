@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **130 escenarios** más la **prueba negativa**.
+   que ejecuta **131 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **146 PRs** fusionados (el número sale de la búsqueda de la API: `is:pr is:merged`).
-- **130 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **148 PRs** fusionados (el número sale de la búsqueda de la API: `is:pr is:merged`).
+- **131 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 69.9 %.** Proyecto (contando el arnés): **71.8 %**.
 - 42 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
@@ -457,6 +457,20 @@ redondeo no pase desapercibido hasta el CI:
 - `color_u32_alpha(Text, 0.70)` da `0xB3FFFFFF` y no `0xB2`: es el redondeo por floats del reference.
 
 Los tests subieron de 39 a **42**.
+### Area de contenido disponible (peso 1): cerrada, y una correccion de modelo
+
+Golden `content_avail`: `GetContentRegionAvail` al empezar, tras un texto y tras `Indent(50)`. Medido:
+**(284, 184)**, **(284, 167)** y **(234, 167)**.
+
+- El reference devuelve **`WorkRect.Max - CursorPos`**, no el tamaño de la region: por eso encoge al
+  avanzar el cursor (167 en vertical tras la linea de texto) y por eso el `Indent` de 50 le quita 50 al
+  ancho.
+- **Correccion de modelo**: el port devolvia `window.content_size` sin restar el cursor, que solo coincidia
+  al principio de la ventana. Ahora resta el cursor, y el test unitario que ya existia (`(284, 184)` al
+  empezar) sigue valiendo porque ahi cursor y origen coinciden.
+- El escenario **no** usa `SetCursorPosX` para mover el cursor: el reference **afirma** en `End()` si una
+  posicion manual no va seguida de un item que extienda los limites. Con `Indent` se mueve el borde de
+  linea sin ese requisito, y el golden queda igual de claro.
 ### Ancho de item (peso 1): cerrada
 
 Golden `item_width`: cuatro `LabelText` con el ancho por defecto, con `PushItemWidth(100)`, con
@@ -863,7 +877,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 130 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 131 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```

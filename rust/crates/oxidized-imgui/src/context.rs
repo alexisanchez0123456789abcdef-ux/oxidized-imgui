@@ -3060,9 +3060,14 @@ impl Context {
             && mouse.y < max.y
     }
 
-    /// `GetContentRegionAvail` inside the current window.
+    /// `GetContentRegionAvail`: the content region from the cursor to its far corner, which is the
+    /// `WorkRect.Max` of the reference minus `CursorPos`.
     pub fn content_avail(&self) -> Vec2 {
-        self.window().content_size
+        let window = self.window();
+        Vec2 {
+            x: window.content_origin.x + window.content_size.x - window.cursor.x,
+            y: window.content_origin.y + window.content_size.y - window.cursor.y,
+        }
     }
 
     /// `GetCursorPos`: the cursor in window coordinates, which is what the layout functions use.
