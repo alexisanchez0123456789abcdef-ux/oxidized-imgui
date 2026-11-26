@@ -49,7 +49,8 @@ comparar.
 - `master` limpio, **112 PRs** fusionados.
 - **105 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 68.1 %.** Proyecto (contando el arnés): **70.3 %**.
-- 32 tests unitarios en 6 binarios.
+- 39 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
+  órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
 
 ## Método que funciona (y lo que cuesta caro)
@@ -407,6 +408,13 @@ Lo que eso fija para el port:
 - Queda por identificar el `cmd 1` de tres quads antes de poder cerrar la unidad; después, la rueda y
   el arrastre de la barra, y con eso `TableSetupScrollFreeze` (que sólo cuenta si
   `InnerWindow->Scroll` no es 0).
+- **Segunda medición, sin `RowBg`**: la estructura no se simplifica. Frame 1: `cmd 0` (144 elems, clip
+  del host: la barra), `cmd 1` (6 elems, clip del host: **una** banda de cabecera) y `cmd 2` (78 elems,
+  clip de la tabla). O sea que el splitter deja la banda de la cabecera en un comando **propio** aunque
+  comparta clip con la barra: no fusiona comandos de distinto *momento* dentro del mismo canal. El
+  merge simplificado del port (fondo + columnas) no modela esas fronteras, así que la barra necesita
+  primero un modelo de los comandos por canal del splitter (o el golden no se puede igualar). Eso es lo
+  que bloquea hoy esta unidad, no la barra en sí.
 
 ### Entrada de texto (peso 4): cerrada
 

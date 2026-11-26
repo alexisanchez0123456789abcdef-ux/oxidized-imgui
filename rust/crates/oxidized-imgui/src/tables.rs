@@ -988,4 +988,168 @@ mod tests {
         table.end_cell(83.0);
         assert_eq!(table.row_pos_y2, 85.0);
     }
+
+    /// A table with the columns `A` (default sort), `B` (default sort, descending) and `C` (no sort),
+    /// as the `tables_sort_arrow` and `tables_sort_click` goldens declare it.
+    fn sortable_table(flags: u32) -> Table {
+        let mut table = Table::new(
+            flags,
+            3,
+            (Vec2 { x: 68.0, y: 68.0 }, Vec2 { x: 352.0, y: 68.0 }),
+        );
+        table.setup_column(
+            "A",
+            column_flags::WIDTH_FIXED | column_flags::DEFAULT_SORT,
+            60.0,
+        );
+        table.setup_column(
+            "B",
+            column_flags::WIDTH_FIXED
+                | column_flags::DEFAULT_SORT
+                | column_flags::PREFER_SORT_DESCENDING,
+            80.0,
+        );
+        table.setup_column(
+            "C",
+            column_flags::WIDTH_FIXED | column_flags::NO_SORT,
+            100.0,
+        );
+        // `BeginTableEx` marks the specs dirty on the frame that creates the table.
+        table.sort_specs_dirty = true;
+        table
+    }
+
+    /// Two `DefaultSort` columns both start at sort order 0; the sanitize step is what linearizes
+    /// them to 0 and 1, and only `SortMulti` lets both keep one.
+    #[test]
+    fn default_sorts_are_linearized_and_multi_keeps_them() {
+        let mut table = sortable_table(table_flags::SORTABLE | table_flags::SORT_MULTI);
+        table.build_sort_specs();
+        assert_eq!(table.sort_specs, vec![(0, 1), (1, 2)]);
+        assert!(table.sort_specs_dirty);
+        assert!(table.sort_specs_public_dirty);
+
+        let mut single = sortable_table(table_flags::SORTABLE);
+        single.build_sort_specs();
+        assert_eq!(single.sort_specs, vec![(0, 1)]);
+    }
+
+    /// A sortable table without a `DefaultSort` column starts with its first sortable column, which
+    /// is the rule the `tables_sort_tristate` golden pins (the reference run that produced it had a
+    /// sort saved in its settings, so the port always hands out one spec).
+    #[test]
+    fn a_sortable_table_without_defaults_starts_on_its_first_sortable_column() {
+        let mut table = Table::new(
+            table_flags::SORTABLE | table_flags::SORT_TRISTATE,
+            2,
+            (Vec2 { x: 68.0, y: 68.0 }, Vec2 { x: 352.0, y: 68.0 }),
+        );
+        table.setup_column("A", column_flags::WIDTH_FIXED, 60.0);
+        table.setup_column("B", column_flags::WIDTH_FIXED | column_flags::NO_SORT, 80.0);
+        table.build_sort_specs();
+        assert_eq!(table.sort_specs, vec![(0, 1)]);
+    }
+
+    /// The direction a click would set: unsorted columns take the first available direction, sorted
+    /// ones take the next in the list, and `NoSortAscending` removes ascending from the list.
+    #[test]
+    fn the_next_direction_follows_the_available_list() {
+        // `A` starts sorted ascending by its `DefaultSort` flag: the next click turns it descending,
+        // and the one after it back to ascending.
+        let mut table = sortable_table(table_flags::SORTABLE);
+        assert_eq!(table.next_sort_direction(0), 2);
+        table.set_column_sort_direction(0, 2, false);
+        assert_eq!(table.next_sort_direction(0), 1);
+
+        // An unsorted column starts at the first available direction.
+        let mut plain = Table::new(
+            table_flags::SORTABLE,
+            1,
+            (Vec2 { x: 68.0, y: 68.0 }, Vec2 { x: 352.0, y: 68.0 }),
+        );
+        plain.setup_column("A", column_flags::WIDTH_FIXED, 60.0);
+        assert_eq!(plain.next_sort_direction(0), 1);
+        // With ascending banned the list loses it, so the same column starts descending.
+        plain.columns[0].flags |= column_flags::NO_SORT_ASCENDING;
+        assert_eq!(plain.next_sort_direction(0), 2);
+    }
+
+    /// Without `SortMulti` a click replaces the specs; with it and `append` (the Shift path) the
+    /// column goes to `max(order) + 1` and the others keep theirs.
+    #[test]
+    fn a_click_replaces_or_appends_the_order() {
+        let mut table = sortable_table(table_flags::SORTABLE | table_flags::SORT_MULTI);
+        table.build_sort_specs();
+        assert_eq!(table.sort_specs, vec![(0, 1), (1, 2)]);
+
+        table.set_column_sort_direction(2, 1, true);
+        assert_eq!(table.sort_order(2), 2);
+        table.build_sort_specs();
+        assert_eq!(table.sort_specs, vec![(0, 1), (1, 2), (2, 1)]);
+
+        // The same call without `append` replaces the whole order with this column at 0.
+        table.set_column_sort_direction(2, 2, false);
+        table.build_sort_specs();
+        assert_eq!(table.sort_specs, vec![(2, 2)]);
+        assert_eq!(table.sort_order(0), -1);
+        assert_eq!(table.sort_order(1), -1);
+
+        // `SortMulti` without Shift cannot append either.
+        let mut plain = sortable_table(table_flags::SORTABLE);
+        plain.build_sort_specs();
+        plain.set_column_sort_direction(1, 1, true);
+        plain.build_sort_specs();
+        assert_eq!(plain.sort_specs, vec![(1, 1)]);
+        assert_eq!(plain.sort_order(0), -1);
+    }
+
+    /// `TableSetColumnDisplayOrder` shifts the columns between the two positions, and `DisplayOrder`
+    /// and `DisplayOrderToIndex` stay each other's inverse.
+    #[test]
+    fn moving_a_column_shifts_the_ones_in_between() {
+        let mut table = sortable_table(0);
+        assert_eq!(table.display_orders, vec![0, 1, 2]);
+        table.set_column_display_order(1, 0);
+        assert_eq!(table.display_orders, vec![1, 0, 2]);
+        assert_eq!(table.display_order_to_index, vec![1, 0, 2]);
+        table.set_column_display_order(2, 0);
+        assert_eq!(table.display_orders, vec![2, 1, 0]);
+        assert_eq!(table.display_order_to_index, vec![2, 1, 0]);
+        assert_eq!(table.column_at_display_order(2), 0);
+    }
+
+    /// A drag cannot cross a column that refuses reordering, which is the only barrier modelled until
+    /// frozen columns land.
+    #[test]
+    fn the_drag_cannot_cross_a_no_reorder_column() {
+        let mut table = sortable_table(0);
+        table.columns[0].flags |= column_flags::NO_REORDER;
+        table.queue_column_display_order(1, 0);
+        assert_eq!(table.reorder_column_dst_order, 1);
+        table.apply_pending_reorder();
+        assert_eq!(table.display_orders, vec![0, 1, 2]);
+    }
+
+    /// The sort state that outlives the frame round-trips, and a restored table ignores the
+    /// `DefaultSort` flags of the columns declared again.
+    #[test]
+    fn the_saved_state_round_trips_and_overrides_the_defaults() {
+        let mut table = sortable_table(table_flags::SORTABLE | table_flags::SORT_MULTI);
+        table.build_sort_specs();
+        table.set_column_sort_direction(0, 0, false);
+        assert_eq!(table.sort_orders, vec![-1, -1, -1]);
+        let state = table.sort_state();
+        assert!(state.specs_dirty);
+
+        let mut restored = sortable_table(table_flags::SORTABLE | table_flags::SORT_MULTI);
+        assert!(restored.restore_sort_state(&state));
+        assert!(restored.sort_state_loaded);
+        // Declaring `A` again with `DefaultSort` must not put its order back to 0.
+        restored.setup_column(
+            "A",
+            column_flags::WIDTH_FIXED | column_flags::DEFAULT_SORT,
+            60.0,
+        );
+        assert_eq!(restored.sort_orders[0], -1);
+    }
 }
