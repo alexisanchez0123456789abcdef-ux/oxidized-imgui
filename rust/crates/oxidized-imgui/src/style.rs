@@ -42,10 +42,12 @@ pub enum Col {
     TextSelectedBg,
     /// `ImGuiCol_InputTextCursor`: the caret of a text field.
     InputTextCursor,
+    /// `ImGuiCol_PlotHistogram`: the filled part of a `ProgressBar`.
+    PlotHistogram,
 }
 
 impl Col {
-    pub const COUNT: usize = 31;
+    pub const COUNT: usize = 32;
 
     pub(crate) fn index(self) -> usize {
         match self {
@@ -80,6 +82,7 @@ impl Col {
             Col::SeparatorActive => 28,
             Col::TextSelectedBg => 29,
             Col::InputTextCursor => 30,
+            Col::PlotHistogram => 31,
         }
     }
 }
@@ -273,6 +276,7 @@ impl Default for Style {
                 0xFFBF_661A, // SeparatorActive (pinned from the reference)
                 0x59FA_9642, // TextSelectedBg (pinned from the reference)
                 0xFFFF_FFFF, // InputTextCursor (pinned from the reference)
+                0xFF00_B3E6, // PlotHistogram (pinned from the reference)
             ],
         }
     }

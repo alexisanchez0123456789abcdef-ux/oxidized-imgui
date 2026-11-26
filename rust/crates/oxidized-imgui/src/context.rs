@@ -3308,6 +3308,144 @@ impl Context {
         };
     }
 
+    /// `ImGui::CalcItemSize`: the size an item takes from the `size_arg` its widget asks for. Zero
+    /// means the default width or height, a negative axis fills up to the content edge (what the
+    /// `ImVec2(-FLT_MIN, 0)` default of widgets like `ProgressBar` asks for) and a positive one is
+    /// taken as is.
+    fn calc_item_size(&mut self, size: Vec2, default_w: f32, default_h: f32) -> Vec2 {
+        let (cursor, region_max) = {
+            let window = self.window();
+            (
+                window.cursor,
+                Vec2 {
+                    x: window.content_origin.x + window.content_size.x,
+                    y: window.content_origin.y + window.content_size.y,
+                },
+            )
+        };
+        let axis = |value: f32, default: f32, region_max: f32, cursor: f32| {
+            if value == 0.0 {
+                default
+            } else if value < 0.0 {
+                (region_max - cursor + value).max(4.0)
+            } else {
+                value
+            }
+        };
+        Vec2 {
+            x: axis(size.x, default_w, region_max.x, cursor.x),
+            y: axis(size.y, default_h, region_max.y, cursor.y),
+        }
+    }
+
+    /// `ImGui::ProgressBar`: a frame filled up to `fraction` with `ImGuiCol_PlotHistogram` and the
+    /// overlay (by default the percentage) just after the fill, clipped to the bar. A negative
+    /// fraction draws the indeterminate slice the caller animates.
+    pub fn progress_bar(&mut self, fraction: f32, size: Option<Vec2>, overlay: Option<&str>) {
+        if self
+            .windows
+            .last()
+            .map(|window| window.collapsed)
+            .unwrap_or(false)
+        {
+            return;
+        }
+        let frame_padding = self.style.frame_padding;
+        let font_size = self.font.size;
+        let default_width = self.calc_item_width();
+        // The reference's default `size_arg` is `ImVec2(-FLT_MIN, 0)`: as wide as the content area.
+        let size_arg = size.unwrap_or(Vec2 {
+            x: -f32::MIN_POSITIVE,
+            y: 0.0,
+        });
+        let size = self.calc_item_size(size_arg, default_width, font_size + frame_padding.y * 2.0);
+        let pos = self.window().cursor;
+        let bb = (
+            pos,
+            Vec2 {
+                x: pos.x + size.x,
+                y: pos.y + size.y,
+            },
+        );
+        // `ItemSize(size, FramePadding.y)` then `ItemAdd(bb, 0)`: the whole bar is the item.
+        self.dummy(size);
+        // A fraction below zero is the indeterminate bar, whose slice the caller animates with time.
+        let indeterminate = fraction < 0.0;
+        let clamped = if indeterminate {
+            fraction
+        } else {
+            fraction.clamp(0.0, 1.0)
+        };
+        // A NaN fraction is tolerated as an empty bar, like the reference does.
+        let (mut fill_n0, mut fill_n1) = (0.0f32, if clamped.is_nan() { 0.0 } else { clamped });
+        if indeterminate {
+            let fill_width_n = 0.2f32;
+            fill_n0 = (-fraction % 1.0) * (1.0 + fill_width_n) - fill_width_n;
+            fill_n1 = (fill_n0 + fill_width_n).clamp(0.0, 1.0);
+            fill_n0 = fill_n0.clamp(0.0, 1.0);
+        }
+        // `RenderFrame` with `FrameRounding` 0 and no border is a plain filled rectangle.
+        let frame_colour = self.style.color_u32(crate::style::Col::FrameBg);
+        self.draw_list.add_rect_filled(bb.0, bb.1, frame_colour);
+        // ImLerp between the bar's edges: where the filled part starts and ends.
+        let fill_x0 = bb.0.x + (bb.1.x - bb.0.x) * fill_n0;
+        let fill_x1 = bb.0.x + (bb.1.x - bb.0.x) * fill_n1;
+        if fill_x0 < fill_x1 {
+            let fill_colour = self.style.color_u32(crate::style::Col::PlotHistogram);
+            self.draw_list.add_rect_filled(
+                Vec2 {
+                    x: fill_x0,
+                    y: bb.0.y,
+                },
+                Vec2 {
+                    x: fill_x1,
+                    y: bb.1.y,
+                },
+                fill_colour,
+            );
+        }
+        // The default overlay is the percentage, and an indeterminate bar shows none unless asked.
+        if !indeterminate || overlay.is_some() {
+            // `FindRenderedTextEnd`: everything after "##" identifies the overlay but is not drawn.
+            let text = match overlay {
+                Some(text) => rendered_text(text).to_string(),
+                None => format!("{:.0}%", clamped * 100.0 + 0.01),
+            };
+            let text_size = self.font.calc_text_size(&text, font_size);
+            if text_size.x > 0.0 {
+                let text_x = if indeterminate {
+                    (bb.0.x + bb.1.x - text_size.x) * 0.5
+                } else {
+                    fill_x1 + self.style.item_spacing.x
+                };
+                let text_x = text_x.clamp(
+                    bb.0.x,
+                    bb.1.x - text_size.x - self.style.item_inner_spacing.x,
+                );
+                // `RenderTextClipped` with `align (0, 0.5)` and the bar as its clip rectangle.
+                let text_pos = Vec2 {
+                    x: text_x,
+                    y: bb.0.y + ((bb.1.y - bb.0.y - text_size.y) * 0.5).trunc(),
+                };
+                let colour = self.style.color_u32(crate::style::Col::Text);
+                self.draw_list.add_text_in(
+                    &self.font.clone(),
+                    font_size,
+                    text_pos,
+                    colour,
+                    &text,
+                    Some([bb.0.x, bb.0.y, bb.1.x, bb.1.y]),
+                    None,
+                );
+            }
+        }
+        if let Some(window) = self.windows.last_mut() {
+            window.last_min = bb.0;
+            window.last_max = bb.1;
+            window.has_item = true;
+        }
+    }
+
     /// `ImGui::Bullet`: a disc of radius `FontSize * 0.2` at the start of a line, with the next item
     /// kept on that same line, which is what makes it indent a list entry.
     pub fn bullet(&mut self) {
