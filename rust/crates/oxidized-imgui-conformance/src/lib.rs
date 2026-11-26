@@ -117,6 +117,7 @@ pub const SCENARIOS: &[&str] = &[
     "windows_set_collapsed",
     "windows_set_focus",
     "cursor_pos",
+    "window_bg_alpha",
     "window_scroll",
     "window_scrollbar",
     "window_scrollbar_drag",
@@ -6746,6 +6747,61 @@ pub fn cursor_pos_dump() -> String {
     out
 }
 
+/// The `window_bg_alpha` scenario: `SetNextWindowBgAlpha` paints the next window background with
+/// that alpha instead of the full one.
+pub fn window_bg_alpha_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2, WindowFlags};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/window_bg_alpha.glyphs.txt"
+    );
+    let glyphs = std::fs::read_to_string(path).expect("window bg alpha fixture");
+    let font = Font::from_pinned(&glyphs).expect("font fixture");
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario window_bg_alpha\n");
+
+    for (frame, tag) in ["opaque", "half"].iter().enumerate() {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+        ctx.io_mut().mouse_down[0] = false;
+        ctx.begin_frame();
+        if frame == 1 {
+            ctx.set_next_window_bg_alpha(0.5);
+        }
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+        );
+        ctx.begin_window_ex(
+            "W",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+            true,
+        );
+        ctx.text("A");
+        ctx.end_window();
+        ctx.end_frame();
+        let lists = ctx.render_lists();
+        out.push_str(&format!("frame {frame} {tag} lists {}\n", lists.len()));
+        for (i, (name, list)) in lists.iter().enumerate() {
+            out.push_str(&format!("list {i} {name}\n"));
+            let body = dump("window_bg_alpha", list);
+            for line in body.lines().skip(2) {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
+    }
+    out
+}
+
 /// The `windows_move` scenario: dragging one window by its title bar and by its body, and the clamp
 /// that keeps it reachable when it is dragged off the display.
 ///
@@ -8702,6 +8758,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "windows_set_collapsed" => Some(windows_set_collapsed_dump()),
         "windows_set_focus" => Some(windows_set_focus_dump()),
         "cursor_pos" => Some(cursor_pos_dump()),
+        "window_bg_alpha" => Some(window_bg_alpha_dump()),
         "window_scroll" => Some(window_scroll_dump()),
         "window_scrollbar" => Some(window_scrollbar_dump()),
         "window_scrollbar_drag" => Some(window_scrollbar_drag_dump()),
