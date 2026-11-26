@@ -48,6 +48,7 @@ pub const SCENARIOS: &[&str] = &[
     "tables_stretch",
     "tables_stretch_weights",
     "tables_set_column",
+    "tables_names",
     "text_draw",
     "button",
     "widgets_basic",
@@ -2250,6 +2251,76 @@ pub fn tables_set_column_dump() -> String {
     ));
 
     let full = dump("tables_set_column", ctx.draw_list());
+    for line in full.lines().skip(2) {
+        out.push_str(line);
+        out.push('\n');
+    }
+    ctx.end_window();
+    ctx.end_frame();
+    out
+}
+
+/// The `tables_names` scenario: the table's public column API — `TableGetColumnCount`,
+/// `TableGetColumnName` and `TableGetColumnIndex` — inside the table and after it closes.
+pub fn tables_names_dump() -> String {
+    use oxidized_imgui::{Context, Vec2, WindowFlags, column_flags};
+
+    let mut ctx = Context::new();
+    ctx.io_mut().delta_time = 0.1;
+    ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+    ctx.io_mut().mouse_down[0] = false;
+    ctx.begin_frame();
+    ctx.set_next_window_flags(
+        WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+    );
+    ctx.begin_window_ex(
+        "W",
+        Some(Vec2 { x: 60.0, y: 60.0 }),
+        Some(Vec2 { x: 300.0, y: 200.0 }),
+        false,
+    );
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario tables_names\n");
+
+    let began = ctx.begin_table("T", 3, 0, Vec2::default());
+    out.push_str(&format!("table begin {}\n", i32::from(began)));
+    out.push_str(&format!("count {}\n", ctx.table_get_column_count()));
+    out.push_str(&format!(
+        "name before declaration 0 '{}'\n",
+        ctx.table_get_column_name(0).unwrap_or("")
+    ));
+    ctx.table_setup_column("Alpha", column_flags::WIDTH_FIXED, 60.0);
+    ctx.table_setup_column("Beta", column_flags::WIDTH_FIXED, 80.0);
+    ctx.table_setup_column("Gamma", column_flags::WIDTH_FIXED, 100.0);
+    for n in 0..ctx.table_get_column_count() {
+        out.push_str(&format!(
+            "name {n} '{}'\n",
+            ctx.table_get_column_name(n).unwrap_or("")
+        ));
+    }
+
+    ctx.table_next_row();
+    for n in 0..3 {
+        ctx.table_set_column_index(n);
+        out.push_str(&format!(
+            "inside name {n} '{}' colindex {}\n",
+            ctx.table_get_column_name(n).unwrap_or(""),
+            ctx.table_get_column_index()
+        ));
+    }
+    ctx.end_table();
+    let count = ctx.table_get_column_count();
+    let name0 = ctx
+        .table_get_column_name(0)
+        .map(str::to_string)
+        .unwrap_or_else(|| "(null)".to_string());
+    out.push_str(&format!("after count {count} name0 '{name0}'\n"));
+
+    let full = dump("tables_names", ctx.draw_list());
     for line in full.lines().skip(2) {
         out.push_str(line);
         out.push('\n');
@@ -5309,6 +5380,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "tables_stretch" => Some(tables_stretch_dump()),
         "tables_stretch_weights" => Some(tables_stretch_weights_dump()),
         "tables_set_column" => Some(tables_set_column_dump()),
+        "tables_names" => Some(tables_names_dump()),
         "text_draw" => Some(text_draw_dump()),
         "button" => Some(button_dump()),
         "widgets_basic" => Some(widgets_basic_dump()),
