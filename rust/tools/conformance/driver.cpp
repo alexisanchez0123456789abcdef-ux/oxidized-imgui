@@ -4160,6 +4160,55 @@ static void DumpSeparator()
     }
 }
 
+// separator_text: `SeparatorText` between two labels. The item is as wide as the window's work width
+// and as tall as the label plus SeparatorTextPadding, with a line on each side of the label.
+static void DumpSeparatorText()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario separator_text\n");
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[3] = { 'A', 'S', 'B' };
+    for (char ch : bake_order)
+        baked->FindGlyph((ImWchar)ch);
+    WriteGlyphFixture(font, bake_order, 3);
+
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground;
+    for (int frame = 0; frame < 2; frame++)
+    {
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+        ImGui::Begin("S", NULL, flags);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        const ImVec2 wpos = ImGui::GetWindowPos();
+        ImGui::Text("A");
+        ImGui::SeparatorText("S");
+        ImVec2 mn = PSub(ImGui::GetItemRectMin(), wpos);
+        ImVec2 mx = PSub(ImGui::GetItemRectMax(), wpos);
+        printf("frame %d sep item %08x %08x %08x %08x\n", frame, Bits(mn.x), Bits(mn.y),
+            Bits(mx.x), Bits(mx.y));
+        ImGui::Text("B");
+        const ImVec2 end = PSub(ImGui::GetCursorScreenPos(), wpos);
+        printf("frame %d after cursor %08x %08x\n", frame, Bits(end.x), Bits(end.y));
+        ImGui::End();
+        if (frame == 1)
+            DumpDrawListBody(*dl);
+        ImGui::EndFrame();
+    }
+}
+
 // windows_move: dragging a window by its title bar and by its body, and the clamp that keeps it
 // reachable when it is dragged off the display. Only the positions are dumped: the geometry of a
 // window is what windows_order already covers.
@@ -6227,6 +6276,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "windows_focus") == 0)
     {
         DumpWindowsFocus();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "separator_text") == 0)
+    {
+        DumpSeparatorText();
         ImGui::DestroyContext();
         return 0;
     }
