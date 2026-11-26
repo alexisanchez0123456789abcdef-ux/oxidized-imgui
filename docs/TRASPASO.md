@@ -533,6 +533,8 @@ La causa esta localizada en el reference (`imgui_draw.cpp:2622-2626`): con `roun
 decide `PathArcTo` con `num_segments = 0` (calculo automatico), no `arc_step_for_radius`, que es lo que usa
 hoy `add_rect_filled_aa_rounded` (escrito para el *stroke* redondeado, no para el relleno).
 
+**Segunda medicion (ronda 61)**: aplicar el conteo automatico a `add_rect_filled_aa_rounded` (`arc_step_for_segments(calc_circle_auto_segment_count(rounding))`)**no cambia nada**: sigue en 156 elementos. Motivo: el port **ya tiene** `corner_arc_step_and_count` y `arc_step_for_segments` lo usa, asi que el paso era correcto. La diferencia esta en **que funcion recorre el arco**: el relleno redondeado usa `push_arc` (`PathArcToFast`, que emite todos los samples del cuarto con el paso dado) y el reference usa la rama automatica de `PathArcTo`, que calcula los samples con `ceil`/`floor` sobre los angulos y llama a `_PathArcToFastEx`, mas `a_emit_start`/`a_emit_end` cuando los extremos no caen en una muestra. El port **ya tiene** `push_arc_samples` para `_PathArcToFastEx`: lo que falta es la funcion que resuelve muestras y extremos (lineas 1683-1701 del reference) y usarla en `path_rect_rounded` y `add_rect_filled_aa_rounded`.
+
 Siguiente paso concreto, ya con las piezas localizadas en **los dos lados**: el reference resuelve el conteo
 automatico con `_CalcCircleAutoSegmentCount(radius)` y dibuja los puntos con la tabla de arcos rapidos
 (`_PathArcToFastEx`, que reparte el resto y anade el ultimo sample). El port **ya tiene** las dos piezas:
