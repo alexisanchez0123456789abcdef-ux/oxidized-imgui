@@ -49,6 +49,7 @@ pub const SCENARIOS: &[&str] = &[
     "tables_stretch_weights",
     "tables_set_column",
     "tables_names",
+    "tables_header_id",
     "text_draw",
     "button",
     "widgets_basic",
@@ -2321,6 +2322,62 @@ pub fn tables_names_dump() -> String {
     out.push_str(&format!("after count {count} name0 '{name0}'\n"));
 
     let full = dump("tables_names", ctx.draw_list());
+    for line in full.lines().skip(2) {
+        out.push_str(line);
+        out.push('\n');
+    }
+    ctx.end_window();
+    ctx.end_frame();
+    out
+}
+
+/// The `tables_header_id` scenario: a column label may carry a `##id` suffix. `table_get_column_name`
+/// keeps the whole string while the header draws only the part before `##`.
+pub fn tables_header_id_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2, WindowFlags, column_flags};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/tables_header_id.glyphs.txt"
+    );
+    let glyphs = std::fs::read_to_string(path).expect("glyph fixture");
+    let font = Font::from_pinned(&glyphs).expect("glyph fixture");
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    ctx.io_mut().delta_time = 0.1;
+    ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+    ctx.io_mut().mouse_down[0] = false;
+    ctx.begin_frame();
+    ctx.set_next_window_flags(
+        WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+    );
+    ctx.begin_window_ex(
+        "W",
+        Some(Vec2 { x: 60.0, y: 60.0 }),
+        Some(Vec2 { x: 300.0, y: 200.0 }),
+        false,
+    );
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario tables_header_id\n");
+
+    let began = ctx.begin_table("T", 2, 0, Vec2::default());
+    out.push_str(&format!("table begin {}\n", i32::from(began)));
+    ctx.table_setup_column("Alpha##1", column_flags::WIDTH_FIXED, 60.0);
+    ctx.table_setup_column("Beta##2", column_flags::WIDTH_FIXED, 80.0);
+    out.push_str(&format!(
+        "name 0 '{}' name 1 '{}'\n",
+        ctx.table_get_column_name(0).unwrap_or(""),
+        ctx.table_get_column_name(1).unwrap_or("")
+    ));
+    ctx.table_headers_row();
+    ctx.end_table();
+
+    let full = dump("tables_header_id", ctx.draw_list());
     for line in full.lines().skip(2) {
         out.push_str(line);
         out.push('\n');
@@ -5381,6 +5438,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "tables_stretch_weights" => Some(tables_stretch_weights_dump()),
         "tables_set_column" => Some(tables_set_column_dump()),
         "tables_names" => Some(tables_names_dump()),
+        "tables_header_id" => Some(tables_header_id_dump()),
         "text_draw" => Some(text_draw_dump()),
         "button" => Some(button_dump()),
         "widgets_basic" => Some(widgets_basic_dump()),
