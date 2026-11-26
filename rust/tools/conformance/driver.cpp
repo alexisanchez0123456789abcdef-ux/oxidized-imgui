@@ -1814,6 +1814,43 @@ static void DumpTablesColumnBounds()
     ImGui::End();
     ImGui::EndFrame();
 }
+// tables_cell_bg_twice: two `TableSetBgColor(CellBg)` calls on the same cell. The second one replaces
+// the first (the reference only appends when the column changes), while the next cell keeps its own.
+static void DumpTablesCellBgTwice()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario tables_cell_bg_twice\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground;
+    ImGui::Begin("W", NULL, flags);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+
+    const bool began = ImGui::BeginTable("T", 2, 0, ImVec2(0.0f, 0.0f), 0.0f);
+    printf("table begin %d\n", (int)began);
+    ImGui::TableSetupColumn("A", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+    ImGui::TableSetupColumn("B", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+    ImGui::TableNextRow(ImGuiTableRowFlags_None, 20.0f);
+    ImGui::TableNextColumn();
+    ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, 0xFFFF0000u);
+    ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, 0xFF00FF00u);
+    ImGui::Dummy(ImVec2(10.0f, 10.0f));
+    ImGui::TableNextColumn();
+    ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, 0xFF0000FFu);
+    ImGui::Dummy(ImVec2(10.0f, 10.0f));
+    ImGui::EndTable();
+    DumpDrawListBody(*dl);
+    ImGui::End();
+    ImGui::EndFrame();
+}
 // tables_row_height: `TableNextRow(flags, min_height)` with a minimum taller than the cell contents.
 // Each row is 20 px instead of the 17 its text needs, and the rows below start lower.
 static void DumpTablesRowHeight()
@@ -5558,6 +5595,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "tables_set_column") == 0)
     {
         DumpTablesSetColumn();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "tables_cell_bg_twice") == 0)
+    {
+        DumpTablesCellBgTwice();
         ImGui::DestroyContext();
         return 0;
     }
