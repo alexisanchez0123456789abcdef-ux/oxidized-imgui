@@ -82,6 +82,7 @@ instead of against our own expectations:
 | Style colour scope | `PushStyleColor` saves one entry of `Style::colors` and overwrites it, `PopStyleColor` restores it; every widget reads through `color_u32`, so the override needs no widget-side change | `style_color` golden |
 | Content region available | `GetContentRegionAvail` is the content region from the cursor to its far corner (`WorkRect.Max - CursorPos`), so it shrinks as the cursor advances and when an `Indent` moves the line start | `content_avail` golden |
 | Item width | `PushItemWidth` keeps a stack of widths that `CalcItemWidth` reads after the pending `SetNextItemWidth` and before the window default; zero means the default and a negative width is that much less than the content available from the cursor | `item_width` golden |
+| Text size | `CalcTextSize` gives the size a string takes with the current font, which is the last measurement a custom widget needs before laying itself out | `calc_text_size` golden |
 | Item heights | `GetTextLineHeight` is the font size, the `WithSpacing` variants add `ItemSpacing.y`, and `GetFrameHeight` is `FontSize + FramePadding.y * 2` | `item_heights` golden |
 | Cursor by axis | `SetCursorPosX` and `SetCursorPosY` move one axis and leave the other where it was, which is how a custom layout nudges a single direction | `cursor_pos_xy` golden |
 | Cursor position | `GetCursorPos` reports the cursor relative to the window and `SetCursorPos` places it there without moving the line left edge, so the next item returns to the line start | `cursor_pos` golden |
