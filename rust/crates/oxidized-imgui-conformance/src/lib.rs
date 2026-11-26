@@ -62,6 +62,7 @@ pub const SCENARIOS: &[&str] = &[
     "tables_stretch_prop",
     "tables_row_bg_color",
     "tables_column_bounds",
+    "tables_cell_bg_twice",
     "text_draw",
     "button",
     "widgets_basic",
@@ -3225,6 +3226,56 @@ pub fn tables_column_bounds_dump() -> String {
     out
 }
 
+/// The `tables_cell_bg_twice` scenario: two `TableSetBgColor(CellBg)` calls on the same cell. The
+/// second one replaces the first, while the next cell keeps its own colour.
+pub fn tables_cell_bg_twice_dump() -> String {
+    use oxidized_imgui::{Context, Vec2, WindowFlags, column_flags};
+
+    let mut ctx = Context::new();
+    ctx.io_mut().delta_time = 0.1;
+    ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+    ctx.io_mut().mouse_down[0] = false;
+    ctx.begin_frame();
+    ctx.set_next_window_flags(
+        WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+    );
+    ctx.begin_window_ex(
+        "W",
+        Some(Vec2 { x: 60.0, y: 60.0 }),
+        Some(Vec2 { x: 300.0, y: 200.0 }),
+        false,
+    );
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario tables_cell_bg_twice\n");
+
+    let began = ctx.begin_table("T", 2, 0, Vec2::default());
+    out.push_str(&format!("table begin {}\n", i32::from(began)));
+    ctx.table_setup_column("A", column_flags::WIDTH_FIXED, 60.0);
+    ctx.table_setup_column("B", column_flags::WIDTH_FIXED, 80.0);
+    ctx.table_next_row_min(20.0);
+    ctx.table_next_column();
+    ctx.table_set_cell_bg_color(0xFFFF_0000);
+    ctx.table_set_cell_bg_color(0xFF00_FF00);
+    ctx.dummy(Vec2 { x: 10.0, y: 10.0 });
+    ctx.table_next_column();
+    ctx.table_set_cell_bg_color(0xFF00_00FF);
+    ctx.dummy(Vec2 { x: 10.0, y: 10.0 });
+    ctx.end_table();
+
+    let full = dump("tables_cell_bg_twice", ctx.draw_list());
+    for line in full.lines().skip(2) {
+        out.push_str(line);
+        out.push('\n');
+    }
+    ctx.end_window();
+    ctx.end_frame();
+    out
+}
+
 /// The `text_draw` scenario: glyph quads for a short string.
 ///
 /// UVs are **omitted on purpose**: the atlas coordinates depend on the reference's internal
@@ -6289,6 +6340,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "tables_stretch_prop" => Some(tables_stretch_prop_dump()),
         "tables_row_bg_color" => Some(tables_row_bg_color_dump()),
         "tables_column_bounds" => Some(tables_column_bounds_dump()),
+        "tables_cell_bg_twice" => Some(tables_cell_bg_twice_dump()),
         "text_draw" => Some(text_draw_dump()),
         "button" => Some(button_dump()),
         "widgets_basic" => Some(widgets_basic_dump()),
