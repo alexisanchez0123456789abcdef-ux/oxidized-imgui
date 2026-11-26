@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **141 escenarios** más la **prueba negativa**.
+   que ejecuta **142 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -49,7 +49,7 @@ comparar.
 - `master` limpio. **PRs fusionados: 158** al cerrar esta sesion (2026-11-26). Ese numero es una foto
   fija y **no se mantiene a mano**: el valor vivo sale de la busqueda de la API
   (`is:pr is:merged`). Si lees esto mucho despues, consultalo en vez de fiarte de la cifra.
-- **141 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- **142 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 69.9 %.** Proyecto (contando el arnés): **71.8 %**.
 - 43 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
@@ -521,6 +521,17 @@ reference (`cross_extent = FontSize * 0.5 * 0.7071 - 1`).
 Lo cubren los goldens `window_icons`, `window_icons_states` y `window_icons_drag` (hover, pulsado y
 arrastre sobre el aspa). Consecuencia: **no hay que "portar CloseButton"**; si alguna vez hace falta un aspa
 suelta, lo correcto es exponer un `button` con ese dibujo, no duplicar el de la ventana.
+### Barra de progreso indeterminada (peso 1): cerrada
+
+Golden `progress_bar_indeterminate`: dos barras con fracciones **fijas** (-1.25 y -1.75, sin dependencia de
+tiempo). Medido: items de **200x19**, `cmd_count 3`, `vtx_count 32`, `idx_count 78`, y la lista entera
+coincide byte a byte.
+
+- El widget **ya estaba implementado** en el port (rama `fraction < 0` con `fill_width_n = 0.2`, `fmod`, saturacion y
+  `PlotHistogram`); lo que faltaba era el **golden** que lo verificara contra el reference.
+- Los bordes del relleno caen en pixeles fraccionarios (0.1 y 0.3 de 200 px), que es exactamente lo que el
+  relleno AA verificado en #167 resuelve: sin esa unidad anterior, este golden no habria coincidido.
+- La sonda del driver se queda como escenario registrado, con su fixture, y ya se regenera con `gen-golden.ps1`.
 ### Barra indeterminada: formula del reference y sonda lista
 
 Leido en `imgui_widgets.cpp` (1456-1477) y ya capturado con el driver: con `fraction < 0` la barra no lleva
@@ -1151,7 +1162,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 141 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 142 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
