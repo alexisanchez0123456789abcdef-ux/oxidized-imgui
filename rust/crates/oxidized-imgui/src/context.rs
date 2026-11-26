@@ -4171,6 +4171,7 @@ impl Context {
         // focus is released (the reference only replaces it when another field takes over), so the
         // frame that releases it can still draw its caret.
         let mut active = self.active_id == Some(id);
+        let mut just_activated = false;
         if user_clicked && !active {
             // `Init state`: the field takes a copy of the caller's buffer. Coming back to the same
             // field recycles the cursor, as `recycle_state` does.
@@ -4186,6 +4187,7 @@ impl Context {
             self.input_text_state = Some(state);
             self.active_id = Some(id);
             active = true;
+            just_activated = true;
         }
         // `Release focus when we click outside`. The frame still draws as if active: the reference
         // clears the active id at the end of the function, after the render block.
@@ -4206,6 +4208,45 @@ impl Context {
                 state.select_start = cursor;
                 state.select_end = cursor;
                 state.cursor_anim_reset();
+            }
+        }
+
+        // The edit: `g.ActiveId == id && !g.ActiveIdIsJustActivated`. Characters first, then at most
+        // one key, in the reference's priority order.
+        if active && !just_activated && !release {
+            let shift = self.io.key_shift;
+            let characters: Vec<char> = self.io.input_queue_characters.clone();
+            for c in characters {
+                // `InputTextFilterCharacter`: control characters and Delete are dropped, and Tab is
+                // skipped by the caller of OnCharPressed.
+                if c == '\t' || (c as u32) < 0x20 || (c as u32) == 0x7F {
+                    continue;
+                }
+                if let Some(state) = self.input_text_state.as_mut() {
+                    state.on_char_pressed(c);
+                }
+            }
+            // `IsKeyPressed` with the default repeat, so a held arrow keeps moving.
+            let io = &self.io;
+            let key = if io.is_key_pressed_repeat(Key::LeftArrow) {
+                Some(crate::input_text::EditKey::Left)
+            } else if io.is_key_pressed_repeat(Key::RightArrow) {
+                Some(crate::input_text::EditKey::Right)
+            } else if io.is_key_pressed_repeat(Key::Home) {
+                Some(crate::input_text::EditKey::Home)
+            } else if io.is_key_pressed_repeat(Key::End) {
+                Some(crate::input_text::EditKey::End)
+            } else if io.is_key_pressed_repeat(Key::Delete) {
+                Some(crate::input_text::EditKey::Delete)
+            } else if io.is_key_pressed_repeat(Key::Backspace) {
+                Some(crate::input_text::EditKey::Backspace)
+            } else {
+                None
+            };
+            if let Some(key) = key {
+                if let Some(state) = self.input_text_state.as_mut() {
+                    state.on_key(key, shift);
+                }
             }
         }
 
@@ -4230,12 +4271,90 @@ impl Context {
             y: frame_min.y + pad.y,
         };
         let clip = (frame_min, frame_max);
-        let (text, scroll_x, cursor_anim) = match (&self.input_text_state, active) {
-            (Some(state), true) => (state.text.clone(), state.scroll_x, state.cursor_anim),
-            _ => (buffer.clone(), 0.0, 0.0),
-        };
-        let text_x = draw_pos.x - scroll_x;
+        let (text, cursor, cursor_anim, mut scroll_x, cursor_follow) =
+            match (&self.input_text_state, active) {
+                (Some(state), true) => (
+                    state.text.clone(),
+                    state.cursor,
+                    state.cursor_anim,
+                    state.scroll_x,
+                    state.cursor_follow,
+                ),
+                _ => (buffer.clone(), 0, 0.0, 0.0, false),
+            };
         let font = self.font.clone();
+        let cursor = cursor.min(text.len());
+        // `cursor_offset.x`: the width of the text before the caret, rounded up a whole pixel.
+        let offset_x = (font.calc_text_size(&text[..cursor], font.size).x + 0.999_99).trunc();
+        // `if (render_cursor && state->CursorFollow)`: only the keyboard moves the scroll, in steps of
+        // a quarter of the field's width, and it catches the caret up on the frame it moved.
+        if active && cursor_follow {
+            let inner_width = frame_size.x;
+            let scroll_increment_x = inner_width * 0.25;
+            let visible_width = inner_width - pad.x;
+            if offset_x < scroll_x {
+                scroll_x = (offset_x - scroll_increment_x).max(0.0).trunc();
+            } else if offset_x - visible_width >= scroll_x {
+                scroll_x = (offset_x - visible_width + scroll_increment_x).trunc();
+            }
+            if let Some(state) = self.input_text_state.as_mut() {
+                state.scroll_x = scroll_x;
+                state.cursor_follow = false;
+            }
+        }
+        let text_x = draw_pos.x - scroll_x;
+        // The selection, drawn before the text: `TextSelectedBg` from `draw_pos.y - 1` to
+        // `draw_pos.y + 2 + FontSize`, as wide as the selected characters.
+        let selection = match (&self.input_text_state, active) {
+            (Some(state), true) if state.has_selection() => {
+                let begin = state.select_start.min(state.select_end).min(text.len());
+                let end = state.select_start.max(state.select_end).min(text.len());
+                let begin = if text.is_char_boundary(begin) {
+                    begin
+                } else {
+                    0
+                };
+                let end = if text.is_char_boundary(end) {
+                    end
+                } else {
+                    text.len()
+                };
+                Some((begin, end))
+            }
+            _ => None,
+        };
+        if let Some((begin, end)) = selection {
+            let before = (font.calc_text_size(&text[..begin], font.size).x + 0.999_99).trunc();
+            let width = (font.calc_text_size(&text[begin..end], font.size).x + 0.999_99).trunc();
+            let rect = (
+                Vec2 {
+                    x: text_x + before,
+                    y: draw_pos.y - 1.0,
+                },
+                Vec2 {
+                    x: text_x + before + width,
+                    y: draw_pos.y + 2.0 + font.size,
+                },
+            );
+            // `rect.ClipWith(clip_rect)`.
+            let clipped = (
+                Vec2 {
+                    x: rect.0.x.max(clip.0.x),
+                    y: rect.0.y.max(clip.0.y),
+                },
+                Vec2 {
+                    x: rect.1.x.min(clip.1.x),
+                    y: rect.1.y.min(clip.1.y),
+                },
+            );
+            if clipped.0.x < clipped.1.x && clipped.0.y < clipped.1.y {
+                self.draw_list.prim_rect(
+                    clipped.0,
+                    clipped.1,
+                    self.style.color_u32(crate::style::Col::TextSelectedBg),
+                );
+            }
+        }
         let text_col = self.style.color_u32(crate::style::Col::Text);
         let text_pos = Vec2 {
             x: text_x,
@@ -4254,13 +4373,6 @@ impl Context {
             }
             let visible =
                 !self.io.config_input_text_cursor_blink || anim <= 0.0 || (anim % 1.20) <= 0.80;
-            let cursor = self
-                .input_text_state
-                .as_ref()
-                .map(|state| state.cursor)
-                .unwrap_or(0);
-            // `cursor_offset.x`: the width of the text before the caret, rounded up a whole pixel.
-            let offset_x = (font.calc_text_size(&text[..cursor], font.size).x + 0.999_99).trunc();
             let caret_x = (text_x + offset_x).trunc();
             let caret_y = draw_pos.y + font.size;
             let caret = (

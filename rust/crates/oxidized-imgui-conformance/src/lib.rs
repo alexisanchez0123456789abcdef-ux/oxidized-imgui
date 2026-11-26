@@ -31,6 +31,7 @@ pub const SCENARIOS: &[&str] = &[
     "io_text_events",
     "text_clip",
     "input_text",
+    "input_text_edit",
     "font_metrics",
     "clip_stack",
     "text_draw",
@@ -689,6 +690,116 @@ pub fn input_text_dump() -> String {
         }
         out.push('\n');
         let body = dump("input_text", ctx.draw_list());
+        for line in body.lines().skip(2) {
+            out.push_str(line);
+            out.push('\n');
+        }
+        ctx.end_window();
+        ctx.end_frame();
+    }
+    out
+}
+
+/// The `input_text_edit` scenario: the keyboard half of the field — typing, the caret movements,
+/// a selection dragged with Shift, and the two deletions.
+pub fn input_text_edit_dump() -> String {
+    use oxidized_imgui::{Context, Font, Key, Vec2, WindowFlags};
+
+    pub const LEFT_DOWN: &[(Key, bool)] = &[(Key::LeftArrow, true)];
+    pub const LEFT_UP: &[(Key, bool)] = &[(Key::LeftArrow, false)];
+    pub const HOME_DOWN: &[(Key, bool)] = &[(Key::Home, true)];
+    pub const HOME_UP: &[(Key, bool)] = &[(Key::Home, false)];
+    pub const RIGHT_DOWN: &[(Key, bool)] = &[(Key::RightArrow, true)];
+    pub const RIGHT_UP: &[(Key, bool)] = &[(Key::RightArrow, false)];
+    pub const SHIFT_RIGHT_DOWN: &[(Key, bool)] = &[(Key::ModShift, true), (Key::RightArrow, true)];
+    pub const SHIFT_RIGHT_UP: &[(Key, bool)] = &[(Key::ModShift, false), (Key::RightArrow, false)];
+    pub const END_DOWN: &[(Key, bool)] = &[(Key::End, true)];
+    pub const END_UP: &[(Key, bool)] = &[(Key::End, false)];
+    pub const DELETE_DOWN: &[(Key, bool)] = &[(Key::Delete, true)];
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/input_text_edit.glyphs.txt"
+    );
+    let text = std::fs::read_to_string(path).expect("input_text_edit fixture");
+    let font = Font::from_pinned(&text).expect("font fixture");
+    let line_uvs = parse_line_uvs(&text);
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    ctx.set_line_uv_lines(line_uvs);
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario input_text_edit\n");
+
+    // The same frames as the driver: activate, type, walk the caret, drag a selection, replace it,
+    // scroll to the end and back with End/Home, delete, and release.
+    /// One frame of the edit: the mouse, the keys and the characters sent before it starts.
+    type EditFrame<'a> = (f32, f32, bool, &'a [(Key, bool)], &'a str);
+    let steps: [EditFrame; 21] = [
+        (0.0, 0.0, false, &[], ""),
+        (100.0, 75.0, true, &[], ""),
+        (100.0, 75.0, false, &[], ""),
+        (100.0, 75.0, false, &[], "XY"),
+        (100.0, 75.0, false, LEFT_DOWN, ""),
+        (100.0, 75.0, false, LEFT_UP, ""),
+        (100.0, 75.0, false, LEFT_DOWN, ""),
+        (100.0, 75.0, false, LEFT_UP, ""),
+        (100.0, 75.0, false, HOME_DOWN, ""),
+        (100.0, 75.0, false, HOME_UP, ""),
+        (100.0, 75.0, false, RIGHT_DOWN, ""),
+        (100.0, 75.0, false, RIGHT_UP, ""),
+        (100.0, 75.0, false, SHIFT_RIGHT_DOWN, ""),
+        (100.0, 75.0, false, SHIFT_RIGHT_UP, ""),
+        (100.0, 75.0, false, &[], "Z"),
+        (100.0, 75.0, false, END_DOWN, ""),
+        (100.0, 75.0, false, END_UP, ""),
+        (100.0, 75.0, false, HOME_DOWN, ""),
+        (100.0, 75.0, false, HOME_UP, ""),
+        (100.0, 75.0, false, DELETE_DOWN, ""),
+        (300.0, 200.0, true, &[], ""),
+    ];
+    let mut buffer = String::from("Hello world, this is a long line.");
+    for (frame, (mx, my, down, keys, chars)) in steps.iter().enumerate() {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: *mx, y: *my });
+        ctx.io_mut().mouse_down[0] = *down;
+        for (key, down) in keys.iter() {
+            ctx.io_mut().add_key_event(*key, *down);
+        }
+        if !chars.is_empty() {
+            ctx.io_mut().add_input_characters_utf8(chars);
+        }
+        ctx.begin_frame();
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+        );
+        ctx.begin_window_ex(
+            "W",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+            false,
+        );
+        let id = ctx.get_id("##field");
+        ctx.set_next_item_width(150.0);
+        ctx.input_text("##field", &mut buffer);
+        out.push_str(&format!(
+            "frame {frame} active {}",
+            (ctx.active_id() == Some(id)) as u8
+        ));
+        if let Some(state) = ctx.input_text_state().filter(|state| state.id == id) {
+            out.push_str(&format!(
+                " len {} sel {} scroll {:08x} anim {:08x}",
+                state.text.len(),
+                state.has_selection() as u8,
+                bits(state.scroll_x),
+                bits(state.cursor_anim)
+            ));
+        }
+        out.push('\n');
+        let body = dump("input_text_edit", ctx.draw_list());
         for line in body.lines().skip(2) {
             out.push_str(line);
             out.push('\n');
@@ -3830,6 +3941,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "io_text_events" => Some(io_text_dump()),
         "text_clip" => Some(text_clip_dump()),
         "input_text" => Some(input_text_dump()),
+        "input_text_edit" => Some(input_text_edit_dump()),
         "font_metrics" => Some(font_metrics_dump()),
         "clip_stack" => Some(clip_stack_dump()),
         "text_draw" => Some(text_draw_dump()),

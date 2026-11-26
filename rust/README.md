@@ -23,6 +23,7 @@ instead of against our own expectations:
 | Text | glyph quads including UVs, from the pinned glyph table written by the reference run | `text_draw` golden + `tests/fixtures/text_draw.glyphs.txt` |
 | Text, CPU fine clip | `ImFont::RenderText`: glyphs outside the clip are dropped, and with a `cpu_fine_clip_rect` the straddling ones have their position **and UVs** trimmed; the effective rect is the current clip narrowed by the caller's, and one call can serve several clips | `text_clip` golden |
 | Text field | a single-line `InputText`: the frame is always `FrameBg`, the text is drawn from `frame_bb.Min + FramePadding` clipped glyph by glyph to the frame, a click activates the field and drops the caret on the nearest character boundary (`stb_text_locate_coord`), a click elsewhere releases it, and the caret is a one-pixel primitive drawn while `CursorAnim` allows | `input_text` golden |
+| Text field, editing | typing (`InputQueueCharacters`, Tab and control characters filtered), the caret keys (arrows, Home/End) with Shift dragging the selection, Delete and Backspace, the `TextSelectedBg` rectangle drawn before the text, and the keyboard-driven horizontal scroll in quarter-width steps that only `CursorFollow` moves | `input_text_edit` golden |
 | Button | item rect from text metrics, hover, active, release-inside result | `button` golden |
 | Button drawing | state colour fill plus the label with its atlas UVs | `button_draw` golden |
 | Button states | resting, hovered and held colours across four frames | `button_states` golden |
