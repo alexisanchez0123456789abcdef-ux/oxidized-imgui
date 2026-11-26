@@ -3306,18 +3306,57 @@ impl Context {
         // `ImCeil(RowPosY2)`: the table is as tall as the bottom of its last row.
         let inner_content_max_y = table.row_pos_y2.ceil();
         table.outer_rect.1.y = table.outer_rect.1.y.max(inner_content_max_y);
-        // `TableDrawBorders`, for the inner grid: one vertical line at the right edge of every
-        // column but the last, from the top of the content to the bottom of the table. The outer
-        // rectangle (an anti-aliased stroke) is not in this cut.
+        // `TableDrawBorders`: the outer rectangle first, then one vertical line at the right edge of
+        // every column but the last, from the top of the content to the bottom of the table. All of
+        // it goes to the background channel.
+        let border_outer_h = if table.flags & crate::tables::table_flags::BORDERS_OUTER_H != 0 {
+            1.0
+        } else {
+            0.0
+        };
+        let border_outer_v = if table.flags & crate::tables::table_flags::BORDERS_OUTER_V != 0 {
+            1.0
+        } else {
+            0.0
+        };
+        let borders_outer_h = table.flags & crate::tables::table_flags::BORDERS_OUTER_H != 0;
+        let borders_outer_v = table.flags & crate::tables::table_flags::BORDERS_OUTER_V != 0;
+        let draw_start = self.draw_list.idx_buffer.len();
+        if table.flags & crate::tables::table_flags::BORDERS_INNER_V != 0
+            || borders_outer_h
+            || borders_outer_v
+        {
+            let outer_min = table.outer_rect.0;
+            let outer_max = table.outer_rect.1;
+            let strong = self.style.table_border_strong;
+            if borders_outer_h && borders_outer_v {
+                self.draw_list
+                    .add_rect_stroke(outer_min, outer_max, strong, 1.0);
+            } else if borders_outer_v {
+                self.draw_list
+                    .add_line_v(outer_min.x, outer_min.y, outer_max.y, strong, 1.0);
+                self.draw_list.add_line_v(
+                    outer_max.x - border_outer_v,
+                    outer_min.y,
+                    outer_max.y,
+                    strong,
+                    1.0,
+                );
+            } else if borders_outer_h {
+                self.draw_list
+                    .add_line_h(outer_min.x, outer_max.x, outer_min.y, strong, 1.0);
+                self.draw_list.add_line_h(
+                    outer_min.x,
+                    outer_max.x,
+                    outer_max.y - border_outer_h,
+                    strong,
+                    1.0,
+                );
+            }
+        }
         if table.flags & crate::tables::table_flags::BORDERS_INNER_V != 0 {
-            let border_outer_h = if table.flags & crate::tables::table_flags::BORDERS_OUTER_H != 0 {
-                1.0
-            } else {
-                0.0
-            };
             let draw_y1 = table.outer_rect.0.y.max(table.work_rect.0.y) + border_outer_h;
             let draw_y2 = table.outer_rect.1.y - border_outer_h;
-            let start = self.draw_list.idx_buffer.len();
             for column in &table.columns {
                 let mut draw_x2 = column.max_x;
                 if draw_x2 >= table.inner_clip.1.x && draw_x2 - 1.0 <= table.inner_clip.1.x {
@@ -3342,7 +3381,9 @@ impl Context {
                     1.0,
                 );
             }
-            let tail = self.draw_list.idx_buffer.split_off(start);
+        }
+        if self.draw_list.idx_buffer.len() > draw_start {
+            let tail = self.draw_list.idx_buffer.split_off(draw_start);
             if let Some(cmd) = self.draw_list.cmd_buffer.last_mut() {
                 cmd.elem_count -= tail.len() as u32;
             }
