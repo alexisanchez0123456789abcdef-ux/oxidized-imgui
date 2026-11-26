@@ -3863,16 +3863,8 @@ impl Context {
 
     /// `ImGui::SameLine`: the next item goes to the right of the previous one.
     pub fn same_line(&mut self) {
-        let spacing = self.style.item_spacing;
-        let Some(window) = self.windows.last_mut() else {
-            return;
-        };
-        if window.has_item {
-            window.cursor = Vec2 {
-                x: window.last_max.x + spacing.x,
-                y: window.last_min.y,
-            };
-        }
+        // `SameLine()` is `SameLine(0.0f, -1.0f)`: no offset, and the default spacing.
+        self.same_line_with(0.0, -1.0);
     }
 
     /// `SetCursorScreenPos`: place the next item at an absolute position.
