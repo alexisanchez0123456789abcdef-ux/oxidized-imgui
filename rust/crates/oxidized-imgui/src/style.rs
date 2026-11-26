@@ -103,6 +103,8 @@ pub struct Style {
     pub popup_bg: u32,
     /// `ImGuiCol_MenuBarBg`: the band behind a menu bar.
     pub menu_bar_bg: u32,
+    /// `ImGuiCol_TableHeaderBg`: the band behind a table's header row.
+    pub table_header_bg: u32,
     /// `Style::WindowMinSize`: the smallest size a requested window size is clamped to.
     pub window_min_size: Vec2,
     /// `Style::ScrollbarSize`: the width of a scrollbar, taken out of the window's interior.
@@ -163,6 +165,7 @@ impl Default for Style {
             selectable_rounding: 0.0,
             popup_bg: 0xF0242424,
             menu_bar_bg: 0xFF242424,
+            table_header_bg: 0xFF4A_4747,
             window_min_size: Vec2 { x: 32.0, y: 32.0 },
             scrollbar_size: 14.0,
             scrollbar_padding: 2.0,

@@ -561,6 +561,79 @@ static void DumpTablesBasic()
     ImGui::EndFrame();
 }
 
+// tables_headers: the same three fixed columns, but with TableHeadersRow first: the header row is
+// 17 px tall (13 + 2*CellPadding.y), carries the column names and paints its own background, and it
+// counts for TableGetRowIndex().
+static void DumpTablesHeaders()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario tables_headers\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[6] = { 'A', 'B', 'C', '0', '1', '2' };
+    for (int i = 0; i < 6; i++)
+        baked->FindGlyph((ImWchar)bake_order[i]);
+    WriteGlyphFixture(font, bake_order, 6);
+
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground;
+    ImGui::Begin("W", NULL, flags);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const ImVec2 window_pos = ImGui::GetWindowPos();
+
+    const bool began = ImGui::BeginTable("T", 3, 0, ImVec2(0.0f, 0.0f), 0.0f);
+    printf("table begin %d\n", (int)began);
+    ImGui::TableSetupColumn("A", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+    ImGui::TableSetupColumn("B", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+    ImGui::TableSetupColumn("C", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+
+    ImGui::TableHeadersRow();
+    printf("after headers rowindex %d\n", ImGui::TableGetRowIndex());
+
+    for (int row = 0; row < 2; row++)
+    {
+        ImGui::TableNextRow();
+        for (int col = 0; col < 3; col++)
+        {
+            const bool visible = ImGui::TableNextColumn();
+            const ImVec2 cursor = PSub(ImGui::GetCursorScreenPos(), window_pos);
+            printf("cell %d %d visible %d cursor %08x %08x rowindex %d colindex %d\n", row, col,
+                (int)visible, Bits(cursor.x), Bits(cursor.y), ImGui::TableGetRowIndex(),
+                ImGui::TableGetColumnIndex());
+            char text[8];
+            snprintf(text, sizeof(text), "A%d%d", row, col);
+            ImGui::Text("%s", text);
+            const ImVec2 imin = PSub(ImGui::GetItemRectMin(), window_pos);
+            const ImVec2 imax = PSub(ImGui::GetItemRectMax(), window_pos);
+            printf("cell %d %d item %08x %08x %08x %08x\n", row, col, Bits(imin.x),
+                Bits(imin.y), Bits(imax.x), Bits(imax.y));
+        }
+    }
+
+    ImGui::EndTable();
+    const ImVec2 end_cursor = PSub(ImGui::GetCursorScreenPos(), window_pos);
+    printf("after cursor %08x %08x rowindex %d\n", Bits(end_cursor.x), Bits(end_cursor.y),
+        ImGui::TableGetRowIndex());
+
+    DumpDrawListBody(*dl);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
 // Text dump: same shape as a draw list dump but without UVs, which depend on the atlas packer and
 // are not reproducible across runs.
 static void DumpTextBody(const ImDrawList& list)
@@ -4172,6 +4245,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "tables_basic") == 0)
     {
         DumpTablesBasic();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "tables_headers") == 0)
+    {
+        DumpTablesHeaders();
         ImGui::DestroyContext();
         return 0;
     }
