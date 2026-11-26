@@ -30,6 +30,9 @@ pub struct InputTextState {
     pub cursor_anim: f32,
     /// `state->CursorFollow`: scroll to the caret on this frame.
     pub cursor_follow: bool,
+    /// `state->TextToRevertTo`: the buffer as it was when the field took the keyboard, which is what
+    /// Escape goes back to.
+    pub revert_to: String,
 }
 
 impl InputTextState {
@@ -44,6 +47,7 @@ impl InputTextState {
             scroll_x: 0.0,
             cursor_anim: 0.0,
             cursor_follow: false,
+            revert_to: text.to_string(),
         }
     }
 
@@ -202,6 +206,33 @@ impl InputTextState {
         self.cursor_anim_reset();
     }
 
+    /// `stb_textedit_cut`: take the selection out, leaving the caret where it was. With nothing
+    /// selected the reference selects everything first.
+    pub fn cut_selection(&mut self) {
+        if !self.has_selection() {
+            self.select_all();
+        }
+        self.delete_selection();
+        self.cursor_follow = true;
+        self.cursor_anim_reset();
+    }
+
+    /// `stb_textedit_paste`: replace the selection with `text`.
+    pub fn paste(&mut self, text: &str) {
+        self.delete_selection();
+        self.text.insert_str(self.cursor, text);
+        self.cursor += text.len();
+        self.cursor_follow = true;
+        self.cursor_anim_reset();
+    }
+
+    /// `stb_textedit_replace`: the text becomes `text` and the caret and selection are clamped into
+    /// it. Escape uses this to go back to what the field held when it was activated.
+    pub fn replace_text(&mut self, text: &str) {
+        self.text = text.to_string();
+        self.cursor_clamp();
+    }
+
     /// `ImGuiInputTextState::OnKeyPressed` for [`EditKey`]: the movement and the two deletions.
     ///
     /// `shift` is `STB_TEXTEDIT_K_SHIFT`: with it the movement drags the selection instead of
@@ -315,6 +346,88 @@ pub fn locate_coord_in(text: &str, x: f32, font: &Font, size: f32) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn typing_replaces_the_selection_and_moves_the_caret() {
+        let mut state = InputTextState::new(1, "Hello");
+        state.cursor = 5;
+        state.select_start = 1;
+        state.select_end = 3;
+        state.on_char_pressed('Z');
+        assert_eq!(state.text, "HZlo");
+        assert_eq!(state.cursor, 2);
+        assert!(!state.has_selection());
+        assert!(state.cursor_follow);
+    }
+
+    #[test]
+    fn backspace_and_delete_remove_one_character() {
+        let mut state = InputTextState::new(1, "abc");
+        state.cursor = 2;
+        state.on_key(EditKey::Backspace, false);
+        assert_eq!(state.text, "ac");
+        assert_eq!(state.cursor, 1);
+        state.on_key(EditKey::Delete, false);
+        assert_eq!(state.text, "a");
+        // Nothing left in front of the caret.
+        state.on_key(EditKey::Delete, false);
+        assert_eq!(state.text, "a");
+        state.on_key(EditKey::End, false);
+        assert_eq!(state.cursor, 1);
+        state.on_key(EditKey::Home, false);
+        assert_eq!(state.cursor, 0);
+    }
+
+    #[test]
+    fn shift_drags_the_selection_and_a_plain_move_collapses_it() {
+        let mut state = InputTextState::new(1, "abcd");
+        state.cursor = 4;
+        state.on_key(EditKey::Home, false);
+        state.on_key(EditKey::Right, true);
+        state.on_key(EditKey::Right, true);
+        assert_eq!((state.select_start, state.select_end), (0, 2));
+        assert_eq!(state.cursor, 2);
+        assert!(state.has_selection());
+        // A plain move collapses the selection to its start.
+        state.on_key(EditKey::Left, false);
+        assert_eq!(state.cursor, 0);
+        assert!(!state.has_selection());
+    }
+
+    #[test]
+    fn cut_takes_the_selection_or_everything() {
+        let mut state = InputTextState::new(1, "abcdef");
+        state.cursor = 3;
+        state.select_start = 1;
+        state.select_end = 4;
+        state.cut_selection();
+        assert_eq!(state.text, "aef");
+        assert_eq!(state.cursor, 1);
+        // With nothing selected the reference takes the whole text.
+        state.select_start = state.cursor;
+        state.select_end = state.cursor;
+        state.cut_selection();
+        assert_eq!(state.text, "");
+        assert_eq!(state.cursor, 0);
+    }
+
+    #[test]
+    fn paste_replaces_the_selection_and_escape_restores_the_activation_value() {
+        let mut state = InputTextState::new(1, "abc");
+        state.cursor = 3;
+        state.select_start = 1;
+        state.select_end = 3;
+        state.paste("XY");
+        assert_eq!(state.text, "aXY");
+        assert_eq!(state.cursor, 3);
+
+        // Escape: `stb_textedit_replace` with what the field held when it was activated.
+        let revert = state.revert_to.clone();
+        state.replace_text(&revert);
+        assert_eq!(state.text, "abc");
+        state.cursor_clamp();
+        assert!(state.cursor <= 3);
+    }
 
     /// The default font is monospaced at seven pixels, which is what makes these numbers readable:
     /// "Hello world" is eleven characters and seventy-seven pixels wide.

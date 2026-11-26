@@ -19,6 +19,16 @@ const ARROW_DOWN_SIN: f32 = 1.0;
 const ARROW_RIGHT_COS: f32 = 1.0;
 const ARROW_RIGHT_SIN: f32 = 0.0;
 
+/// `Shortcut(ImGuiMod_Ctrl | key)` reduced to the ones a text field acts on.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Shortcut {
+    None,
+    SelectAll,
+    Copy,
+    Cut,
+    Paste,
+}
+
 /// `FindRenderedTextEnd`: a label stops at `##`, so the part after it identifies the widget without
 /// being drawn.
 fn rendered_text(label: &str) -> &str {
@@ -4184,6 +4194,8 @@ impl Context {
                 _ => crate::input_text::InputTextState::new(id, buffer),
             };
             state.cursor_anim_reset();
+            // `state->TextToRevertTo`: what Escape goes back to, taken when the field takes over.
+            state.revert_to = buffer.clone();
             self.input_text_state = Some(state);
             self.active_id = Some(id);
             active = true;
@@ -4191,7 +4203,7 @@ impl Context {
         }
         // `Release focus when we click outside`. The frame still draws as if active: the reference
         // clears the active id at the end of the function, after the render block.
-        let release = active && self.io.mouse_clicked[0] && !user_clicked;
+        let mut release = active && self.io.mouse_clicked[0] && !user_clicked;
         if active && user_clicked {
             // `mouse_x = (MousePos.x - frame_bb.Min.x - FramePadding.x) + Scroll.x`, then
             // `stb_textedit_click` drops the caret there and clears the selection.
@@ -4213,6 +4225,10 @@ impl Context {
 
         // The edit: `g.ActiveId == id && !g.ActiveIdIsJustActivated`. Characters first, then at most
         // one key, in the reference's priority order.
+        let mut validated = false;
+        let mut revert_edit = false;
+        // `render_cursor` is decided before the edit, and Escape turns it off for its own frame.
+        let mut render_cursor = active;
         if active && !just_activated && !release {
             let shift = self.io.key_shift;
             let characters: Vec<char> = self.io.input_queue_characters.clone();
@@ -4243,9 +4259,91 @@ impl Context {
             } else {
                 None
             };
+            let is_enter = io.is_key_pressed_repeat(Key::Enter) || io.is_key_pressed_repeat(Key::KeypadEnter);
+            let is_escape = io.is_key_pressed_repeat(Key::Escape);
+            // `Shortcut(ImGuiMod_Ctrl | key)`: the key with Control as its only modifier.
+            let ctrl_mods = io.key_ctrl && !io.key_shift && !io.key_alt && !io.key_super;
+            let shortcut = if !ctrl_mods {
+                Shortcut::None
+            } else if io.is_key_pressed(Key::A) {
+                Shortcut::SelectAll
+            } else if io.is_key_pressed(Key::C) {
+                Shortcut::Copy
+            } else if io.is_key_pressed_repeat(Key::X) {
+                Shortcut::Cut
+            } else if io.is_key_pressed_repeat(Key::V) {
+                Shortcut::Paste
+            } else {
+                Shortcut::None
+            };
+
             if let Some(key) = key {
                 if let Some(state) = self.input_text_state.as_mut() {
                     state.on_key(key, shift);
+                }
+            } else if is_enter {
+                // `validated = clear_active_id = true`: the value is applied on this frame.
+                validated = true;
+                release = true;
+            } else if is_escape {
+                // Escape goes back to what the field held when it took the keyboard, and the frame
+                // it does that draws neither the caret nor the selection.
+                if let Some(state) = self.input_text_state.as_mut() {
+                    let revert = state.revert_to.clone();
+                    state.replace_text(&revert);
+                }
+                revert_edit = true;
+                release = true;
+                render_cursor = false;
+            } else if shortcut == Shortcut::SelectAll {
+                // `state->SelectAll()` and let the view follow the caret.
+                if let Some(state) = self.input_text_state.as_mut() {
+                    state.select_all();
+                    state.cursor_follow = true;
+                }
+            } else if shortcut == Shortcut::Copy || shortcut == Shortcut::Cut {
+                // The selection goes to the clipboard; with nothing selected, the whole text does.
+                let copied = self.input_text_state.as_ref().map(|state| {
+                    let (begin, end) = if state.has_selection() {
+                        (
+                            state.select_start.min(state.select_end),
+                            state.select_start.max(state.select_end),
+                        )
+                    } else {
+                        (0, state.text.len())
+                    };
+                    state.text[begin..end].to_string()
+                });
+                if let Some(copied) = copied {
+                    self.io.set_clipboard_text(&copied);
+                }
+                if shortcut == Shortcut::Cut {
+                    if let Some(state) = self.input_text_state.as_mut() {
+                        state.cut_selection();
+                    }
+                }
+            } else if shortcut == Shortcut::Paste {
+                if let Some(text) = self.io.get_clipboard_text().map(str::to_string) {
+                    // `InputTextFilterCharacter` on the pasted text: control characters dropped.
+                    let filtered: String = text
+                        .chars()
+                        .filter(|c| !((*c as u32) < 0x20 || (*c as u32) == 0x7F))
+                        .collect();
+                    if let Some(state) = self.input_text_state.as_mut() {
+                        state.paste(&filtered);
+                    }
+                }
+            }
+        }
+
+        // `value_changed = (validated || clear_active_id || revert_edit) && text differs`: the edit
+        // is applied when the field is validated or loses the focus, never before.
+        let mut value_changed = false;
+        if active && (validated || release || revert_edit) {
+            if let Some(state) = self.input_text_state.as_ref() {
+                if state.text != *buffer {
+                    *buffer = state.text.clone();
+                    value_changed = true;
                 }
             }
         }
@@ -4305,7 +4403,7 @@ impl Context {
         let text_x = draw_pos.x - scroll_x;
         // The selection, drawn before the text: `TextSelectedBg` from `draw_pos.y - 1` to
         // `draw_pos.y + 2 + FontSize`, as wide as the selected characters.
-        let selection = match (&self.input_text_state, active) {
+        let selection = match (&self.input_text_state, render_cursor) {
             (Some(state), true) if state.has_selection() => {
                 let begin = state.select_start.min(state.select_end).min(text.len());
                 let end = state.select_start.max(state.select_end).min(text.len());
@@ -4365,7 +4463,7 @@ impl Context {
 
         // The caret: `trunc(draw_pos + cursor_offset - draw_scroll)`, one pixel wide, from
         // `y - FontSize + 1` to `y - 1`.
-        if active {
+        if render_cursor {
             // `state->CursorAnim += io.DeltaTime`, then the blink rule.
             let anim = cursor_anim + self.io.delta_time;
             if let Some(state) = self.input_text_state.as_mut() {
@@ -4398,17 +4496,13 @@ impl Context {
             }
         }
 
-        if release {
-            // Write the edit back and let go of the keyboard. The state itself stays until another
-            // field takes it, which is what lets this same frame still draw the caret.
-            if let Some(state) = self.input_text_state.as_ref() {
-                *buffer = state.text.clone();
-            }
-            if self.active_id == Some(id) {
-                self.active_id = None;
-            }
+        // `ClearActiveID()` after the value is applied but before the frame is drawn: the caret is
+        // still drawn because `render_cursor` was decided earlier. The state itself stays until
+        // another field takes it.
+        if active && (validated || release) && self.active_id == Some(id) {
+            self.active_id = None;
         }
-        false
+        value_changed
     }
 
     /// `ImGui::Checkbox`: a square box plus a label. Returns true on the frame it is toggled.
