@@ -63,6 +63,7 @@ pub const SCENARIOS: &[&str] = &[
     "tables_row_bg_color",
     "tables_column_bounds",
     "tables_cell_bg_twice",
+    "tables_column_hovered_flag",
     "text_draw",
     "button",
     "widgets_basic",
@@ -3276,6 +3277,66 @@ pub fn tables_cell_bg_twice_dump() -> String {
     out
 }
 
+/// The `tables_column_hovered_flag` scenario: the `IsHovered` bit of `TableGetColumnFlags` marks the
+/// column under the mouse, as `TableGetHoveredColumn` reports it.
+pub fn tables_column_hovered_flag_dump() -> String {
+    use oxidized_imgui::{Context, Vec2, WindowFlags, column_flags};
+
+    let mut ctx = Context::new();
+    ctx.io_mut().delta_time = 0.1;
+    ctx.io_mut().mouse_down[0] = false;
+
+    let mut out = String::new();
+    for frame in 0..3 {
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: 150.0, y: 95.0 });
+        ctx.begin_frame();
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+        );
+        ctx.begin_window_ex(
+            "W",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+            false,
+        );
+        if frame == 0 {
+            out.push_str(&format!(
+                "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+            ));
+            out.push_str("scenario tables_column_hovered_flag\n");
+        }
+        let began = ctx.begin_table("T", 2, 0, Vec2::default());
+        if frame == 0 {
+            out.push_str(&format!("table begin {}\n", i32::from(began)));
+        }
+        ctx.table_setup_column("A", column_flags::WIDTH_FIXED, 60.0);
+        ctx.table_setup_column("B", column_flags::WIDTH_FIXED, 80.0);
+        for _ in 0..2 {
+            ctx.table_next_row_min(20.0);
+            for _ in 0..2 {
+                ctx.table_next_column();
+                ctx.dummy(Vec2 { x: 10.0, y: 10.0 });
+            }
+        }
+        out.push_str(&format!(
+            "frame {frame} flags {:08x} {:08x}\n",
+            ctx.table_get_column_flags(0),
+            ctx.table_get_column_flags(1)
+        ));
+        ctx.end_table();
+        if frame == 2 {
+            let full = dump("tables_column_hovered_flag", ctx.draw_list());
+            for line in full.lines().skip(2) {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
+        ctx.end_window();
+        ctx.end_frame();
+    }
+    out
+}
+
 /// The `text_draw` scenario: glyph quads for a short string.
 ///
 /// UVs are **omitted on purpose**: the atlas coordinates depend on the reference's internal
@@ -6341,6 +6402,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "tables_row_bg_color" => Some(tables_row_bg_color_dump()),
         "tables_column_bounds" => Some(tables_column_bounds_dump()),
         "tables_cell_bg_twice" => Some(tables_cell_bg_twice_dump()),
+        "tables_column_hovered_flag" => Some(tables_column_hovered_flag_dump()),
         "text_draw" => Some(text_draw_dump()),
         "button" => Some(button_dump()),
         "widgets_basic" => Some(widgets_basic_dump()),

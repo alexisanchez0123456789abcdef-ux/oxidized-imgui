@@ -3646,10 +3646,14 @@ impl Context {
             x: table.outer_rect.1.x,
             y: table.outer_rect.1.y.max(table.outer_rect.0.y + last_height),
         };
+        for column in table.columns.iter_mut() {
+            column.flags &= !crate::tables::column_flags::IS_HOVERED;
+        }
         if self.hovered_in(table.outer_rect.0, hit_max) {
             if let Some(mouse) = self.io.mouse_pos {
-                for (n, column) in table.columns.iter().enumerate() {
+                for (n, column) in table.columns.iter_mut().enumerate() {
                     if mouse.x >= column.clip[0] && mouse.x < column.clip[2] {
+                        column.flags |= crate::tables::column_flags::IS_HOVERED;
                         table.hovered_column_body = n as i32;
                     }
                 }
