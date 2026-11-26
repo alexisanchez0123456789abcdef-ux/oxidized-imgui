@@ -3508,6 +3508,19 @@ impl Context {
         );
     }
 
+    /// `ImGui::NewLine`: ends the line by reserving one font height, so the cursor moves below it.
+    ///
+    /// The reference branches on `CurrLineSize.y`, which every `ItemSize` resets, so the branch only
+    /// differs on a line whose height was set by hand (`AlignTextToFramePadding`, i.e. a menu bar),
+    /// which no golden covers yet.
+    pub fn new_line(&mut self) {
+        let font_size = self.font.size;
+        self.dummy(Vec2 {
+            x: 0.0,
+            y: font_size,
+        });
+    }
+
     /// `ImGui::Spacing`: an empty item of no size, which closes the current line and leaves the gap
     /// of `ItemSpacing.y` below it.
     pub fn spacing(&mut self) {
