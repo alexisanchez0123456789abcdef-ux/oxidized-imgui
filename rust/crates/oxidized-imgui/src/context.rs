@@ -3437,7 +3437,11 @@ impl Context {
             return;
         }
         let host_clip = self.draw_list.current_clip_rect();
-        table.update_layout(self.style.cell_padding, host_clip);
+        table.update_layout(
+            self.style.cell_padding,
+            host_clip,
+            self.style.frame_padding.x,
+        );
     }
 
     /// `TableEndRow`: closes the open cell and leaves the cursor at the row's bottom.

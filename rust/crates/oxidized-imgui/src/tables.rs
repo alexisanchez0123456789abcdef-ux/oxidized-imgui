@@ -26,6 +26,16 @@ pub mod table_flags {
     pub const NO_PAD_INNER_X: u32 = 1 << 23;
     /// `ImGuiTableFlags_RowBg`: every other row gets `TableRowBgAlt`.
     pub const ROW_BG: u32 = 1 << 6;
+    /// `ImGuiTableFlags_SizingMask_`: the bits that pick the table sizing policy.
+    pub const SIZING_MASK: u32 = 4 << 13;
+    /// `ImGuiTableFlags_SizingFixedFit`: the default policy.
+    pub const SIZING_FIXED_FIT: u32 = 1 << 13;
+    /// `ImGuiTableFlags_SizingFixedSame`.
+    pub const SIZING_FIXED_SAME: u32 = 2 << 13;
+    /// `ImGuiTableFlags_SizingStretchSame`: every column stretches with the same weight.
+    pub const SIZING_STRETCH_SAME: u32 = 4 << 13;
+    /// `ImGuiTableFlags_PreciseWidths`: keeps the rounding remainder out of the stretch columns.
+    pub const PRECISE_WIDTHS: u32 = 1 << 19;
     /// `ImGuiTableRowFlags_Headers`: the row holds column headers.
     pub const ROW_HEADERS: u32 = 1 << 0;
 }
@@ -34,6 +44,10 @@ pub mod table_flags {
 pub mod column_flags {
     /// `ImGuiTableColumnFlags_WidthFixed`: the column keeps the width it asked for.
     pub const WIDTH_FIXED: u32 = 1 << 4;
+    /// `ImGuiTableColumnFlags_WidthStretch`: the column takes a share of what the fixed ones leave.
+    pub const WIDTH_STRETCH: u32 = 1 << 3;
+    /// `ImGuiTableColumnFlags_WidthMask_`.
+    pub const WIDTH_MASK: u32 = 1 << 3 | 1 << 4;
     /// `ImGuiTableColumnFlags_NoResize`.
     pub const NO_RESIZE: u32 = 1 << 5;
 }
@@ -51,6 +65,8 @@ pub struct TableColumn {
     pub width_request: f32,
     /// `column->WidthGiven`: what the layout gave it.
     pub width_given: f32,
+    /// `column->StretchWeight`: the share of the leftover width a stretch column asks for.
+    pub stretch_weight: f32,
     /// `column->MinX`: where the column starts, padding included.
     pub min_x: f32,
     /// `column->MaxX`: where the next column starts.
@@ -153,7 +169,7 @@ impl Table {
     ///
     /// `cell_padding` is `ImGuiStyle::CellPadding` and `host_clip` is the window's clip rectangle,
     /// which the reference keeps as `table->HostClipRect`.
-    pub fn update_layout(&mut self, cell_padding: Vec2, host_clip: [f32; 4]) {
+    pub fn update_layout(&mut self, cell_padding: Vec2, host_clip: [f32; 4], frame_padding_x: f32) {
         // The padding and spacing arithmetic of `BeginTableEx`: without vertical borders the space
         // between two columns is the explicit cell padding on both sides; with them, it is the
         // border, and the padding moves inside the column instead.
@@ -204,6 +220,75 @@ impl Table {
         self.border_x1 = self.inner_clip.0.x;
         self.border_x2 = self.inner_clip.1.x;
 
+        // [Part 3] The width each column asks for and, for the stretch ones, its weight. A column
+        // declared without a width flag follows the table's sizing policy, which is
+        // `SizingFixedFit` when the flags say nothing.
+        let policy = self.flags & table_flags::SIZING_MASK;
+        let min_column_width = frame_padding_x.max(1.0);
+        let mut sum_width_requests = 0.0f32;
+        let mut stretch_sum_weights = 0.0f32;
+        for column in self.columns.iter_mut() {
+            if column.flags & column_flags::WIDTH_MASK == 0 {
+                column.flags |= if policy == table_flags::SIZING_FIXED_FIT
+                    || policy == table_flags::SIZING_FIXED_SAME
+                {
+                    column_flags::WIDTH_FIXED
+                } else {
+                    column_flags::WIDTH_STRETCH
+                };
+            }
+            if column.flags & column_flags::WIDTH_FIXED != 0 {
+                sum_width_requests += column.width_request;
+            } else {
+                // `InitStretchWeightOrWidth` is the weight when the column asked for one; the
+                // content-derived weight of `SizingStretchProp` is not ported yet.
+                column.stretch_weight = if column.width_request > 0.0 {
+                    column.width_request
+                } else {
+                    1.0
+                };
+                stretch_sum_weights += column.stretch_weight;
+            }
+            sum_width_requests += self.cell_padding_x * 2.0;
+        }
+
+        // [Part 4] Final widths: the stretch columns share what the fixed ones leave, once the
+        // spacing between columns is taken out.
+        let width_avail = (self.outer_rect.1.x - self.outer_rect.0.x).max(1.0);
+        let width_spacings = self.outer_padding_x * 2.0
+            + (self.cell_spacing_x1 + self.cell_spacing_x2)
+                * self.columns.len().saturating_sub(1) as f32;
+        let width_avail_for_stretched = width_avail - width_spacings - sum_width_requests;
+        let mut width_remaining = width_avail_for_stretched;
+        for column in self.columns.iter_mut() {
+            if column.flags & column_flags::WIDTH_STRETCH != 0 {
+                let ratio = if stretch_sum_weights > 0.0 {
+                    column.stretch_weight / stretch_sum_weights
+                } else {
+                    0.0
+                };
+                column.width_request =
+                    ((width_avail_for_stretched * ratio).max(min_column_width) + 0.01).trunc();
+                width_remaining -= column.width_request;
+            }
+            column.width_given = column.width_request.max(min_column_width).trunc();
+        }
+
+        // [Part 5] The rounding remainder goes to the stretch columns, from right to left.
+        if width_remaining >= 1.0 && self.flags & table_flags::PRECISE_WIDTHS == 0 {
+            for column in self.columns.iter_mut().rev() {
+                if width_remaining < 1.0 {
+                    break;
+                }
+                if column.flags & column_flags::WIDTH_STRETCH == 0 {
+                    continue;
+                }
+                column.width_request += 1.0;
+                column.width_given += 1.0;
+                width_remaining -= 1.0;
+            }
+        }
+
         // The column chain: the first column starts one spacing before the table's content start,
         // and each column begins where the previous one ended.
         let mut min_x = self.outer_rect.0.x + self.outer_padding_x - self.cell_spacing_x1;
@@ -216,9 +301,6 @@ impl Table {
             };
             column.min_x = min_x;
             column.work_min_x = min_x + self.cell_spacing_x1 + self.cell_padding_x;
-            // `WidthFixed`: the column keeps its request. Resizing is not here yet, so the request
-            // and the given width are the same value.
-            column.width_given = column.width_request;
             column.max_x =
                 column.work_min_x + column.width_given + self.cell_padding_x + self.cell_spacing_x2;
             column.work_max_x = column.max_x - self.cell_padding_x - self.cell_spacing_x2;
@@ -332,7 +414,7 @@ mod tests {
         );
         table.setup_column("A", column_flags::WIDTH_FIXED, 60.0);
         table.setup_column("B", column_flags::WIDTH_FIXED, 80.0);
-        table.update_layout(Vec2 { x: 4.0, y: 2.0 }, [61.0, 61.0, 359.0, 259.0]);
+        table.update_layout(Vec2 { x: 4.0, y: 2.0 }, [61.0, 61.0, 359.0, 259.0], 4.0);
         table
     }
 
