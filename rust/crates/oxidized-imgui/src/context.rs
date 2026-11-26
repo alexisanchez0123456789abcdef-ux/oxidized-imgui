@@ -3132,8 +3132,20 @@ impl Context {
             self.table_end_row(&mut table);
         }
         table.row_cell_padding_y = self.style.cell_padding.y;
-        let header_bg = self.style.table_header_bg;
-        table.begin_row(row_min_height, row_flags, header_bg);
+        // The row background: a header row always has its own, `RowBg` alternates over the data
+        // rows, and an explicit colour would win over both.
+        let row_bg = if row_flags & crate::tables::table_flags::ROW_HEADERS != 0 {
+            Some(self.style.table_header_bg)
+        } else if table.flags & crate::tables::table_flags::ROW_BG != 0 {
+            Some(if table.row_bg_counter & 1 != 0 {
+                self.style.table_row_bg_alt
+            } else {
+                self.style.table_row_bg
+            })
+        } else {
+            None
+        };
+        table.begin_row(row_min_height, row_flags, row_bg);
         // `TableBeginRow` restarts the row's own extent at its top.
         if let Some(window) = self.windows.last_mut() {
             window.cursor_max.y = table.row_pos_y1;
@@ -3159,8 +3171,16 @@ impl Context {
                 self.table_end_row(&mut table);
             }
             table.row_cell_padding_y = self.style.cell_padding.y;
-            let header_bg = self.style.table_header_bg;
-            table.begin_row(0.0, 0, header_bg);
+            let row_bg = if table.flags & crate::tables::table_flags::ROW_BG != 0 {
+                Some(if table.row_bg_counter & 1 != 0 {
+                    self.style.table_row_bg_alt
+                } else {
+                    self.style.table_row_bg
+                })
+            } else {
+                None
+            };
+            table.begin_row(0.0, 0, row_bg);
             if let Some(window) = self.windows.last_mut() {
                 window.cursor_max.y = table.row_pos_y1;
             }
@@ -3350,7 +3370,8 @@ impl Context {
                 x: table.work_rect.1.x.min(clip.1.x),
                 y: table.row_pos_y2.min(clip.1.y),
             };
-            if min.y < max.y {
+            // A fully transparent row background (`TableRowBg` is 0,0,0,0) draws nothing at all.
+            if color != 0 && min.y < max.y {
                 let start = self.draw_list.idx_buffer.len();
                 self.draw_list.add_rect_filled(min, max, color);
                 let tail = self.draw_list.idx_buffer.split_off(start);
