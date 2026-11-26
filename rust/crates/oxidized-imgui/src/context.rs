@@ -3308,6 +3308,67 @@ impl Context {
         };
     }
 
+    /// `ImGui::Bullet`: a disc of radius `FontSize * 0.2` at the start of a line, with the next item
+    /// kept on that same line, which is what makes it indent a list entry.
+    pub fn bullet(&mut self) {
+        let font_size = self.font.size;
+        let frame_padding = self.style.frame_padding;
+        let Some(window) = self.windows.last() else {
+            return;
+        };
+        if window.collapsed {
+            return;
+        }
+        // `ImMax(ImMin(CurrLineSize.y, FontSize + FramePadding.y * 2), FontSize)`: the bullet is as
+        // tall as the line it lands on, but never smaller than the font.
+        let line_height = window
+            .line_height
+            .min(font_size + frame_padding.y * 2.0)
+            .max(font_size);
+        let pos = window.cursor;
+        let bb = (
+            pos,
+            Vec2 {
+                x: pos.x + font_size,
+                y: pos.y + line_height,
+            },
+        );
+        // `ItemSize(bb)` then `ItemAdd(bb, 0)`: the item is a square as wide as the font.
+        self.dummy(Vec2 {
+            x: font_size,
+            y: line_height,
+        });
+        let colour = self.style.color_u32(crate::style::Col::Text);
+        // `RenderBullet`: an eight-segment disc at `bb.Min + (FramePadding.x + FontSize * 0.5,
+        // line_height * 0.5)`.
+        self.draw_list.add_circle_filled(
+            Vec2 {
+                x: bb.0.x + frame_padding.x + font_size * 0.5,
+                y: bb.0.y + line_height * 0.5,
+            },
+            font_size * 0.20,
+            colour,
+            8,
+        );
+        if let Some(window) = self.windows.last_mut() {
+            window.last_min = bb.0;
+            window.last_max = bb.1;
+            window.has_item = true;
+        }
+        // `SameLine(0, FramePadding.x * 2)`: the next item shares the bullet's line.
+        let spacing = Vec2 {
+            x: frame_padding.x * 2.0,
+            y: self.style.item_spacing.y,
+        };
+        let Some(window) = self.windows.last_mut() else {
+            return;
+        };
+        window.cursor = Vec2 {
+            x: window.last_max.x + spacing.x,
+            y: window.last_min.y,
+        };
+    }
+
     /// `ImGui::SameLine`: the next item goes to the right of the previous one.
     pub fn same_line(&mut self) {
         let spacing = self.style.item_spacing;

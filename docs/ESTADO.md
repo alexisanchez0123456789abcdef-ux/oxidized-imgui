@@ -2,9 +2,9 @@
 
 _Actualizado: 2026-11-26. Generado desde `docs/progress.json`: no editar a mano._
 
-## Reescritura a Rust: **68.6 %**
+## Reescritura a Rust: **68.8 %**
 
-Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 70.7 %.
+Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 70.9 %.
 
 Qué cuenta como hecho: solo lo que tiene una prueba que lo compara con el código C++ original.
 Un cambio de estado sin evidencia no sube el porcentaje.
@@ -13,7 +13,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 | --- | ---: | ---: |
 | Núcleo: contexto, IO, ventanas, identificadores, layout | 59 | 76 % |
 | Listas de dibujo y primitivas | 18 | 100 % |
-| Widgets | 32 | 97 % |
+| Widgets | 33 | 97 % |
 | Fuentes y texto | 13 | 15 % |
 | Docking y viewports | 10 | 0 % |
 | Backends y ejemplos | 8 | 0 % |
@@ -80,6 +80,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Botón: reposo, hover y activo comparados** — golden button_states
 - **Botón: borde de marco (FrameBorderSize)** — golden button_border
 - **Label y checkbox: rectángulo y alternancia** — golden widgets_basic
+- **Bullet: disco AA de FontSize*0.2, ítem cuadrado con el tamaño de la fuente y SameLine que sangra la entrada** — golden bullet (ítem, cursor tras el bullet y el texto en la misma línea, y lista completa)
 - **BeginDisabled/EndDisabled: Style::Alpha por DisabledAlpha (0.6) en todos los colores y ítems que no hoveran ni pulsan** — golden disabled (4 frames: reposo, pulsación y suelta sobre el botón deshabilitado, y hover sobre el siguiente, con los valores de retorno)
 - **Separador: horizontal en layout vertical, vertical en la barra de menús, y SeparatorText con etiqueta entre dos líneas** — goldens separator (ítem, cursor y lista), separator_text (ítem, cursor y líneas con centro sesgado) y menu_bar_separator (la forma vertical: alto de la línea de la barra)
 - **Slider: región de agarre, arrastre y redondeo** — golden slider_basic
