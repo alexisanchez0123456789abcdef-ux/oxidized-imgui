@@ -166,6 +166,16 @@ impl Font {
             .map(|(_, g)| g)
     }
 
+    /// The advance of one character at `size`: the glyph's, or the fallback for a character the
+    /// pinned table does not have. This is `STB_TEXTEDIT_GETWIDTH` and `GetCharAdvance` in one.
+    pub fn advance_of(&self, c: char, size: f32) -> f32 {
+        let scale = size / self.size;
+        self.glyph(c)
+            .map(|g| g.advance_x)
+            .unwrap_or(self.fallback_advance)
+            * scale
+    }
+
     /// `ImFont::CalcTextSizeA` for a single line: sum of advances scaled by `size / font_size`,
     /// height is the requested size. Unknown characters use the fallback advance, as the reference.
     pub fn calc_text_size(&self, text: &str, size: f32) -> Vec2 {

@@ -263,6 +263,8 @@ pub struct Io {
     /// keeps UTF-16 code units; this keeps code points, which is the same thing minus lone
     /// surrogates (a code point above U+FFFF is reported as U+FFFD, exactly as the reference does).
     pub input_queue_characters: Vec<char>,
+    /// `io.ConfigInputTextCursorBlink`: whether the caret of a text field blinks.
+    pub config_input_text_cursor_blink: bool,
     /// `io.KeyRepeatDelay` and `io.KeyRepeatRate`: when a held key starts and then repeats.
     pub key_repeat_delay: f32,
     pub key_repeat_rate: f32,
@@ -305,6 +307,7 @@ impl Default for Io {
             keys: [KeyData::default(); Key::COUNT],
             key_queue: Vec::new(),
             input_queue_characters: Vec::new(),
+            config_input_text_cursor_blink: true,
             key_repeat_delay: 0.275,
             key_repeat_rate: 0.050,
             key_ctrl: false,

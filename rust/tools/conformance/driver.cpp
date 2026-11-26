@@ -888,6 +888,76 @@ static void DumpTextClip()
     ImGui::EndFrame();
 }
 
+// input_text: a single-line field across a click, a second click that moves the caret, and a click
+// elsewhere that releases it. Prints the edit state and the window's draw list per frame.
+static void FrameInputText(int frame, float mx, float my, bool down)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = down;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground;
+    ImGui::Begin("W", NULL, flags);
+    static char buf[64] = "Hello world";
+    ImGui::SetNextItemWidth(150.0f);
+    ImGui::InputText("##field", buf, IM_ARRAYSIZE(buf));
+    ImGuiWindow* w = ImGui::GetCurrentWindow();
+    ImGuiContext& g = *GImGui;
+    const ImGuiID id = w->GetID("##field");
+    ImGuiInputTextState* state = ImGui::GetInputTextState(id);
+    printf("frame %d active %d clicked %d", frame, (int)(g.ActiveId == id), io.MouseClicked[0] ? 1 : 0);
+    if (state != NULL)
+        printf(" len %d sel %d scroll %08x anim %08x", state->TextLen, state->HasSelection() ? 1 : 0,
+            Bits(state->Scroll.x), Bits(state->CursorAnim));
+    printf("\n");
+    DumpDrawListBody(*w->DrawList);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpInputText()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario input_text\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    // Every letter of "Hello world", since the reference bakes on demand.
+    const char bake_order[8] = { 'H', 'e', 'l', 'o', ' ', 'w', 'r', 'd' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    WriteGlyphFixture(font, bake_order, 8);
+
+    // The field runs from (68,68) to (218,87). A click at x=100 lands on the caret after "Hell"
+    // (28 pixels in, seven per character); a click at x=150 goes past the end of the line.
+    const float steps[10][3] = {
+        { 0.0f, 0.0f, 0.0f },
+        { 100.0f, 75.0f, 0.0f },
+        { 100.0f, 75.0f, 1.0f },
+        { 100.0f, 75.0f, 0.0f },
+        { 150.0f, 75.0f, 1.0f },
+        { 150.0f, 75.0f, 0.0f },
+        { 75.0f, 75.0f, 1.0f },
+        { 75.0f, 75.0f, 0.0f },
+        { 300.0f, 200.0f, 1.0f },
+        { 300.0f, 200.0f, 0.0f },
+    };
+    for (int f = 0; f < 10; f++)
+        FrameInputText(f, steps[f][0], steps[f][1], steps[f][2] != 0.0f);
+}
+
 // window_bg: a window background with no border.
 static void DumpWindowBg()
 {
@@ -3192,6 +3262,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "scene_window_button") == 0)
     {
         DumpSceneWindowButtonScenario();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "input_text") == 0)
+    {
+        DumpInputText();
         ImGui::DestroyContext();
         return 0;
     }

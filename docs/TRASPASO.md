@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **63 escenarios** más la **prueba negativa**.
+   que ejecuta **64 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,10 +46,10 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **70 PRs** fusionados.
-- **63 escenarios** con golden propio, todos en verde, más la prueba negativa.
-- **Reescritura: 62.8 %.** Proyecto (contando el arnés): **65.3 %**.
-- 21 tests unitarios en 6 binarios.
+- `master` limpio, **71 PRs** fusionados.
+- **64 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- **Reescritura: 63.5 %.** Proyecto (contando el arnés): **66.0 %**.
+- 29 tests unitarios en 6 binarios.
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
 
 ## Método que funciona (y lo que cuesta caro)
@@ -160,7 +160,7 @@ scroll interno. **Ya está medido con una sonda** (`InputText` de una línea, et
    `CalcTypematicRepeatAmount`) están verificados en el golden `io_text_events`. Ojo: `KeyCtrl` sale
    **sólo** de `ModCtrl`, no de `LeftCtrl`; el golden lo demuestra.
 2. ~~`add_text` con `CpuFineClip`~~ **Hecho** (PR 72): `add_text_in` toma el recorte base y el `fine_clip`, descarta los quads fuera sin partir comandos y recorta posición **y UVs** en el borde; `text_clip` lo verifica con cinco recortes distintos.
-3. `InputTextState`: copia del buffer (`TextA`), `TextLen`, `Stb` (cursor, `select_start/end`),
+3. ~~`InputTextState` y el widget, mitad de ratón~~ **Hecho** (PR 73): `InputTextState` con la copia del buffer, cursor, selección, `Scroll`, `CursorAnim` y `CursorFollow`; el campo dibuja marco, texto recortado al marco, cursor y se activa/libera con el ratón (`input_text`, 10 frames). Queda el teclado.
    `Scroll`, `CursorAnim`, `CursorFollow`, y el manejo de teclas de `stb_textedit`
    (`ImStb::STB_TexteditState`).
 4. El widget: marco, `draw_pos`, selección, texto, cursor y scroll.
@@ -198,7 +198,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 63 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 64 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```

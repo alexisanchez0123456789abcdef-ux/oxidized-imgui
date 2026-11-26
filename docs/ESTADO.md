@@ -2,9 +2,9 @@
 
 _Actualizado: 2026-11-26. Generado desde `docs/progress.json`: no editar a mano._
 
-## Reescritura a Rust: **62.8 %**
+## Reescritura a Rust: **63.5 %**
 
-Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 65.3 %.
+Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 66.0 %.
 
 Qué cuenta como hecho: solo lo que tiene una prueba que lo compara con el código C++ original.
 Un cambio de estado sin evidencia no sube el porcentaje.
@@ -13,7 +13,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 | --- | ---: | ---: |
 | Núcleo: contexto, IO, ventanas, identificadores, layout | 59 | 76 % |
 | Listas de dibujo y primitivas | 18 | 89 % |
-| Widgets | 29 | 79 % |
+| Widgets | 29 | 83 % |
 | Fuentes y texto | 13 | 15 % |
 | Docking y viewports | 10 | 0 % |
 | Backends y ejemplos | 8 | 0 % |
@@ -79,6 +79,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Botón: borde de marco (FrameBorderSize)** — golden button_border
 - **Label y checkbox: rectángulo y alternancia** — golden widgets_basic
 - **Slider: región de agarre, arrastre y redondeo** — golden slider_basic
+- **Campo de texto: marco, texto recortado al marco, cursor desde el clic y liberación al clicar fuera** — golden input_text (10 frames, 36202 bytes) + input_text::tests (4 casos)
 - **Selectable: fila a todo el ancho, resalte por estado y clic** — golden selectable (8 frames, 38668 bytes)
 - **Clic en una fila del popup: pulsación, cierre y foco del anfitrión** — golden popup_click (12 frames, 45697 bytes)
 - **Combo desplegable: caja, flecha, popup colocado bajo la caja y filas** — golden combo (11 frames, 52130 bytes)

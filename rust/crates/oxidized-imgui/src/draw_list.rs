@@ -425,6 +425,9 @@ impl DrawList {
         }
         for ch in text.chars() {
             let Some(glyph) = font.glyph(ch) else {
+                // `FindGlyph` never fails in the reference: a character the atlas does not have
+                // gets the fallback glyph, which draws nothing but still advances the pen.
+                x += font.advance_of(ch, size);
                 continue;
             };
             let char_width = glyph.advance_x * scale;
