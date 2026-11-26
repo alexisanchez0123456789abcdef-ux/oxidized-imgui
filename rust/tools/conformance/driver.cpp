@@ -5717,6 +5717,53 @@ static void DumpArrowButton()
     }
 }
 
+// rect_filled_aa: a single AddRectFilled with fractional coordinates, which takes the AA path.
+static void DumpRectFilledAa()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario rect_filled_aa\n");
+    ImGuiIO& io = ImGui::GetIO();
+    ImGui::NewFrame();
+    ImGui::EndFrame();
+    int vtx = 0, idx = 0;
+
+    ImDrawList* list = NULL;
+    {
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+        ImGui::SetNextWindowSize(ImVec2(200.0f, 100.0f));
+        ImGui::Begin("A", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+            ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings);
+        list = ImGui::GetWindowDrawList();
+        list->AddRectFilled(ImVec2(10.5f, 20.5f), ImVec2(30.5f, 50.5f), IM_COL32(255, 0, 0, 255));
+        ImGui::End();
+        ImGui::EndFrame();
+    }
+    printf("white_uv %08x %08x\n", Bits(list->_Data->TexUvWhitePixel.x), Bits(list->_Data->TexUvWhitePixel.y));
+    printf("fringe_scale %08x\n", Bits(list->_FringeScale));
+    int cmds = list->CmdBuffer.Size;
+    printf("cmd_count %d\n", cmds);
+    for (int i = 0; i < cmds; i++)
+    {
+        const ImDrawCmd& cmd = list->CmdBuffer[i];
+        printf("cmd %d clip %08x %08x %08x %08x elems %d vtxoff %d idxoff %d\n", i,
+            Bits(cmd.ClipRect.x), Bits(cmd.ClipRect.y), Bits(cmd.ClipRect.z), Bits(cmd.ClipRect.w),
+            (int)cmd.ElemCount, (int)cmd.VtxOffset, (int)cmd.IdxOffset);
+    }
+    printf("vtx_count %d\n", list->VtxBuffer.Size);
+    for (int i = 0; i < list->VtxBuffer.Size; i++)
+    {
+        const ImDrawVert& v = list->VtxBuffer[i];
+        printf("vtx %d pos %08x %08x uv %08x %08x col %08x\n", i, Bits(v.pos.x), Bits(v.pos.y),
+            Bits(v.uv.x), Bits(v.uv.y), v.col);
+    }
+    printf("idx_count %d\n", list->IdxBuffer.Size);
+    for (int i = 0; i < list->IdxBuffer.Size; i += 3)
+        printf("tri %d %d %d %d\n", i / 3, (int)list->IdxBuffer[i], (int)list->IdxBuffer[i + 1],
+            (int)list->IdxBuffer[i + 2]);
+}
+
 // windows_move: dragging a window by its title bar and by its body, and the clamp that keeps it
 // reachable when it is dragged off the display. Only the positions are dumped: the geometry of a
 // window is what windows_order already covers.
@@ -7605,6 +7652,13 @@ int main(int argc, char** argv)
         return 0;
     }
 
+
+    if (strcmp(name, "rect_filled_aa") == 0)
+    {
+        DumpRectFilledAa();
+        ImGui::DestroyContext();
+        return 0;
+    }
 
     if (strcmp(name, "arrow_button") == 0)
     {
