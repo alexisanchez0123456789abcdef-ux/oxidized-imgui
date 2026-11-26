@@ -46,7 +46,7 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **112 PRs** fusionados.
+- `master` limpio, **114 PRs** fusionados.
 - **105 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 68.1 %.** Proyecto (contando el arnés): **70.3 %**.
 - 39 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
