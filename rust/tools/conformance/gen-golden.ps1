@@ -60,6 +60,7 @@ $fixture_names = @{
     'tables_headers'      = 'tables_headers.glyphs.txt'
     'tables_rowbg'        = 'tables_rowbg.glyphs.txt'
     'tables_cellbg'       = 'tables_cellbg.glyphs.txt'
+    'tables_borders'      = 'tables_borders.glyphs.txt'
     'window_resize_edges' = 'window_resize_edges.lineuvs.txt'
     'window_resize_cursor' = 'window_resize_cursor.lineuvs.txt'
     'collapsing_header'   = 'collapsing_header.fixture.txt'

@@ -3306,6 +3306,48 @@ impl Context {
         // `ImCeil(RowPosY2)`: the table is as tall as the bottom of its last row.
         let inner_content_max_y = table.row_pos_y2.ceil();
         table.outer_rect.1.y = table.outer_rect.1.y.max(inner_content_max_y);
+        // `TableDrawBorders`, for the inner grid: one vertical line at the right edge of every
+        // column but the last, from the top of the content to the bottom of the table. The outer
+        // rectangle (an anti-aliased stroke) is not in this cut.
+        if table.flags & crate::tables::table_flags::BORDERS_INNER_V != 0 {
+            let border_outer_h = if table.flags & crate::tables::table_flags::BORDERS_OUTER_H != 0 {
+                1.0
+            } else {
+                0.0
+            };
+            let draw_y1 = table.outer_rect.0.y.max(table.work_rect.0.y) + border_outer_h;
+            let draw_y2 = table.outer_rect.1.y - border_outer_h;
+            let start = self.draw_list.idx_buffer.len();
+            for column in &table.columns {
+                let mut draw_x2 = column.max_x;
+                if draw_x2 >= table.inner_clip.1.x && draw_x2 - 1.0 <= table.inner_clip.1.x {
+                    draw_x2 = table.inner_clip.1.x;
+                }
+                if draw_x2 >= table.inner_clip.1.x {
+                    continue;
+                }
+                // The right-most column's border belongs to the outer rectangle; with the default
+                // sizing policy the reference skips it here.
+                if column.next_enabled_column == -1 {
+                    continue;
+                }
+                if draw_x2 <= column.clip[0] || draw_y2 <= draw_y1 {
+                    continue;
+                }
+                self.draw_list.add_line_v(
+                    draw_x2,
+                    draw_y1,
+                    draw_y2,
+                    self.style.table_border_light,
+                    1.0,
+                );
+            }
+            let tail = self.draw_list.idx_buffer.split_off(start);
+            if let Some(cmd) = self.draw_list.cmd_buffer.last_mut() {
+                cmd.elem_count -= tail.len() as u32;
+            }
+            self.table_bg_indices.extend_from_slice(&tail);
+        }
         // `ImDrawListSplitter::Merge`: the background channel first, then the column channels, so
         // the vertices stay where they were drawn and only the indices are regrouped.
         let background = core::mem::take(&mut self.table_bg_indices);
@@ -3395,6 +3437,27 @@ impl Context {
             if rect.0.y < rect.1.y {
                 let start = self.draw_list.idx_buffer.len();
                 self.draw_list.add_rect_filled(rect.0, rect.1, color);
+                let tail = self.draw_list.idx_buffer.split_off(start);
+                if let Some(cmd) = self.draw_list.cmd_buffer.last_mut() {
+                    cmd.elem_count -= tail.len() as u32;
+                }
+                self.table_bg_indices.extend_from_slice(&tail);
+            }
+        }
+        // `TableEndRow` draws the border above a row once it has another row before it, in the
+        // strong colour when the previous row was a header row.
+        if table.current_row > 0 && table.flags & crate::tables::table_flags::BORDERS_INNER_H != 0 {
+            let y = table.row_pos_y1;
+            if y >= table.bg_clip.0.y && y < table.bg_clip.1.y {
+                let colour = if table.last_row_flags & crate::tables::table_flags::ROW_HEADERS != 0
+                {
+                    self.style.table_border_strong
+                } else {
+                    self.style.table_border_light
+                };
+                let start = self.draw_list.idx_buffer.len();
+                self.draw_list
+                    .add_line_h(table.border_x1, table.border_x2, y, colour, 1.0);
                 let tail = self.draw_list.idx_buffer.split_off(start);
                 if let Some(cmd) = self.draw_list.cmd_buffer.last_mut() {
                     cmd.elem_count -= tail.len() as u32;

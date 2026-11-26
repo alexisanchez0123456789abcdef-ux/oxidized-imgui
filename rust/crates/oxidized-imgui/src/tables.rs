@@ -10,6 +10,10 @@ use crate::draw_list::Vec2;
 
 /// `ImGuiTableFlags`: the table bits the layout reads.
 pub mod table_flags {
+    /// `ImGuiTableFlags_BordersInnerH`: horizontal borders between rows.
+    pub const BORDERS_INNER_H: u32 = 1 << 7;
+    /// `ImGuiTableFlags_BordersOuterH`: horizontal borders above and below the table.
+    pub const BORDERS_OUTER_H: u32 = 1 << 8;
     /// `ImGuiTableFlags_BordersInnerV`: vertical borders between columns.
     pub const BORDERS_INNER_V: u32 = 1 << 9;
     /// `ImGuiTableFlags_BordersOuterV`: vertical borders on the sides.
@@ -57,6 +61,8 @@ pub struct TableColumn {
     pub work_max_x: f32,
     /// `column->ClipRect`: the span clipped to the table's inner clip.
     pub clip: [f32; 4],
+    /// `column->NextEnabledColumn`: the next visible column, `-1` for the last one.
+    pub next_enabled_column: i32,
 }
 
 /// The state of the table being built, `ImGuiTable`, reduced to what the first cut needs.
@@ -69,6 +75,9 @@ pub struct Table {
     pub outer_rect: (Vec2, Vec2),
     /// `table->InnerClipRect`: the table's rectangle clipped to the window.
     pub inner_clip: (Vec2, Vec2),
+    /// `table->BorderX1` / `BorderX2`: the horizontal span of the inner horizontal borders.
+    pub border_x1: f32,
+    pub border_x2: f32,
     /// `table->CellPaddingX`: only set when the columns are separated by borders.
     pub cell_padding_x: f32,
     /// `table->CellSpacingX1` / `CellSpacingX2`: the gaps on each side of a column.
@@ -93,6 +102,9 @@ pub struct Table {
     pub decl_columns: usize,
     /// `table->RowFlags` and `table->RowMinHeight` of the row being built.
     pub row_flags: u32,
+    /// `table->LastRowFlags`: the flags of the row closed most recently, which decide the colour of
+    /// the border above the next one.
+    pub last_row_flags: u32,
     pub row_min_height: f32,
     /// `table->RowBgColor[0]`: the background the row paints before the next one starts.
     pub row_bg0: Option<u32>,
@@ -174,24 +186,34 @@ impl Table {
         self.outer_padding_x =
             (outer_padding_for_border + outer_padding_explicit) - self.cell_padding_x;
 
-        // `InnerClipRect`: the table's rectangle clipped to the window, then carried down to the
-        // window's bottom edge so the rows of a non-scrolling table can grow inside it.
+        // `InnerClipRect`: the table's rectangle shrunk by the outer border size when there is one
+        // (a 1 px outer border pulls the clip in on both sides), clipped to the window, then carried
+        // down to the window's bottom edge so the rows can grow inside it. The vertical shrink of a
+        // table with no height yet collapses to its top, which is why only x moves here.
+        let border_outer_v = if borders_outer_v { BORDER_SIZE } else { 0.0 };
         self.inner_clip = (
             Vec2 {
-                x: self.outer_rect.0.x.max(host_clip[0]),
+                x: self.outer_rect.0.x.max(host_clip[0]) + border_outer_v,
                 y: self.outer_rect.0.y.max(host_clip[1]),
             },
             Vec2 {
-                x: self.outer_rect.1.x.min(host_clip[2]),
-                y: self.outer_rect.1.y.min(host_clip[3]),
+                x: self.outer_rect.1.x.min(host_clip[2]) - border_outer_v,
+                y: host_clip[3],
             },
         );
-        self.inner_clip.1.y = host_clip[3];
+        self.border_x1 = self.inner_clip.0.x;
+        self.border_x2 = self.inner_clip.1.x;
 
         // The column chain: the first column starts one spacing before the table's content start,
         // and each column begins where the previous one ended.
         let mut min_x = self.outer_rect.0.x + self.outer_padding_x - self.cell_spacing_x1;
-        for column in self.columns.iter_mut() {
+        let columns_count = self.columns.len() as i32;
+        for (n, column) in self.columns.iter_mut().enumerate() {
+            column.next_enabled_column = if (n as i32) + 1 < columns_count {
+                n as i32 + 1
+            } else {
+                -1
+            };
             column.min_x = min_x;
             column.work_min_x = min_x + self.cell_spacing_x1 + self.cell_padding_x;
             // `WidthFixed`: the column keeps its request. Resizing is not here yet, so the request
@@ -223,6 +245,7 @@ impl Table {
         self.current_row += 1;
         self.current_column = -1;
         self.is_inside_row = true;
+        self.last_row_flags = self.row_flags;
         self.row_flags = row_flags;
         self.row_min_height = row_min_height;
         self.row_bg0 = row_bg;
