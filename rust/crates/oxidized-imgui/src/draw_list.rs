@@ -235,6 +235,12 @@ impl DrawList {
         }
     }
 
+    /// The clip the command being built carries (`ImDrawList::_CmdHeader.ClipRect`). A caller that
+    /// wants to push the clip already in effect needs it.
+    pub fn current_clip_rect(&self) -> [f32; 4] {
+        self.current_clip
+    }
+
     /// What closing a window does to the command list, pinned by `window_bg` and the full scene:
     /// the empty command left by the clip push at the start is dropped, and the clip pop opens a
     /// new empty command when the current one has geometry, and that one stays.
@@ -263,14 +269,19 @@ impl DrawList {
         self.current_clip = self.fullscreen_clip;
     }
 
-    /// `ImDrawList::_OnChangedClipRect`.
+    /// `ImDrawList::_OnChangedClipRect`: what a clip change does to the command buffer.
+    ///
+    /// Three outcomes, in the reference's order: a command that already has geometry is closed and
+    /// a new one opened **only when the clip really changed**; an empty command left by a clip
+    /// push/pop that drew nothing is dropped when the previous command already carries the restored
+    /// clip, so the geometry can continue there; otherwise the current command takes the new clip.
     fn on_changed_clip_rect(&mut self) {
-        let last_has_geometry = self
-            .cmd_buffer
-            .last()
-            .map(|cmd| cmd.elem_count > 0)
-            .unwrap_or(false);
-        if last_has_geometry {
+        // `ImDrawCmd_HeaderCompare` also compares `TexRef` and `VtxOffset`; both are the defaults on
+        // every command here (no texture changes yet), so the clip is what can differ.
+        let Some(&curr) = self.cmd_buffer.last() else {
+            return;
+        };
+        if curr.elem_count != 0 && curr.clip_rect != self.current_clip {
             // A new command carries the index offset of the buffer when it opens, as
             // `ImDrawList::AddDrawCmd` does. `VtxOffset` stays 0 until a backend asks for it.
             let cmd = DrawCmd {
@@ -279,7 +290,19 @@ impl DrawList {
                 ..DrawCmd::default()
             };
             self.cmd_buffer.push(cmd);
-        } else if let Some(cmd) = self.cmd_buffer.last_mut() {
+            return;
+        }
+        if curr.elem_count == 0 && self.cmd_buffer.len() > 1 {
+            let prev = self.cmd_buffer[self.cmd_buffer.len() - 2];
+            // `ImDrawCmd_AreSequentialIdxOffset`: the empty command follows the previous one with no
+            // geometry in between, so merging it back loses nothing.
+            let sequential = prev.idx_offset + prev.elem_count == curr.idx_offset;
+            if prev.clip_rect == self.current_clip && sequential && prev.user_callback.is_none() {
+                self.cmd_buffer.pop();
+                return;
+            }
+        }
+        if let Some(cmd) = self.cmd_buffer.last_mut() {
             cmd.clip_rect = self.current_clip;
         }
     }

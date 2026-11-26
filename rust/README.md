@@ -80,9 +80,10 @@ instead of against our own expectations:
 | Bezier points | recursive flatness subdivision with the curve error of 1.12 px | `bezier_points` golden |
 | Polyline stroke | open path, miter joins, simple caps, untextured stroke path | `aa_polyline` golden |
 | Border stroke | closed path, miter joins, inside stroke position | `aa_border` golden |
+| Clip stack | `PushClipRect`/`PopClipRect`, intersection, fullscreen fallback, command splitting | `clip_stack` golden |
+| Command split | `_OnChangedClipRect` in full: a clip change closes the command **only when the rectangle really changes**, an unchanged push/pop keeps the geometry in the same command, and a push/pop pair that draws nothing merges its empty command back into the one it came from | `cmd_split` golden (3 commands) |
 
 The conformance driver is compiled with `/DIMGUI_DISABLE_SSE`: the reference's default `ImRsqrtPrecise` uses the SSE reciprocal-square-root estimate, whose last bits depend on the CPU model, which would make every AA golden machine-specific. Both sides take the exact `1/sqrt` path instead.
-| Clip stack | `PushClipRect`/`PopClipRect`, intersection, fullscreen fallback, command splitting | `clip_stack` golden |
 
 Provisional, **not** parity-checked: everything else. In particular circles, the baked corner
 textures for rounded widget frames (a second drawing path next to the geometric one), text wrapping

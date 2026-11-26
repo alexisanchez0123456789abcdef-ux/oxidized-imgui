@@ -367,6 +367,67 @@ static void DumpClipStack()
     }
 }
 
+// cmd_split: one window draw list where every clip change has to cut the command the same way the
+// reference does. A clip that does not change must not start a command; one that does must; and a
+// push/pop pair that draws nothing must merge back into the command it came from.
+static void DumpCmdSplit()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario cmd_split\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground;
+    ImGui::Begin("W", NULL, flags);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    // The clip the window started with, which is the clip of the command already in the buffer. A
+    // loose ImDrawList is avoided on purpose: outside a window it faults in this reference build.
+    const ImRect win = ImGui::GetCurrentWindow()->ClipRect;
+    const ImVec2 cmin = win.Min;
+    const ImVec2 cmax = win.Max;
+
+    // 1. The window clip first, the command every later step is compared against.
+    dl->AddRectFilled(ImVec2(70.0f, 70.0f), ImVec2(110.0f, 90.0f), COL);
+    // 2. Pushing that very rectangle is not a change: no new command.
+    dl->PushClipRect(cmin, cmax, false);
+    dl->AddRectFilled(ImVec2(70.0f, 100.0f), ImVec2(110.0f, 120.0f), COL);
+    // 3. A second identical push, nested, neither.
+    dl->PushClipRect(cmin, cmax, false);
+    dl->AddRectFilled(ImVec2(70.0f, 130.0f), ImVec2(110.0f, 150.0f), COL);
+    dl->PopClipRect();
+    // 4. Popping back to the clip the command already carries: still no split.
+    dl->PopClipRect();
+    dl->AddRectFilled(ImVec2(120.0f, 70.0f), ImVec2(160.0f, 90.0f), COL);
+    // 5. Intersecting with a larger rectangle leaves the clip alone: no split.
+    dl->PushClipRect(ImVec2(cmin.x - 20.0f, cmin.y - 20.0f),
+        ImVec2(cmax.x + 20.0f, cmax.y + 20.0f), true);
+    dl->AddRectFilled(ImVec2(120.0f, 100.0f), ImVec2(160.0f, 120.0f), COL);
+    dl->PopClipRect();
+    // 6. Intersecting with a smaller one does change it: the command is cut here.
+    dl->PushClipRect(ImVec2(130.0f, 60.0f), ImVec2(200.0f, 200.0f), true);
+    dl->AddRectFilled(ImVec2(120.0f, 130.0f), ImVec2(180.0f, 160.0f), COL);
+    dl->PopClipRect();
+    // 7. Back at the window clip, which the command just closed does not carry: cut again.
+    dl->AddRectFilled(ImVec2(120.0f, 170.0f), ImVec2(160.0f, 190.0f), COL);
+    // 8. A push that changes the clip and a pop that undoes it with nothing drawn in between: the
+    // empty command merges back into the one it came from, so this rectangle joins the previous one
+    // instead of opening a fourth command.
+    dl->PushClipRect(ImVec2(62.0f, 62.0f), ImVec2(300.0f, 150.0f), false);
+    dl->PopClipRect();
+    dl->AddRectFilled(ImVec2(70.0f, 170.0f), ImVec2(110.0f, 190.0f), COL);
+
+    DumpDrawListBody(*dl);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
 // Text dump: same shape as a draw list dump but without UVs, which depend on the atlas packer and
 // are not reproducible across runs.
 static void DumpTextBody(const ImDrawList& list)
@@ -3957,6 +4018,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "io_text_events") == 0)
     {
         DumpIoText();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "cmd_split") == 0)
+    {
+        DumpCmdSplit();
         ImGui::DestroyContext();
         return 0;
     }
