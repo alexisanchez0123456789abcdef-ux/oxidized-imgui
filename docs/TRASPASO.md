@@ -96,6 +96,32 @@ Esto está aprendido a base de fallar, y ahorra sesiones enteras:
   aparecer un frame después.
 - Un elemento sólo está "encima" si **su ventana** es la que está bajo el ratón.
 
+## Trampas del propio agente (comprobadas a base de trompicones)
+
+Estas no son del arnés sino de cómo se edita y se publica; están aquí porque cada una ha costado una
+ronda y no aparece en ninguna otra documentación:
+
+- **Un literal `'\n'` de Rust dentro de un script de PowerShell se rompe.** Al construir el dump de un
+  escenario con un array de líneas y `-join`, escribir `out.push('\n')` acaba en el fichero como
+  `out.push(\x27\n\x27)` (o como `'\\n'`, según cómo se escape): Rust falla con «character literal may
+  only contain one codepoint». **Solución**: escribir esa línea concreta con la herramienta de edición,
+  o con una cadena entre comillas dobles de PowerShell (`"                out.push('\n');"`), nunca con
+  comillas simples anidadas. Ha pasado **tres veces**.
+- **Editar `context.rs` por número de línea es peligroso**: un índice desfasado duplicó un
+  `let min_size` y dejó el fichero sin compilar. `cargo build` lo dice en el acto; **regla**: tras
+  cualquier cambio estructural, `cargo build`/`cargo clippy` *antes* de seguir, y si algo huele mal,
+  `git checkout -- <fichero>` y volver a empezar. Nunca commitear sin ese paso.
+- **Renombrar un método con `.Replace` también toca sus llamadas**: al convertir `frame_height` en
+  `get_frame_height` se rompieron nueve llamadores. Lo barato es renombrar sólo el envoltorio público y
+  dejar el ayudante privado como estaba.
+- **Los mensajes de commit con comillas dobles o backticks** rompen el parseo de PowerShell
+  (`git commit -m "... SeparatorText("") ..."` intenta tratar el resto como ruta). Usar mensajes sin
+  comillas internas o pasarlos por una variable.
+- **El push necesita `GIT_SSH_COMMAND`** (`ssh -i <llave> -o StrictHostKeyChecking=accept-new -o
+  BatchMode=yes`): sin él, Git intenta usar su propio `sh.exe`. La llave se registra por la API, se
+  borra en la misma ronda y se comprueba al final que la lista de llaves del repo está vacía.
+
+
 ## Hecho y verificado (con su golden)
 
 Núcleo y listas: hashes de identificadores, pila de identificadores, ventanas con
