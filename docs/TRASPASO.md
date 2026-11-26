@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **124 escenarios** más la **prueba negativa**.
+   que ejecuta **125 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **133 PRs** fusionados.
-- **124 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **134 PRs** fusionados.
+- **125 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 69.9 %.** Proyecto (contando el arnés): **71.8 %**.
 - 39 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
@@ -420,6 +420,15 @@ Golden `separator_text`: "A", `SeparatorText("S")` y "B" en la misma ventana de 
   dibuja **una sola línea** de extremo a extremo, con su propio golden (`separator_text_empty`):
   el ítem sigue midiendo `max(label + padding, border)` de alto, así que el cursor avanza igual.
 
+### Foco de ventana por nombre (peso 1): cerrada
+
+Golden `windows_set_focus`: las mismas dos ventanas solapadas de `windows_focus`, ahora con
+`SetWindowFocus` sobre "A" o "B" antes de los `Begin`.
+
+- Es la versión inmediata de lo que ya existía: mueve el nombre al final del orden de display y lo
+  deja como ventana enfocada, que es justo el estado que el `Begin` siguiente encuentra hecho. Un
+  nombre desconocido no hace nada, como el `FindWindowByName` fallido de la referencia.
+- Medido: `[A,B]` → `focus_a` → `[B,A]` (y la barra activa pasa a A) → `focus_b` → `[A,B]`.
 ### Colapso de ventana por nombre (peso 1): cerrada
 
 Golden `windows_set_collapsed`: la misma ventana de `windows_collapse_api`, ahora con
@@ -767,7 +776,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 124 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 125 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
