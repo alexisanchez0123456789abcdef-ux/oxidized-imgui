@@ -3421,14 +3421,17 @@ impl Context {
         }
         let hovered = over && key.is_some() && self.header_hovered_last == key;
         // `ButtonBehavior`: pressing a hovered header takes `ActiveId` until the button is released,
-        // and the release over the item is the press that changes the sort order.
+        // and the release over the item is the press that changes the sort order. Only the header
+        // that holds the active id consumes the release: the ones before it in the row must leave it
+        // alone, or a click on the second column would be swallowed by the first.
         let mut pressed = false;
         if self.io.mouse_down[0] {
             if hovered {
                 self.header_active = key.clone();
             }
-        } else if let Some(active) = self.header_active.take() {
-            pressed = hovered && key.as_ref() == Some(&active);
+        } else if key.is_some() && self.header_active == key {
+            self.header_active = None;
+            pressed = hovered;
         }
         let held = key.is_some() && self.header_active == key;
         // A hovered cell takes `HeaderHovered`; a header outside a header row still paints its cell,

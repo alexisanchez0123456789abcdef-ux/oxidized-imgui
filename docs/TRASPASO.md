@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **103 escenarios** más la **prueba negativa**.
+   que ejecuta **104 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **110 PRs** fusionados.
-- **103 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **111 PRs** fusionados.
+- **104 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 68.1 %.** Proyecto (contando el arnés): **70.3 %**.
 - 32 tests unitarios en 6 binarios.
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
@@ -139,7 +139,9 @@ tabla de líneas en el fixture), con ascendente/descendente y el número de orde
 `tables_sort_click`: el clic de cabecera que alterna la dirección, con el frame del clic (flecha vieja)
 y el siguiente (flecha nueva);
 `tables_reorder`: el arrastre de una cabecera que reordena las columnas, aplicado en el `BeginTable`
-siguiente (dos movimientos, con la columna bajo el ratón como prueba de texto).
+siguiente (dos movimientos, con la columna bajo el ratón como prueba de texto);
+`tables_sort_multi`: el Shift+clic que añade una segunda columna al orden (`SortMulti`), con su número
+de orden "2".
 
 La tabla completa, con el nombre del golden de cada fila, está en `rust/README.md`.
 El detalle por pieza y su peso, en `docs/progress.json`.
@@ -158,7 +160,8 @@ de columnas (`tables_set_column`, `tables_names` y `tables_header_id`), el recor
 comandos por columna (`tables_clip`), las specs de orden (`tables_sort_specs`, `tables_sort_tristate`
 y `tables_column_sorted_flag`), la **flecha de orden** (`tables_sort_arrow`, con el número del
 segundo criterio y la dirección descendente), el **clic** que alterna la dirección
-(`tables_sort_click`) y el **reordenado por arrastre** (`tables_reorder`). El resto del sistema, por
+(`tables_sort_click`), el **reordenado por arrastre** (`tables_reorder`) y el **Shift+clic multi-columna**
+(`tables_sort_multi`). El resto del sistema, por
 orden de coste:
 
 - **Políticas de tamaño**: `SizingStretchSame`, los pesos explícitos y el ancho automático por
@@ -315,6 +318,13 @@ del ratón, pulsación, mantenido, suelte y el frame siguiente, dos veces para a
   driver sale 1 siempre.
 - El estado de orden persiste por id de tabla (`Context::table_sort_state`, ya usado por la flecha);
   sin eso el clic se perdería al re-declarar las columnas en el frame siguiente.
+- **Shift+clic** (`tables_sort_multi`): con `SortMulti`, `TableSetColumnSortDirection(..., append =
+  IO.KeyShift)` añade la columna en `max(SortOrder) + 1` en vez de sustituir las demás; sin `SortMulti`
+  o sin Shift, sustituye. La segunda columna dibuja su número "2" (la misma geometría de la flecha).
+- **Trampa que cazó el golden**: `ButtonBehavior` sólo consume el `ActiveId` **la cabecera que lo
+  tiene**. El primer intento hacía `header_active.take()` en cualquier cabecera, así que al soltar
+  sobre la segunda columna la primera de la fila se comía el release y el clic no se aplicaba. Ahora
+  sólo se limpia cuando `header_active` es la clave de esa cabecera, como en el original.
 
 ### Tablas, reordenar por arrastre (peso 1): cerrada
 
@@ -434,7 +444,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 103 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 104 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
