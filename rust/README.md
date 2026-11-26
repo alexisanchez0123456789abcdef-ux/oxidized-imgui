@@ -66,6 +66,7 @@ instead of against our own expectations:
 | Window scroll | `SetNextWindowScroll` clamped to `ScrollMax` (which lags one frame behind the content), the content origin moving up with it, and the item rects following | `window_scroll` golden |
 | Window moving | a click on a window starts a move drag from the title bar or the body (the default is not title-bar-only), the window follows the mouse keeping the grab offset, and it is clamped so a corner stays inside the padded work area | `windows_move` golden |
 | Window stack, order | several windows each with their own list, rendered front to back, the top-most one hovered, a click raising the clicked window in the same frame, and the title bar colour following the focus | `windows_order` golden |
+| Window focus by API | `SetNextWindowFocus` raises the next window to the front of the display order and gives it the focus at `Begin`, without a click: the draw-data order and the `TitleBgActive` bar swap on that same frame | `windows_focus` golden |
 | Command offsets | each command carries the index offset of the buffer when it opened | `cmd_offsets` golden |
 | Window close | clip starts below the title band; the empty command from the clip push is dropped and the pop adds one only after geometry | `window_bg`, `window_title` goldens |
 | Full scene | titled window with a button: background, band, border, title, fill, label and the three commands | `scene_window_button` golden |

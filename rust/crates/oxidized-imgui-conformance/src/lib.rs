@@ -96,6 +96,7 @@ pub const SCENARIOS: &[&str] = &[
     "window_icons_drag",
     "windows_order",
     "windows_move",
+    "windows_focus",
     "window_scroll",
     "window_scrollbar",
     "window_scrollbar_drag",
@@ -5200,6 +5201,92 @@ pub fn windows_order_dump() -> String {
     out
 }
 
+/// The `windows_focus` scenario: `SetNextWindowFocus` raises a window to the front of the display
+/// order and gives it the focus without a click, so the draw order and the title bar colour swap.
+pub fn windows_focus_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/windows_focus.glyphs.txt"
+    );
+    let glyphs = std::fs::read_to_string(path).expect("windows focus fixture");
+    let font = Font::from_pinned(&glyphs).expect("font fixture");
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario windows_focus\n");
+
+    // `focus_a` and `focus_b` name the window the caller asks for; `None` leaves the order alone.
+    let frame = |ctx: &mut Context,
+                 out: &mut String,
+                 n: usize,
+                 tag: &str,
+                 focus: Option<usize>,
+                 record: bool| {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+        ctx.io_mut().mouse_down[0] = false;
+        ctx.begin_frame();
+        if focus == Some(0) {
+            ctx.set_next_window_focus();
+        }
+        ctx.begin_window_titled(
+            "A",
+            "A",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        ctx.end_window();
+        if focus == Some(1) {
+            ctx.set_next_window_focus();
+        }
+        ctx.begin_window_titled(
+            "B",
+            "B",
+            Some(Vec2 { x: 110.0, y: 100.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        ctx.end_window();
+        let hovered = ctx.hovered_window_name().unwrap_or("-").to_string();
+        ctx.end_frame();
+        if !record {
+            return;
+        }
+        let lists = ctx.render_lists();
+        out.push_str(&format!(
+            "frame {n} {tag} hovered {hovered} lists {}\n",
+            lists.len()
+        ));
+        for (i, (name, list)) in lists.iter().enumerate() {
+            out.push_str(&format!("list {i} {name}\n"));
+            let body = dump("windows_focus", list);
+            for line in body.lines().skip(2) {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
+    };
+
+    // B is created last, so it starts on top; the frames then move the focus by hand.
+    for _ in 0..6 {
+        frame(&mut ctx, &mut out, 0, "", None, false);
+    }
+    frame(&mut ctx, &mut out, 0, "idle", None, true);
+    frame(&mut ctx, &mut out, 1, "focus_a", Some(0), true);
+    frame(&mut ctx, &mut out, 2, "idle_a_on_top", None, true);
+    frame(&mut ctx, &mut out, 3, "focus_b", Some(1), true);
+    frame(&mut ctx, &mut out, 4, "idle_b_on_top", None, true);
+    frame(&mut ctx, &mut out, 5, "focus_a_again", Some(0), true);
+    frame(&mut ctx, &mut out, 6, "idle_a_again", None, true);
+    out
+}
+
 /// The `windows_move` scenario: dragging one window by its title bar and by its body, and the clamp
 /// that keeps it reachable when it is dragged off the display.
 ///
@@ -7135,6 +7222,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "window_icons_drag" => Some(window_icons_drag_dump()),
         "windows_order" => Some(windows_order_dump()),
         "windows_move" => Some(windows_move_dump()),
+        "windows_focus" => Some(windows_focus_dump()),
         "window_scroll" => Some(window_scroll_dump()),
         "window_scrollbar" => Some(window_scrollbar_dump()),
         "window_scrollbar_drag" => Some(window_scrollbar_drag_dump()),
