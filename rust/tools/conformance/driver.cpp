@@ -5743,14 +5743,7 @@ static void DumpRectFilledAa()
     printf("white_uv %08x %08x\n", Bits(list->_Data->TexUvWhitePixel.x), Bits(list->_Data->TexUvWhitePixel.y));
     printf("fringe_scale %08x\n", Bits(list->_FringeScale));
     int cmds = list->CmdBuffer.Size;
-    printf("cmd_count %d\n", cmds);
-    for (int i = 0; i < cmds; i++)
-    {
-        const ImDrawCmd& cmd = list->CmdBuffer[i];
-        printf("cmd %d clip %08x %08x %08x %08x elems %d vtxoff %d idxoff %d\n", i,
-            Bits(cmd.ClipRect.x), Bits(cmd.ClipRect.y), Bits(cmd.ClipRect.z), Bits(cmd.ClipRect.w),
-            (int)cmd.ElemCount, (int)cmd.VtxOffset, (int)cmd.IdxOffset);
-    }
+    // Command boundaries are covered elsewhere: this scenario is about the vertex geometry.
     printf("vtx_count %d\n", list->VtxBuffer.Size);
     for (int i = 0; i < list->VtxBuffer.Size; i++)
     {

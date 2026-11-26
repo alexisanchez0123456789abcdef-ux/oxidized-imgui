@@ -132,6 +132,7 @@ pub const SCENARIOS: &[&str] = &[
     "small_button",
     "same_line_offset",
     "arrow_button",
+    "rect_filled_aa",
     "window_scroll",
     "window_scrollbar",
     "window_scrollbar_drag",
@@ -7602,6 +7603,62 @@ pub fn arrow_button_dump() -> String {
     out
 }
 
+/// The `rect_filled_aa` scenario: a single `AddRectFilled` with fractional coordinates, which takes
+/// the anti-aliased convex-polygon path. Command boundaries are covered by other scenarios.
+pub fn rect_filled_aa_dump() -> String {
+    use oxidized_imgui::draw_list::draw_flags;
+    use oxidized_imgui::{Context, DrawList, Vec2};
+
+    let mut list = DrawList::new();
+    // The white-pixel UV the atlas pins, as every other golden records it.
+    list.white_uv = Vec2 {
+        x: f32::from_bits(0x3a80_0000),
+        y: f32::from_bits(0x3b80_0000),
+    };
+    list.fringe_scale = 1.0;
+    let _ = draw_flags::JOIN_MITER;
+    list.add_rect_filled(
+        Vec2 { x: 10.5, y: 20.5 },
+        Vec2 { x: 30.5, y: 50.5 },
+        0xFF00_00FF,
+    );
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario rect_filled_aa\n");
+    out.push_str(&format!(
+        "white_uv {:08x} {:08x}\n",
+        list.white_uv.x.to_bits(),
+        list.white_uv.y.to_bits()
+    ));
+    out.push_str(&format!(
+        "fringe_scale {:08x}\n",
+        list.fringe_scale.to_bits()
+    ));
+    out.push_str(&format!("vtx_count {}\n", list.vtx_buffer.len()));
+    for (i, v) in list.vtx_buffer.iter().enumerate() {
+        out.push_str(&format!(
+            "vtx {i} pos {:08x} {:08x} uv {:08x} {:08x} col {:08x}\n",
+            v.pos.x.to_bits(),
+            v.pos.y.to_bits(),
+            v.uv.x.to_bits(),
+            v.uv.y.to_bits(),
+            v.col
+        ));
+    }
+    out.push_str(&format!("idx_count {}\n", list.idx_buffer.len()));
+    for (tri, indices) in list.idx_buffer.chunks_exact(3).enumerate() {
+        out.push_str(&format!(
+            "tri {tri} {} {} {}\n",
+            indices[0], indices[1], indices[2]
+        ));
+    }
+    let _ = Context::new();
+    out
+}
+
 /// The `windows_move` scenario: dragging one window by its title bar and by its body, and the clamp
 /// that keeps it reachable when it is dragged off the display.
 ///
@@ -9572,6 +9629,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "small_button" => Some(small_button_dump()),
         "same_line_offset" => Some(same_line_offset_dump()),
         "arrow_button" => Some(arrow_button_dump()),
+        "rect_filled_aa" => Some(rect_filled_aa_dump()),
         "window_scroll" => Some(window_scroll_dump()),
         "window_scrollbar" => Some(window_scrollbar_dump()),
         "window_scrollbar_drag" => Some(window_scrollbar_drag_dump()),

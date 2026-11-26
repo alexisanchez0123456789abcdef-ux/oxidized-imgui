@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **140 escenarios** más la **prueba negativa**.
+   que ejecuta **141 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -49,7 +49,7 @@ comparar.
 - `master` limpio. **PRs fusionados: 158** al cerrar esta sesion (2026-11-26). Ese numero es una foto
   fija y **no se mantiene a mano**: el valor vivo sale de la busqueda de la API
   (`is:pr is:merged`). Si lees esto mucho despues, consultalo en vez de fiarte de la cifra.
-- **140 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- **141 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 69.9 %.** Proyecto (contando el arnés): **71.8 %**.
 - 42 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
@@ -521,6 +521,22 @@ reference (`cross_extent = FontSize * 0.5 * 0.7071 - 1`).
 Lo cubren los goldens `window_icons`, `window_icons_states` y `window_icons_drag` (hover, pulsado y
 arrastre sobre el aspa). Consecuencia: **no hay que "portar CloseButton"**; si alguna vez hace falta un aspa
 suelta, lo correcto es exponer un `button` con ese dibujo, no duplicar el de la ventana.
+### Relleno AA (peso 2): cerrada
+
+Golden `rect_filled_aa`: un solo `AddRectFilled` de `(10.5,20.5)` a `(30.5,50.5)`. Medido y ahora
+reproducido: **8 vertices** (interiores opacos en esquina + offset, exteriores con alfa 0 en esquina -
+offset) y **30 indices** en el orden medido.
+
+- La maquinaria ya existia: `add_convex_poly_filled` (draw_list.rs) hace la normal `(dy, -dx)`, el miter
+  `min(1000, 1/(1+max(-0.9999619, dot)))`, `half_aa` y `col_trans`. Lo que faltaba era **enrutar**:
+  `add_rect_filled` usa `prim_rect` solo con las cuatro coordenadas enteras y, si alguna es fraccionaria,
+  delega en `add_convex_poly_filled(.., JOIN_MITER)`, que es lo que hace el reference en la linea 2620.
+- Por eso el "gran pendiente" resulto ser **20 lineas y un golden**: el trabajo de las rondas anteriores
+  (medir el orden de vertices) era el que faltaba, no la implementacion.
+- **El escenario compara solo geometria** (`white_uv`, `fringe_scale`, vertices e indices), no comandos: la
+  diferencia del comando vacio final ya esta documentada aparte y no tiene que ver con el relleno.
+- Siguiente paso natural: la **barra de progreso indeterminada** (fraccion negativa), que ahora deberia salir
+  sin tocar nada mas.
 ### ArrowButton (peso 1): cerrada
 
 Golden `arrow_button`: dos `ArrowButton` (izquierda y derecha) en la misma ventana. Medido: cada uno mide
@@ -1050,7 +1066,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 140 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 141 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
