@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 $cargoBin = Join-Path $env:USERPROFILE '.cargo\bin'
 if (Test-Path $cargoBin) { $env:PATH = "$cargoBin;$env:PATH" }
 
-$scenarios = @('prim_rect_uv', 'prim_rect', 'rect_filled', 'line_h', 'window_layout', 'io_mouse_events', 'io_keyboard_events', 'io_text_events', 'font_metrics', 'text_clip', 'input_text', 'input_text_edit', 'clip_stack', 'text_draw', 'button', 'widgets_basic', 'slider_basic', 'style_defaults', 'aa_rect', 'aa_round_rect', 'aa_line', 'aa_strokes', 'aa_bevel', 'arc_steps', 'bezier_points', 'aa_polyline', 'aa_border', 'button_draw', 'window_bg', 'window_border', 'window_title', 'window_icons', 'window_icons_states', 'window_icons_drag', 'windows_order', 'windows_move', 'window_scroll', 'window_scrollbar', 'window_scrollbar_drag', 'window_wheel', 'window_autosize', 'window_autosize_change', 'window_wheel_lock', 'window_hscrollbar', 'window_scrollbar_page', 'window_min_size', 'window_resize_grips', 'window_resize_drag', 'window_resize_edges', 'window_resize_cursor', 'window_resize_autofit', 'collapsing_header', 'tree_node', 'child_region', 'selectable', 'popup', 'popup_click', 'combo', 'tooltip', 'menu_bar', 'submenu', 'cmd_offsets', 'scene_window_button', 'button_states', 'button_border')
+$scenarios = @('prim_rect_uv', 'prim_rect', 'rect_filled', 'line_h', 'window_layout', 'io_mouse_events', 'io_keyboard_events', 'io_text_events', 'font_metrics', 'text_clip', 'input_text', 'input_text_edit', 'input_text_clipboard', 'clip_stack', 'text_draw', 'button', 'widgets_basic', 'slider_basic', 'style_defaults', 'aa_rect', 'aa_round_rect', 'aa_line', 'aa_strokes', 'aa_bevel', 'arc_steps', 'bezier_points', 'aa_polyline', 'aa_border', 'button_draw', 'window_bg', 'window_border', 'window_title', 'window_icons', 'window_icons_states', 'window_icons_drag', 'windows_order', 'windows_move', 'window_scroll', 'window_scrollbar', 'window_scrollbar_drag', 'window_wheel', 'window_autosize', 'window_autosize_change', 'window_wheel_lock', 'window_hscrollbar', 'window_scrollbar_page', 'window_min_size', 'window_resize_grips', 'window_resize_drag', 'window_resize_edges', 'window_resize_cursor', 'window_resize_autofit', 'collapsing_header', 'tree_node', 'child_region', 'selectable', 'popup', 'popup_click', 'combo', 'tooltip', 'menu_bar', 'submenu', 'cmd_offsets', 'scene_window_button', 'button_states', 'button_border')
 
 $conformance = $PSScriptRoot
 $root   = (Resolve-Path "$conformance\..\..\..").Path
@@ -68,6 +68,7 @@ $fixture_names = @{
     'text_clip'           = 'text_clip.glyphs.txt'
     'input_text'          = 'input_text.glyphs.txt'
     'input_text_edit'     = 'input_text_edit.glyphs.txt'
+    'input_text_clipboard' = 'input_text_clipboard.glyphs.txt'
     'menu_bar'            = 'menu_bar.glyphs.txt'
     'submenu'             = 'submenu.glyphs.txt'
     'window_icons'        = 'window_icons.fixture.txt'

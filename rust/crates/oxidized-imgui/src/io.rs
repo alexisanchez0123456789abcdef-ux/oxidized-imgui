@@ -263,6 +263,10 @@ pub struct Io {
     /// keeps UTF-16 code units; this keeps code points, which is the same thing minus lone
     /// surrogates (a code point above U+FFFF is reported as U+FFFD, exactly as the reference does).
     pub input_queue_characters: Vec<char>,
+    /// The clipboard the platform backend owns. The reference reaches it through
+    /// `PlatformIO.Platform_Get/SetClipboardTextFn`; without a backend those are NULL and copy and
+    /// paste do nothing, which is why this is an `Option`.
+    pub clipboard: Option<String>,
     /// `io.ConfigInputTextCursorBlink`: whether the caret of a text field blinks.
     pub config_input_text_cursor_blink: bool,
     /// `io.KeyRepeatDelay` and `io.KeyRepeatRate`: when a held key starts and then repeats.
@@ -307,6 +311,7 @@ impl Default for Io {
             keys: [KeyData::default(); Key::COUNT],
             key_queue: Vec::new(),
             input_queue_characters: Vec::new(),
+            clipboard: None,
             config_input_text_cursor_blink: true,
             key_repeat_delay: 0.275,
             key_repeat_rate: 0.050,
@@ -361,6 +366,16 @@ impl Io {
         for c in text.chars() {
             self.add_input_character(c);
         }
+    }
+
+    /// `ImGui::GetClipboardText`: the text the platform holds, if any.
+    pub fn get_clipboard_text(&self) -> Option<&str> {
+        self.clipboard.as_deref()
+    }
+
+    /// `ImGui::SetClipboardText`: hand the text to the platform clipboard.
+    pub fn set_clipboard_text(&mut self, text: &str) {
+        self.clipboard = Some(text.to_string());
     }
 
     pub fn is_key_down(&self, key: Key) -> bool {
