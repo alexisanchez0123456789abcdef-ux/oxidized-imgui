@@ -96,6 +96,8 @@ pub struct Table {
     pub row_min_height: f32,
     /// `table->RowBgColor[0]`: the background the row paints before the next one starts.
     pub row_bg0: Option<u32>,
+    /// `table->RowCellData`: the per-cell backgrounds of the row being built, in submission order.
+    pub row_cells: Vec<(usize, u32)>,
     /// `table->RowBgColorCounter`: the odd/even counter of `RowBg`, which skips header rows.
     pub row_bg_counter: u32,
     /// `table->WorkRect`: the table's work rectangle, which is the outer one in a plain table.
@@ -224,6 +226,7 @@ impl Table {
         self.row_flags = row_flags;
         self.row_min_height = row_min_height;
         self.row_bg0 = row_bg;
+        self.row_cells.clear();
         // `TableEndRow` only counts the rows that are not headers, which is what makes the bands of
         // `RowBg` alternate over the data rows while the header keeps its own colour.
         if row_flags & table_flags::ROW_HEADERS == 0 {
@@ -252,6 +255,37 @@ impl Table {
                 y: self.row_pos_y2,
             },
         )
+    }
+
+    /// `TableSetBgColor(ImGuiTableBgTarget_CellBg, ...)`: the background of the current cell, which
+    /// is painted when the row closes. The reference reuses the last entry when the column did not
+    /// change.
+    pub fn set_cell_bg(&mut self, color: u32) {
+        if self.current_column < 0 {
+            return;
+        }
+        let column = self.current_column as usize;
+        if let Some(last) = self.row_cells.last_mut() {
+            if last.0 == column {
+                last.1 = color;
+                return;
+            }
+        }
+        self.row_cells.push((column, color));
+    }
+
+    /// `TableGetCellBgRect` clipped the way `TableEndRow` paints it: first to the table's background
+    /// clip, then to the column's own span.
+    pub fn cell_bg_rect(&self, column: usize) -> (Vec2, Vec2) {
+        let (mut min, mut max) = self.cell_rect(column);
+        min.x = min.x.max(self.bg_clip.0.x);
+        min.y = min.y.max(self.bg_clip.0.y);
+        max.x = max.x.min(self.bg_clip.1.x);
+        max.y = max.y.min(self.bg_clip.1.y);
+        // `TableEndRow` then keeps the fill inside the column's clip and its `MaxX`.
+        min.x = min.x.max(self.columns[column].clip[0]);
+        max.x = max.x.min(self.columns[column].max_x);
+        (min, max)
     }
 
     /// The top of the content of the cell in `column`, which is where its first item goes.
