@@ -122,6 +122,7 @@ pub const SCENARIOS: &[&str] = &[
     "cursor_pos_xy",
     "item_width",
     "content_avail",
+    "style_color",
     "window_scroll",
     "window_scrollbar",
     "window_scrollbar_drag",
@@ -7068,6 +7069,59 @@ pub fn content_avail_dump() -> String {
     out
 }
 
+/// The `style_color` scenario: `PushStyleColor` overrides one entry of the style colours until
+/// `PopStyleColor`, so only the button in the middle is drawn with the pushed colour.
+pub fn style_color_dump() -> String {
+    use oxidized_imgui::style::Col;
+    use oxidized_imgui::{Context, Font, Vec2, WindowFlags};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/style_color.glyphs.txt"
+    );
+    let glyphs = std::fs::read_to_string(path).expect("style color fixture");
+    let font = Font::from_pinned(&glyphs).expect("font fixture");
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario style_color\n");
+
+    for frame in 0..2 {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+        ctx.io_mut().mouse_down[0] = false;
+        ctx.begin_frame();
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+        );
+        ctx.begin_window_ex(
+            "W",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+            true,
+        );
+        ctx.button("A");
+        ctx.push_style_color(Col::Button, 0xFF00_00FF);
+        ctx.button("B");
+        ctx.pop_style_color();
+        ctx.button("C");
+        ctx.end_window();
+        if frame == 1 {
+            let body = dump("style_color", ctx.draw_list());
+            for line in body.lines().skip(2) {
+                out.push_str(&format!("{line}\n"));
+            }
+        }
+        ctx.end_frame();
+    }
+    out
+}
+
 /// The `windows_move` scenario: dragging one window by its title bar and by its body, and the clamp
 /// that keeps it reachable when it is dragged off the display.
 ///
@@ -9029,6 +9083,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "cursor_pos_xy" => Some(cursor_pos_xy_dump()),
         "item_width" => Some(item_width_dump()),
         "content_avail" => Some(content_avail_dump()),
+        "style_color" => Some(style_color_dump()),
         "window_scroll" => Some(window_scroll_dump()),
         "window_scrollbar" => Some(window_scrollbar_dump()),
         "window_scrollbar_drag" => Some(window_scrollbar_drag_dump()),

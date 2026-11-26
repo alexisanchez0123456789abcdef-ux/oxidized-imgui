@@ -369,6 +369,8 @@ pub struct Context {
     /// `SetNextItemWidth`: the width the next item asks for, consumed by the item that reads it.
     next_item_width: Option<f32>,
     /// `ImGui::PushItemWidth` stack: the widths later items take, zero meaning the default.
+    /// ImGui::PushStyleColor stack: the colours to restore on each pop.
+    color_stack: Vec<(crate::style::Col, u32)>,
     item_width_stack: Vec<f32>,
     /// `g.HoveredIdTimer`: how long the border under the mouse has been hovered. The reference
     /// waits WINDOWS_RESIZE_FROM_EDGES_FEEDBACK_TIMER before it reports a border, so brushing past
@@ -466,6 +468,7 @@ impl Default for Context {
             menu_bar_clip_max_y: None,
             input_text_state: None,
             next_item_width: None,
+            color_stack: Vec::new(),
             item_width_stack: Vec::new(),
             last_popup_name: None,
             resize_grip_cols: [0; 2],
@@ -3058,6 +3061,19 @@ impl Context {
             && mouse.x < max.x
             && mouse.y >= min.y
             && mouse.y < max.y
+    }
+
+    /// `ImGui::PushStyleColor`: overrides one entry of the style colours until the matching pop.
+    pub fn push_style_color(&mut self, col: crate::style::Col, colour: u32) {
+        self.color_stack.push((col, self.style.colors[col.index()]));
+        self.style.colors[col.index()] = colour;
+    }
+
+    /// `ImGui::PopStyleColor`: restores the colour the matching push replaced.
+    pub fn pop_style_color(&mut self) {
+        if let Some((col, previous)) = self.color_stack.pop() {
+            self.style.colors[col.index()] = previous;
+        }
     }
 
     /// `GetContentRegionAvail`: the content region from the cursor to its far corner, which is the
