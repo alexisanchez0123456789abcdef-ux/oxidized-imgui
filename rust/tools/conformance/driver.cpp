@@ -4044,6 +4044,67 @@ static void DumpWindowsSetPos()
     DumpWindowOrderFrame(frame++, "stays_again");
 }
 
+// windows_set_size: `SetWindowSize` by name resizes a live window immediately (the port's remembered
+// size), truncating the axis; it stays that size on the following frames.
+static void FrameSetWindowSize(int set_size, float x, float y)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    if (set_size)
+        ImGui::SetWindowSize("P", ImVec2(x, y));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
+    ImGui::Begin("P", NULL, flags);
+    ImGui::Button("B");
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpWindowsSetSize()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario windows_set_size\n");
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[2] = { 'P', 'B' };
+    for (char ch : bake_order)
+        baked->FindGlyph((ImWchar)ch);
+    WriteGlyphFixture(font, bake_order, 2);
+
+    for (int i = 0; i < 2; i++)
+    {
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+        ImGui::Begin("P", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse);
+        ImGui::Button("B");
+        ImGui::End();
+        ImGui::EndFrame();
+    }
+    int frame = 0;
+
+    FrameSetWindowSize(0, 0.0f, 0.0f);
+    DumpWindowOrderFrame(frame++, "idle");
+    FrameSetWindowSize(1, 200.9f, 120.7f);
+    DumpWindowOrderFrame(frame++, "set_size");
+    FrameSetWindowSize(0, 0.0f, 0.0f);
+    DumpWindowOrderFrame(frame++, "stays");
+    FrameSetWindowSize(1, 300.0f, 200.0f);
+    DumpWindowOrderFrame(frame++, "set_size_again");
+    FrameSetWindowSize(0, 0.0f, 0.0f);
+    DumpWindowOrderFrame(frame++, "stays_again");
+}
+
 // windows_move: dragging a window by its title bar and by its body, and the clamp that keeps it
 // reachable when it is dragged off the display. Only the positions are dumped: the geometry of a
 // window is what windows_order already covers.
@@ -6111,6 +6172,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "windows_focus") == 0)
     {
         DumpWindowsFocus();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "windows_set_size") == 0)
+    {
+        DumpWindowsSetSize();
         ImGui::DestroyContext();
         return 0;
     }

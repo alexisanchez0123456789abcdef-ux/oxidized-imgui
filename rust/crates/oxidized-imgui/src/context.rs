@@ -693,6 +693,20 @@ impl Context {
         self.next_collapsed = Some(collapsed);
     }
 
+    /// `ImGui::SetWindowSize(name, size, cond)` without the condition: the window resizes now, which
+    /// the port keeps in the memory it reads at the next `Begin`. Only the positive form is modelled:
+    /// the reference truncates the size, and a non-positive axis turns on auto-fit.
+    pub fn set_window_size(&mut self, name: &str, size: Vec2) {
+        if let Some(memory) = WindowMemory::find_mut(&mut self.memory, name) {
+            if size.x > 0.0 {
+                memory.size_full.x = size.x.trunc();
+            }
+            if size.y > 0.0 {
+                memory.size_full.y = size.y.trunc();
+            }
+        }
+    }
+
     /// `ImGui::SetWindowPos(name, pos, cond)` without the condition: the window moves now, which the
     /// port keeps in the memory it reads at the next `Begin`. The reference truncates the position,
     /// and moving a window that is not submitted this frame still takes effect on its next frame.

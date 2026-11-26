@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **108 escenarios** más la **prueba negativa**.
+   que ejecuta **109 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **117 PRs** fusionados.
-- **108 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **118 PRs** fusionados.
+- **109 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 68.1 %.** Proyecto (contando el arnés): **70.3 %**.
 - 39 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
@@ -105,7 +105,7 @@ barra de título, iconos y su interacción, arrastre de ventana, scroll (barra, 
 página, rueda, bloqueo de rueda), auto-ajuste de tamaño, tamaño mínimo, tiradores de
 redimensión (bordes, cursor, doble clic, autofit), orden de ventanas, foco por API
 (`windows_focus`: `SetNextWindowFocus` sube la ventana al frente y le da la barra activa en el mismo
-frame, sin clic) y colapso por API (`windows_collapse_api`) y posición por API (`windows_set_pos`), y todas las primitivas de dibujo y antialiasing, incluidos los círculos (`aa_circles`). Los recortes también
+frame, sin clic) y colapso por API (`windows_collapse_api`), posición por API (`windows_set_pos`) y tamaño por API (`windows_set_size`), y todas las primitivas de dibujo y antialiasing, incluidos los círculos (`aa_circles`). Los recortes también
 están cerrados: la pila de `PushClipRect`/`PopClipRect` con su intersección (`clip_stack`) y el
 corte de comandos de `_OnChangedClipRect` (`cmd_split`: el clip que no cambia no parte, el que
 cambia sí, y el push/pop sin geometría se fusiona con el comando anterior).
@@ -202,6 +202,19 @@ Cifras ya medidas que sirven de contrato (ventana de 400×300 en (40,40), paddin
   restar la posición de la ventana para compararlos.
 
 ## Lo cerrado, con su detalle medido
+
+### Tamaño de ventana por API (peso 1): cerrada
+
+Golden `windows_set_size`: la misma ventana de `windows_set_pos`, redimensionada con `SetWindowSize`
+por nombre.
+
+- `SetWindowSize(name, size)` redimensiona **en el acto** y **trunca** cada eje positivo: (200.9, 120.7)
+  deja la ventana en (200, 120), que es lo que muestra el golden.
+- El tamaño es el que el siguiente `Begin` lee (memoria de la ventana), y se mantiene en los frames
+  siguientes.
+- Sólo se modela la forma positiva: en la referencia un eje ≤ 0 no fija el tamaño y enciende el
+  auto-ajuste (`AutoFitOnlyGrows`), que no está portado.
+- Sin condiciones (`ImGuiCond_*`), igual que `windows_set_pos`.
 
 ### Posición de ventana por API (peso 1): cerrada
 
@@ -553,7 +566,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 108 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 109 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
