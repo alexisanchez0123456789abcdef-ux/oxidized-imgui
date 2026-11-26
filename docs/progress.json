@@ -80,7 +80,7 @@
     {
       "id": "widgets",
       "title": "Widgets",
-      "weight": 34,
+      "weight": 35,
       "infra": false,
       "items": [
         { "id": "w_button", "label": "Botón: geometría, hover, estado activo y valor de retorno", "weight": 2, "done": true, "evidence": "golden button" },
@@ -88,6 +88,7 @@
         { "id": "w_button_states", "label": "Botón: reposo, hover y activo comparados", "weight": 2, "done": true, "evidence": "golden button_states" },
         { "id": "w_button_border", "label": "Botón: borde de marco (FrameBorderSize)", "weight": 1, "done": true, "evidence": "golden button_border" },
         { "id": "w_label_checkbox", "label": "Label y checkbox: rectángulo y alternancia", "weight": 1, "done": true, "evidence": "golden widgets_basic" },
+        { "id": "w_text_colors", "label": "TextColored y TextDisabled: color explícito empaquetado con ColorConvertFloat4ToU32 y alfa del estilo", "weight": 1, "done": true, "evidence": "golden text_colors (Text normal, TextColored en rojo, TextDisabled y Text después, con los colores en la lista)" },
         { "id": "w_progress_bar", "label": "ProgressBar: marco, parte rellena con PlotHistogram, overlay de porcentaje tras el relleno y ancho por defecto que llena el área de contenido", "weight": 1, "done": true, "evidence": "golden progress_bar (4 barras: 25%, 75%, overlay propio y ancho por defecto, con el rectángulo del ítem y la lista)" },
         { "id": "w_bullet", "label": "Bullet: disco AA de FontSize*0.2, ítem cuadrado con el tamaño de la fuente y SameLine que sangra la entrada", "weight": 1, "done": true, "evidence": "golden bullet (ítem, cursor tras el bullet y el texto en la misma línea, y lista completa)" },
         { "id": "w_disabled", "label": "BeginDisabled/EndDisabled: Style::Alpha por DisabledAlpha (0.6) en todos los colores y ítems que no hoveran ni pulsan", "weight": 1, "done": true, "evidence": "golden disabled (4 frames: reposo, pulsación y suelta sobre el botón deshabilitado, y hover sobre el siguiente, con los valores de retorno)" },

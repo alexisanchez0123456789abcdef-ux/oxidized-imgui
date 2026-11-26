@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **115 escenarios** más la **prueba negativa**.
+   que ejecuta **116 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,9 +46,9 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **124 PRs** fusionados.
-- **115 escenarios** con golden propio, todos en verde, más la prueba negativa.
-- **Reescritura: 69.0 %.** Proyecto (contando el arnés): **71.1 %**.
+- `master` limpio, **125 PRs** fusionados.
+- **116 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- **Reescritura: 69.2 %.** Proyecto (contando el arnés): **71.2 %**.
 - 39 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
@@ -248,6 +248,19 @@ Golden `separator`: tres etiquetas con un separador entre ellas en una ventana d
 - El rectángulo del ítem es la línea (`(8,25)-(292,26)`), no la caja del texto: el golden lo imprime
   tras cada `Separator`.
 - La forma **vertical** (la barra de menús) tiene su propia sección más abajo.
+
+### Textos con color (peso 1): cerrada
+
+Golden `text_colors`: "A" con `Text`, "B" con `TextColored(rojo)`, "C" con `TextDisabled` y "D" con
+`Text`.
+
+- `TextColored` no inventa un camino de dibujo: **empuja `ImGuiCol_Text`** con el color dado,
+  dibuja y lo saca, así que el color pasa por `GetColorU32` y `Style::Alpha` sigue aplicándose. En el
+  port eso es `Style::color_u32_from([f32; 4])`, que empaqueta `IM_COL32` con `+ 0.5` y multiplica el
+  alfa por `Style::Alpha`.
+- `TextDisabled` es lo mismo con el color `ImGuiCol_TextDisabled` (`0xFF949494`).
+- Los cuatro textos comparten `text_with_colour`, que pinta en el cursor y toma el tamaño en el
+  layout: el color no cambia ni la posición ni el avance.
 
 ### Barra de progreso (peso 1): cerrada, con un límite anotado
 
@@ -676,7 +689,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 115 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 116 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```

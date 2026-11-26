@@ -5081,11 +5081,30 @@ impl Context {
 
     /// `ImGui::Text` with the text actually painted, which is what a tooltip shows.
     pub fn text(&mut self, text: &str) {
+        let colour = self.style.color_u32(crate::style::Col::Text);
+        self.text_with_colour(text, colour);
+    }
+
+    /// `ImGui::TextColored`: the text painted with an explicit colour. The reference pushes it as
+    /// `ImGuiCol_Text`, so `Style::Alpha` still applies, which is what `Style::color_u32_from` does.
+    pub fn text_colored(&mut self, text: &str, colour: [f32; 4]) {
+        let packed = self.style.color_u32_from(colour);
+        self.text_with_colour(text, packed);
+    }
+
+    /// `ImGui::TextDisabled`: the text in `ImGuiCol_TextDisabled`.
+    pub fn text_disabled(&mut self, text: &str) {
+        let colour = self.style.color_u32(crate::style::Col::TextDisabled);
+        self.text_with_colour(text, colour);
+    }
+
+    /// The body shared by every text widget: paint at the cursor with a packed colour, then take the
+    /// text's size in the layout.
+    fn text_with_colour(&mut self, text: &str, colour: u32) {
         let font = self.font.clone();
         let pos = self.window().cursor;
         let clip = self.window().clip_rect;
         let size = font.calc_text_size(text, font.size);
-        let colour = self.style.color_u32(crate::style::Col::Text);
         self.draw_list
             .add_text_in(&font, font.size, pos, colour, text, clip, None);
         self.dummy(size);
