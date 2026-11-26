@@ -46,10 +46,10 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **68 PRs** fusionados.
+- `master` limpio, **69 PRs** fusionados.
 - **62 escenarios** con golden propio, todos en verde, más la prueba negativa.
-- **Reescritura: 62.2 %.** Proyecto (contando el arnés): **64.8 %**.
-- 20 tests unitarios en 6 binarios.
+- **Reescritura: 62.5 %.** Proyecto (contando el arnés): **65.1 %**.
+- 21 tests unitarios en 6 binarios.
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
 
 ## Método que funciona (y lo que cuesta caro)
@@ -86,7 +86,8 @@ Esto está aprendido a base de fallar, y ahorra sesiones enteras:
 ## Hecho y verificado (con su golden)
 
 Núcleo y listas: hashes de identificadores, pila de identificadores, ventanas con
-posición/tamaño/memoria, cursor y avance de ítems, ratón, tiempo, teclado, fondo, borde,
+posición/tamaño/memoria, cursor y avance de ítems, ratón, tiempo, teclado (incluida la cola de
+caracteres y la repetición de una tecla mantenida), fondo, borde,
 barra de título, iconos y su interacción, arrastre de ventana, scroll (barra, arrastre,
 página, rueda, bloqueo de rueda), auto-ajuste de tamaño, tamaño mínimo, tiradores de
 redimensión (bordes, cursor, doble clic, autofit), orden de ventanas, y todas las
@@ -151,9 +152,13 @@ scroll interno. **Ya está medido con una sonda** (`InputText` de una línea, et
 
 **Lo que hay que construir, en este orden** (cada paso con su golden):
 
-1. `Io`: el juego completo de `ImGuiKey` (hoy sólo hay `A` y los modificadores) y la cola
-   `InputQueueCharacters` con `AddInputCharacter(s)`, vaciada en `NewFrame`. Sin esto no hay nada
-   que medir.
+1. ~~`Io`: el juego completo de `ImGuiKey` y la cola `InputQueueCharacters`.~~ **Hecho** (PR 71):
+   `Key` es ya la lista completa de `ImGuiKey` (teclado; faltan gamepad y botones de ratón como
+   teclas), hay `add_input_character`/`add_input_characters_utf8` con la regla del reference
+   (un code point por encima de U+FFFF se convierte en U+FFFD), la cola se vacía al final del frame,
+   y `IsKeyPressed`/`IsKeyReleased`/la repetición (`KeyRepeatDelay`/`KeyRepeatRate` con
+   `CalcTypematicRepeatAmount`) están verificados en el golden `io_text_events`. Ojo: `KeyCtrl` sale
+   **sólo** de `ModCtrl`, no de `LeftCtrl`; el golden lo demuestra.
 2. `add_text` con `CpuFineClip`: descartar quads fuera del rectángulo **sin** partir comandos.
 3. `InputTextState`: copia del buffer (`TextA`), `TextLen`, `Stb` (cursor, `select_start/end`),
    `Scroll`, `CursorAnim`, `CursorFollow`, y el manejo de teclas de `stb_textedit`

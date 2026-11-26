@@ -28,6 +28,7 @@ pub const SCENARIOS: &[&str] = &[
     "window_layout",
     "io_mouse_events",
     "io_keyboard_events",
+    "io_text_events",
     "font_metrics",
     "clip_stack",
     "text_draw",
@@ -424,6 +425,99 @@ pub fn io_keyboard_dump() -> String {
             io.key_alt as u8,
             io.key_super as u8,
         ));
+        ctx.end_frame();
+    }
+    out
+}
+
+/// The `io_text_events` scenario: the character queue, and the press/release/repeat timeline of a
+/// key held across the repeat delay.
+pub fn io_text_dump() -> String {
+    use oxidized_imgui::{Context, Key};
+
+    const LA_DOWN: &[(Key, bool)] = &[(Key::LeftArrow, true)];
+    const LA_UP: &[(Key, bool)] = &[(Key::LeftArrow, false)];
+    const MOD_TAB_DOWN: &[(Key, bool)] = &[(Key::ModCtrl, true), (Key::Tab, true)];
+    const MOD_TAB_UP: &[(Key, bool)] = &[(Key::ModCtrl, false), (Key::Tab, false)];
+    const LEFT_CTRL_DOWN: &[(Key, bool)] = &[(Key::LeftCtrl, true)];
+    const LEFT_CTRL_UP: &[(Key, bool)] = &[(Key::LeftCtrl, false)];
+    const F1_DOWN: &[(Key, bool)] = &[(Key::F1, true)];
+    const KEYPAD_ENTER_DOWN: &[(Key, bool)] = &[(Key::KeypadEnter, true)];
+    const ENTER_DOWN: &[(Key, bool)] = &[(Key::Enter, true)];
+    const ESCAPE_DOWN: &[(Key, bool)] = &[(Key::Escape, true)];
+
+    // The same frames as the driver: characters first, then a key held for eleven frames at 0.05 s
+    // (which crosses io.KeyRepeatDelay, 0.275) and released, then the modifiers and a key sample.
+    let frames: [(&[(Key, bool)], &str); 23] = [
+        (&[], ""),
+        (&[], "ab"),
+        (&[], ""),
+        (&[], "é😀"),
+        (LA_DOWN, ""),
+        (&[], ""),
+        (&[], ""),
+        (&[], ""),
+        (&[], ""),
+        (&[], ""),
+        (&[], ""),
+        (&[], ""),
+        (&[], ""),
+        (LA_UP, ""),
+        (&[], ""),
+        (MOD_TAB_DOWN, ""),
+        (MOD_TAB_UP, ""),
+        (LEFT_CTRL_DOWN, ""),
+        (LEFT_CTRL_UP, ""),
+        (F1_DOWN, ""),
+        (KEYPAD_ENTER_DOWN, ""),
+        (ENTER_DOWN, ""),
+        (ESCAPE_DOWN, ""),
+    ];
+
+    let mut ctx = Context::new();
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario io_text_events\n");
+
+    for (i, (events, chars)) in frames.iter().enumerate() {
+        ctx.io_mut().delta_time = 0.05;
+        for (key, down) in events.iter() {
+            ctx.io_mut().add_key_event(*key, *down);
+        }
+        if !chars.is_empty() {
+            ctx.io_mut().add_input_characters_utf8(chars);
+        }
+        ctx.begin_frame();
+
+        let time = bits(ctx.time() as f32);
+        let io = ctx.io();
+        let la = io.key_data(Key::LeftArrow);
+        out.push_str(&format!(
+            "f{i} t {time:08x} chars {} la_down {} la_press {} la_rep {} la_rel {} la_dur {:08x} \
+             la_prev {:08x} mods {}{}{}{} down {}{}{}{}{}{}\n",
+            io.input_queue_characters.len(),
+            la.down as u8,
+            io.is_key_pressed(Key::LeftArrow) as u8,
+            io.is_key_pressed_repeat(Key::LeftArrow) as u8,
+            io.is_key_released(Key::LeftArrow) as u8,
+            bits(la.down_duration),
+            bits(la.down_duration_prev),
+            io.key_ctrl as u8,
+            io.key_shift as u8,
+            io.key_alt as u8,
+            io.key_super as u8,
+            io.is_key_down(Key::Tab) as u8,
+            io.is_key_down(Key::F1) as u8,
+            io.is_key_down(Key::KeypadEnter) as u8,
+            io.is_key_down(Key::Enter) as u8,
+            io.is_key_down(Key::Escape) as u8,
+            io.is_key_down(Key::LeftCtrl) as u8,
+        ));
+        for c in &io.input_queue_characters {
+            out.push_str(&format!("c {:04x}\n", *c as u32));
+        }
         ctx.end_frame();
     }
     out
@@ -3547,6 +3641,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "window_layout" => Some(window_layout_dump()),
         "io_mouse_events" => Some(io_mouse_dump()),
         "io_keyboard_events" => Some(io_keyboard_dump()),
+        "io_text_events" => Some(io_text_dump()),
         "font_metrics" => Some(font_metrics_dump()),
         "clip_stack" => Some(clip_stack_dump()),
         "text_draw" => Some(text_draw_dump()),

@@ -18,6 +18,7 @@ instead of against our own expectations:
 | Window geometry and cursor layout | style defaults, content region, `Dummy`/`SameLine` advance, remembered pos/size | `window_layout` golden + `context::tests` |
 | Mouse input | rounded position, delta, click/release from the down duration, double-click counter | `io_mouse_events` golden |
 | Keyboard input | queued events with duplicate filtering, down durations, `IsKeyPressed`, modifiers from `ImGuiMod_*` | `io_keyboard_events` golden |
+| Keyboard, text events | the character queue (`InputQueueCharacters`) keeps the code points of one frame in order, maps an astral one to U+FFFD exactly as the reference does, and is emptied at the end of the frame; a held key reports `DownDuration` and `DownDurationPrev`, releases once, and repeats after `KeyRepeatDelay` at `KeyRepeatRate`; `Key` is the whole `ImGuiKey` keyboard list, not a subset | `io_text_events` golden |
 | Text measurement | `CalcTextSize` over a pinned advance table (the atlas is **not** built: see `font.rs`) | `font_metrics` golden |
 | Text | glyph quads including UVs, from the pinned glyph table written by the reference run | `text_draw` golden + `tests/fixtures/text_draw.glyphs.txt` |
 | Button | item rect from text metrics, hover, active, release-inside result | `button` golden |

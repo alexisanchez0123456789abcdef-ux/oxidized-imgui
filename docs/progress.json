@@ -1,12 +1,12 @@
 {
   "version": 1,
-  "updated": "2026-11-25",
+  "updated": "2026-11-26",
   "note": "Rúbrica del progreso. Solo cuenta como hecho lo que tiene evidencia en un test o en el oráculo. Cambiar un done exige cambiar también su evidencia.",
   "areas": [
     {
       "id": "core",
       "title": "Núcleo: contexto, IO, ventanas, identificadores, layout",
-      "weight": 58,
+      "weight": 59,
       "infra": false,
       "items": [
         { "id": "hash", "label": "Hash de identificadores (CRC32c, reinicio con ###)", "weight": 2, "done": true, "evidence": "id::tests::hashes_match_oracle (12 vectores del oráculo)" },
@@ -17,6 +17,7 @@
         { "id": "io_time", "label": "Tiempo: DeltaTime y reloj interno (float, como la referencia)", "weight": 1, "done": true, "evidence": "golden io_mouse_events (doble clic depende del reloj)" },
         { "id": "frame", "label": "Ciclo de frame completo: validación de IO y reset de draw data", "weight": 4, "done": false, "evidence": "" },
         { "id": "io_keyboard", "label": "Teclado: cola de eventos, duplicados, duraciones y modificadores", "weight": 2, "done": true, "evidence": "golden io_keyboard_events" },
+        { "id": "io_text", "label": "Teclado de texto: juego completo de ImGuiKey, cola de caracteres y repetición (delay/rate, DownDurationPrev)", "weight": 1, "done": true, "evidence": "golden io_text_events (23 frames: cola, pulsación, repetición y suelta) + io::tests (5 casos)" },
         { "id": "win_bg", "label": "Fondo de ventana y orden del recorte", "weight": 1, "done": true, "evidence": "golden window_bg" },
         { "id": "win_border", "label": "Borde de ventana (marco alineado de dos anillos)", "weight": 1, "done": true, "evidence": "golden window_border" },
         { "id": "win_title", "label": "Barra de título: banda, texto y orden de dibujo", "weight": 1, "done": true, "evidence": "golden window_title" },

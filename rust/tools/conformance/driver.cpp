@@ -197,6 +197,83 @@ static void DumpIoKeyboard()
     }
 }
 
+// io_text_events: the character queue, and the press/release/repeat timeline of a held key.
+static void DumpIoText()
+{
+    struct KeyEv
+    {
+        ImGuiKey key;
+        bool down;
+    };
+    struct TextFrame
+    {
+        int count;
+        KeyEv ev[2];
+        const char* chars;
+    };
+    const KeyEv none = { ImGuiKey_None, false };
+    const KeyEv la_down = { ImGuiKey_LeftArrow, true };
+    const KeyEv la_up = { ImGuiKey_LeftArrow, false };
+    // 0..3: characters, including a two-byte and a four-byte code point. 4..14: a key held for
+    // eleven frames at 0.05 s and then released, which crosses io.KeyRepeatDelay (0.275). 15..22:
+    // the modifier keys, and a sample of the wider key enum.
+    const TextFrame frames[23] = {
+        { 0, { none, none }, NULL },
+        { 0, { none, none }, "ab" },
+        { 0, { none, none }, NULL },
+        { 0, { none, none }, "\xC3\xA9\xF0\x9F\x98\x80" },
+        { 1, { la_down, none }, NULL },
+        { 0, { none, none }, NULL },
+        { 0, { none, none }, NULL },
+        { 0, { none, none }, NULL },
+        { 0, { none, none }, NULL },
+        { 0, { none, none }, NULL },
+        { 0, { none, none }, NULL },
+        { 0, { none, none }, NULL },
+        { 0, { none, none }, NULL },
+        { 1, { la_up, none }, NULL },
+        { 0, { none, none }, NULL },
+        { 2, { { (ImGuiKey)ImGuiMod_Ctrl, true }, { ImGuiKey_Tab, true } }, NULL },
+        { 2, { { (ImGuiKey)ImGuiMod_Ctrl, false }, { ImGuiKey_Tab, false } }, NULL },
+        { 1, { { ImGuiKey_LeftCtrl, true }, none }, NULL },
+        { 1, { { ImGuiKey_LeftCtrl, false }, none }, NULL },
+        { 1, { { ImGuiKey_F1, true }, none }, NULL },
+        { 1, { { ImGuiKey_KeypadEnter, true }, none }, NULL },
+        { 1, { { ImGuiKey_Enter, true }, none }, NULL },
+        { 1, { { ImGuiKey_Escape, true }, none }, NULL },
+    };
+
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario io_text_events\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    for (int i = 0; i < 23; i++)
+    {
+        io.DeltaTime = 0.05f;
+        for (int e = 0; e < frames[i].count; e++)
+            io.AddKeyEvent(frames[i].ev[e].key, frames[i].ev[e].down);
+        if (frames[i].chars != NULL)
+            io.AddInputCharactersUTF8(frames[i].chars);
+        ImGui::NewFrame();
+
+        const ImGuiKeyData* la = ImGui::GetKeyData(ImGuiKey_LeftArrow);
+        printf("f%d t %08x chars %d la_down %d la_press %d la_rep %d la_rel %d la_dur %08x la_prev %08x "
+               "mods %d%d%d%d down %d%d%d%d%d%d\n",
+            i, Bits(ImGui::GetTime()), io.InputQueueCharacters.Size,
+            la->Down ? 1 : 0, ImGui::IsKeyPressed(ImGuiKey_LeftArrow, false) ? 1 : 0,
+            ImGui::IsKeyPressed(ImGuiKey_LeftArrow, true) ? 1 : 0,
+            ImGui::IsKeyReleased(ImGuiKey_LeftArrow) ? 1 : 0,
+            Bits(la->DownDuration), Bits(la->DownDurationPrev),
+            io.KeyCtrl ? 1 : 0, io.KeyShift ? 1 : 0, io.KeyAlt ? 1 : 0, io.KeySuper ? 1 : 0,
+            ImGui::IsKeyDown(ImGuiKey_Tab) ? 1 : 0, ImGui::IsKeyDown(ImGuiKey_F1) ? 1 : 0,
+            ImGui::IsKeyDown(ImGuiKey_KeypadEnter) ? 1 : 0, ImGui::IsKeyDown(ImGuiKey_Enter) ? 1 : 0,
+            ImGui::IsKeyDown(ImGuiKey_Escape) ? 1 : 0, ImGui::IsKeyDown(ImGuiKey_LeftCtrl) ? 1 : 0);
+        for (int c = 0; c < io.InputQueueCharacters.Size; c++)
+            printf("c %04x\n", (unsigned int)io.InputQueueCharacters[c]);
+        ImGui::EndFrame();
+    }
+}
+
 // font_metrics: the default font's baked metrics, glyph advances and CalcTextSize.
 static void DumpFontMetrics()
 {
@@ -3385,6 +3462,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "io_keyboard_events") == 0)
     {
         DumpIoKeyboard();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "io_text_events") == 0)
+    {
+        DumpIoText();
         ImGui::DestroyContext();
         return 0;
     }
