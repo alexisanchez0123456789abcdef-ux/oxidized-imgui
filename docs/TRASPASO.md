@@ -193,6 +193,27 @@ El detalle por pieza y su peso, en `docs/progress.json`.
 La entrada de texto (peso 4), las curvas AA (peso 1) y el primer corte de las tablas (peso 1) están
 cerradas y su sección queda más abajo como referencia de lo ya medido. Lo que queda:
 
+### Medido: el scroll de tabla no existe todavia (ronda 70)
+
+Sonda `table_scroll_bar` (no commiteada, se revirtio): ventana de 300x200 en (60,60), `BeginTable("T", 1,
+ImGuiTableFlags_ScrollY, ImVec2(0, 80))` con 9 filas de texto, 4 frames, volcado en el cuarto. Medido:
+
+| | reference | port |
+| --- | --- | --- |
+| `cmd_count` | **3** | **1** |
+| comandos | fondo (30 elems) · clip de tabla (144) · cierre vacio (0) | solo el fondo de la ventana |
+| `vtx_count` / `idx_count` | 48 / 174 | los de la ventana sola |
+
+Conclusion precisa: **no falta la barra, falta la ventana interior**. Con altura exterior explicita y `SCROLL_Y` el
+reference crea su inner window (de ahi el clip propio y los 144 elementos), y el port no la crea: `begin_table`
+ignora esa altura. El golden `tables_scroll_child` si pasa porque cubre el caso en que la ventana interior ya
+existe por otras flags, lo que habia hecho creer que faltaba solo la barra.
+
+Receta para la proxima sesion: crear la sonda (25 lineas de driver, `WriteGlyphFixture`, `BeginTable` con
+`ScrollY` y altura 80), capturar el golden, implementar la ventana interior en `begin_table` cuando
+`outer_size.y > 0` y `SCROLL_Y`, y apuntar a los **3 comandos y 174 indices** medidos. Ojo con dos trampas ya
+conocidas: `GetDrawData()` es **null** antes de `Render()` (usar `GetWindowDrawList()` dentro de la ventana) y el
+fixture debe ser `WriteGlyphFixture` si no hay flechas.
 ### Tablas: lo que falta (peso 1)
 
 Están hechos el primer corte (`tables_basic`), las cabeceras (`tables_headers`), las bandas de fila
