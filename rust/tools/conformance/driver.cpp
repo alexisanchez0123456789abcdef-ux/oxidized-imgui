@@ -428,6 +428,64 @@ static void DumpCmdSplit()
     ImGui::EndFrame();
 }
 
+// aa_circles: filled discs and stroked circles below the fast arc cutoff radius (140.11), the range
+// that samples the pinned arc table instead of calling cos/sin. Every automatic segment step the
+// table can ask for is covered, plus the alpha-multiplied minimum radius and the collapsed stroke.
+static void WriteLineUvFixture();
+
+static void DumpAaCircles()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario aa_circles\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    // The line table only reaches the shared data once a frame has selected the atlas font.
+    ImGui::NewFrame();
+    WriteLineUvFixture();
+    ImGui::EndFrame();
+
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(40.0f, 40.0f));
+    ImGui::SetNextWindowSize(ImVec2(520.0f, 400.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground;
+    ImGui::Begin("W", NULL, flags);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+
+    // Filled discs: radii 2, 5, 12, 20, 30, 45 and 63 take the table steps 12, 4, 3, 2, 2, 1 and 1.
+    dl->AddCircleFilled(ImVec2(100.0f, 100.0f), 2.0f, COL, 0);
+    dl->AddCircleFilled(ImVec2(140.0f, 100.0f), 5.0f, COL, 0);
+    dl->AddCircleFilled(ImVec2(190.0f, 100.0f), 12.0f, COL, 0);
+    dl->AddCircleFilled(ImVec2(250.0f, 100.0f), 20.0f, COL, 0);
+    dl->AddCircleFilled(ImVec2(320.0f, 100.0f), 30.0f, COL, 0);
+    dl->AddCircleFilled(ImVec2(400.0f, 100.0f), 45.0f, COL, 0);
+    dl->AddCircleFilled(ImVec2(490.0f, 100.0f), 63.0f, COL, 0);
+    // Below the minimum radius the reference scales the alpha and draws at the minimum instead.
+    dl->AddCircleFilled(ImVec2(100.0f, 230.0f), 0.6f, COL, 0);
+
+    // Stroked circles, inside stroke by default.
+    dl->AddCircle(ImVec2(140.0f, 230.0f), 5.0f, COL, 0, 1.0f);
+    dl->AddCircle(ImVec2(190.0f, 230.0f), 10.0f, COL, 0, 1.0f);
+    dl->AddCircle(ImVec2(250.0f, 230.0f), 20.0f, COL, 0, 3.0f);
+    dl->AddCircle(ImVec2(320.0f, 230.0f), 30.0f, COL, 0, 1.0f);
+    dl->AddCircle(ImVec2(430.0f, 230.0f), 60.0f, COL, 0, 2.0f);
+    // A stroke thicker than the radius collapses into a filled disc of the outer radius.
+    dl->AddCircle(ImVec2(490.0f, 330.0f), 2.0f, COL, 0, 3.0f);
+
+    DumpDrawListBody(*dl);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
 // Text dump: same shape as a draw list dump but without UVs, which depend on the atlas packer and
 // are not reproducible across runs.
 static void DumpTextBody(const ImDrawList& list)
@@ -4025,6 +4083,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "cmd_split") == 0)
     {
         DumpCmdSplit();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "aa_circles") == 0)
+    {
+        DumpAaCircles();
         ImGui::DestroyContext();
         return 0;
     }

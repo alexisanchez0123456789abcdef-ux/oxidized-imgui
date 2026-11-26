@@ -70,7 +70,7 @@
         { "id": "aa_bezier_pts", "label": "AA: puntos de bézier por subdivisión", "weight": 1, "done": true, "evidence": "golden bezier_points" },
         { "id": "aa_polyline", "label": "AA: trazado de polilínea (miters, extremos abiertos)", "weight": 1, "done": true, "evidence": "golden aa_polyline" },
         { "id": "aa_border", "label": "AA: trazo cerrado con trazo interior (bordes)", "weight": 1, "done": true, "evidence": "golden aa_border" },
-        { "id": "aa_curves", "label": "AA: círculos", "weight": 1, "done": false, "evidence": "" },
+        { "id": "aa_curves", "label": "AA: círculos", "weight": 1, "done": true, "evidence": "golden aa_circles (14 círculos rellenos y contorneados bajo el corte arc-fast, con la tabla de segmentos cacheada y el radio mínimo con alfa)" },
         { "id": "style_colors", "label": "Estilo: colores, redondeos y bordes por defecto", "weight": 1, "done": true, "evidence": "golden style_defaults" },
         { "id": "text_draw", "label": "Texto dibujado en la lista (geometría, sin UVs)", "weight": 1, "done": true, "evidence": "golden text_draw (geometría; UVs omitidos por no ser reproducibles)" },
         { "id": "text_clip", "label": "Texto con CpuFineClip: glifos descartados fuera del recorte y quads y UVs recortados en el borde", "weight": 1, "done": true, "evidence": "golden text_clip (5 recortes, 4279 bytes, con UVs)" },

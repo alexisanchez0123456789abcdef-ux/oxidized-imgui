@@ -80,14 +80,17 @@ instead of against our own expectations:
 | Bezier points | recursive flatness subdivision with the curve error of 1.12 px | `bezier_points` golden |
 | Polyline stroke | open path, miter joins, simple caps, untextured stroke path | `aa_polyline` golden |
 | Border stroke | closed path, miter joins, inside stroke position | `aa_border` golden |
+| Circles | `AddCircleFilled`/`AddCircle`: the cached `CircleSegmentCounts` table picks the segment count, `_PathArcToFastEx` samples the pinned 48-entry arc table below `ArcFastRadiusCutoff` (140.1176), the fill is the miter-only `AddConvexPolyFilled`, a radius under `FringeScale·1.414/2` is drawn at that size with its alpha scaled, and a stroke thicker than the radius collapses into a disc | `aa_circles` golden |
 | Clip stack | `PushClipRect`/`PopClipRect`, intersection, fullscreen fallback, command splitting | `clip_stack` golden |
 | Command split | `_OnChangedClipRect` in full: a clip change closes the command **only when the rectangle really changes**, an unchanged push/pop keeps the geometry in the same command, and a push/pop pair that draws nothing merges its empty command back into the one it came from | `cmd_split` golden (3 commands) |
 
 The conformance driver is compiled with `/DIMGUI_DISABLE_SSE`: the reference's default `ImRsqrtPrecise` uses the SSE reciprocal-square-root estimate, whose last bits depend on the CPU model, which would make every AA golden machine-specific. Both sides take the exact `1/sqrt` path instead.
 
-Provisional, **not** parity-checked: everything else. In particular circles, the baked corner
-textures for rounded widget frames (a second drawing path next to the geometric one), text wrapping
-and clipping, and every widget beyond the ones listed above are not implemented yet.
+Provisional, **not** parity-checked: everything else. In particular a circle whose radius is past
+`ArcFastRadiusCutoff`, or one asked for an explicit segment count, goes through `cos`/`sin` (the
+reference's `_PathArcToN`), which no golden pins yet; the baked corner textures for rounded widget
+frames (a second drawing path next to the geometric one), text wrapping and clipping, and every
+widget beyond the ones listed above are not implemented yet.
 
 ## Commands
 
