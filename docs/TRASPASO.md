@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **128 escenarios** más la **prueba negativa**.
+   que ejecuta **129 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **142 PRs** fusionados (el número sale de la búsqueda de la API: `is:pr is:merged`).
-- **128 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **144 PRs** fusionados (el número sale de la búsqueda de la API: `is:pr is:merged`).
+- **129 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 69.9 %.** Proyecto (contando el arnés): **71.8 %**.
 - 42 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
@@ -431,6 +431,14 @@ redondeo no pase desapercibido hasta el CI:
 - `color_u32_alpha(Text, 0.70)` da `0xB3FFFFFF` y no `0xB2`: es el redondeo por floats del reference.
 
 Los tests subieron de 39 a **42**.
+### Cursor por eje (peso 1): cerrada
+
+Golden `cursor_pos_xy`: `SetCursorPosX(10)` y luego `SetCursorPosY(30)` en una ventana de 300x200.
+Medido: el cursor va de `(8,8)` a `(10,8)` y despues a `(10,30)`: cada llamada mueve **solo** su eje y
+deja el otro como estaba.
+
+El port los expone como `set_cursor_pos_x` y `set_cursor_pos_y`, que escriben `pos.x + local` y
+`pos.y + local` respectivamente, igual que el `SetCursorPos` completo.
 ### Alturas de item (peso 1): cerrada
 
 Golden `item_heights`: las cuatro consultas de altura del reference, con los bits crudos del float. Medido:
@@ -815,7 +823,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 128 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 129 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
