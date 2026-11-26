@@ -52,7 +52,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Barra de scroll vertical: aparición, ancho del área interior y dibujo del agarre** — golden window_scrollbar (5 frames con rectángulo de barra, área interior y volcado)
 - **Scroll por API: máximo desde el contenido, desplazamiento del contenido y recorte** — golden window_scroll (10 frames con scroll, máximo, contenido y rectángulo interior)
 - **Mover una ventana: arrastre desde la barra y desde el cuerpo, con recorte al salir de pantalla** — golden windows_move (15 estados con la posición de la ventana)
-- **Pila de ventanas: orden de dibujo, hover entre ventanas y foco al hacer clic** — golden windows_order (9 frames con la lista de dibujo de cada ventana en orden)
+- **Pila de ventanas: orden de dibujo, hover entre ventanas, foco al hacer clic y foco por API (SetNextWindowFocus)** — goldens windows_order (9 frames con la lista de dibujo de cada ventana en orden) y windows_focus (7 frames con SetNextWindowFocus sobre A y B)
 - **Desplazamiento de índices por comando** — golden cmd_offsets
 - **Cierre de ventana: recorte bajo la banda y limpieza de comandos** — goldens window_bg y window_title + sonda de comandos
 - **Escena completa: ventana con título y botón, comparada entera** — golden scene_window_button

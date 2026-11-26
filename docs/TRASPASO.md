@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **105 escenarios** más la **prueba negativa**.
+   que ejecuta **106 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **114 PRs** fusionados.
-- **105 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **115 PRs** fusionados.
+- **106 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 68.1 %.** Proyecto (contando el arnés): **70.3 %**.
 - 39 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
@@ -103,8 +103,9 @@ posición/tamaño/memoria, cursor y avance de ítems, ratón, tiempo, teclado (i
 caracteres y la repetición de una tecla mantenida), fondo, borde,
 barra de título, iconos y su interacción, arrastre de ventana, scroll (barra, arrastre,
 página, rueda, bloqueo de rueda), auto-ajuste de tamaño, tamaño mínimo, tiradores de
-redimensión (bordes, cursor, doble clic, autofit), orden de ventanas, y todas las
-primitivas de dibujo y antialiasing, incluidos los círculos (`aa_circles`). Los recortes también
+redimensión (bordes, cursor, doble clic, autofit), orden de ventanas y foco por API
+(`windows_focus`: `SetNextWindowFocus` sube la ventana al frente y le da la barra activa en el mismo
+frame, sin clic), y todas las primitivas de dibujo y antialiasing, incluidos los círculos (`aa_circles`). Los recortes también
 están cerrados: la pila de `PushClipRect`/`PopClipRect` con su intersección (`clip_stack`) y el
 corte de comandos de `_OnChangedClipRect` (`cmd_split`: el clip que no cambia no parte, el que
 cambia sí, y el push/pop sin geometría se fusiona con el comando anterior).
@@ -201,6 +202,22 @@ Cifras ya medidas que sirven de contrato (ventana de 400×300 en (40,40), paddin
   restar la posición de la ventana para compararlos.
 
 ## Lo cerrado, con su detalle medido
+
+### Foco de ventana por API (peso 1): cerrada
+
+Golden `windows_focus`: dos ventanas solapadas (A en (60,60) y B en (110,100) de 300×200) y siete
+frames que alternan `SetNextWindowFocus` entre ellas.
+
+- `SetNextWindowFocus` sólo deja `g.NextWindowData.Focus`; lo aplica el `Begin` de **esa** ventana como
+  `FocusWindow`: la sube al final del orden de display (la primera de `g.Windows` es la de delante) y le
+  da el foco. El `ImDrawData` cambia de orden **en el mismo frame** — `[A,B]` → `[B,A]` — y la barra de
+  título de la enfocada pasa a `TitleBgActive`; la otra vuelve a `TitleBg`.
+- No hay clic, así que no hay arrastre ni `ActiveId`: sólo cambian el orden y el color.
+- El port ya modelaba el orden con `Context::display_order` (de atrás a delante) y el foco con
+  `focused_window`; la unidad añadió el flag `next_focus`, su `set_next_window_focus()` y el bloque que
+  en `begin_window` mueve la ventana al final del orden y la enfoca.
+- Medición: el orden de las listas del volcado es la prueba (`list 0`/`list 1` con `A`/`B`), y los
+  colores de la barra de título van dentro de esas listas.
 
 ### Curvas AA (peso 1): círculos
 
@@ -507,7 +524,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 105 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 106 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```

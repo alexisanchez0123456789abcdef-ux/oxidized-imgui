@@ -300,6 +300,8 @@ pub struct Context {
     wheeling_release_timer: f32,
     /// The flags of the window about to start, set with `set_next_window_flags`.
     next_flags: Option<WindowFlags>,
+    /// `SetNextWindowFocus` for the window about to start, which `Begin` applies as `FocusWindow`.
+    next_focus: bool,
     /// `g.Windows`, back to front: the order the lists are rendered in. It survives frames.
     display_order: Vec<String>,
     /// Names of the windows that were submitted on the previous frame (`WasActive`).
@@ -416,6 +418,7 @@ impl Default for Context {
             memory: Vec::new(),
             next_scroll: None,
             next_flags: None,
+            next_focus: false,
             wheeling_window: None,
             wheeling_ref_mouse: Vec2::default(),
             wheeling_release_timer: 0.0,
@@ -672,12 +675,17 @@ impl Context {
         self.next_scroll = Some(scroll);
     }
 
-    /// The `ImGuiWindowFlags` of the next window, as `ImGui::Begin` takes them.
-    /// ImGui::SetMouseCursor: what the backend should show for the rest of the frame.
+    /// `ImGui::SetMouseCursor`: what the backend should show for the rest of the frame.
     pub fn set_mouse_cursor(&mut self, cursor: crate::io::MouseCursor) {
         self.io.mouse_cursor = cursor;
     }
 
+    /// `ImGui::SetNextWindowFocus`: the next window `Begin` raises to the front and focuses.
+    pub fn set_next_window_focus(&mut self) {
+        self.next_focus = true;
+    }
+
+    /// The `ImGuiWindowFlags` of the next window, as `ImGui::Begin` takes them.
     pub fn set_next_window_flags(&mut self, flags: WindowFlags) {
         self.next_flags = Some(flags);
     }
@@ -1080,6 +1088,16 @@ impl Context {
         // an existing one keeps its place until something raises it.
         if !self.display_order.iter().any(|known| known == name) {
             self.display_order.push(name.to_string());
+            self.focused_window = Some(name.to_string());
+        }
+        // `SetNextWindowFocus` (`g.NextWindowData.Focus`): `FocusWindow` raises the window to the
+        // front of the display order and gives it the focus, like a click does but without the drag.
+        if self.next_focus {
+            self.next_focus = false;
+            if let Some(index) = self.display_order.iter().position(|known| known == name) {
+                let name = self.display_order.remove(index);
+                self.display_order.push(name);
+            }
             self.focused_window = Some(name.to_string());
         }
 
