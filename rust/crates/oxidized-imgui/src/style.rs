@@ -121,6 +121,8 @@ pub struct Style {
     pub window_min_size: Vec2,
     /// `Style::ScrollbarSize`: the width of a scrollbar, taken out of the window's interior.
     pub scrollbar_size: f32,
+    /// `Style::SeparatorSize`: the thickness of a `Separator`, at least one pixel.
+    pub separator_size: f32,
     /// `Style::ScrollbarPadding`: the gap between the scrollbar frame and its grab.
     pub scrollbar_padding: f32,
 
@@ -196,6 +198,7 @@ impl Default for Style {
             table_border_light: 0xFF57_5252,
             window_min_size: Vec2 { x: 32.0, y: 32.0 },
             scrollbar_size: 14.0,
+            separator_size: 1.0,
             scrollbar_padding: 2.0,
             frame_rounding: 0.0,
             window_rounding: 0.0,

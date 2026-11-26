@@ -2,9 +2,9 @@
 
 _Actualizado: 2026-11-26. Generado desde `docs/progress.json`: no editar a mano._
 
-## Reescritura a Rust: **68.1 %**
+## Reescritura a Rust: **68.3 %**
 
-Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 70.3 %.
+Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 70.5 %.
 
 Qué cuenta como hecho: solo lo que tiene una prueba que lo compara con el código C++ original.
 Un cambio de estado sin evidencia no sube el porcentaje.
@@ -13,7 +13,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 | --- | ---: | ---: |
 | Núcleo: contexto, IO, ventanas, identificadores, layout | 59 | 76 % |
 | Listas de dibujo y primitivas | 18 | 100 % |
-| Widgets | 30 | 97 % |
+| Widgets | 31 | 97 % |
 | Fuentes y texto | 13 | 15 % |
 | Docking y viewports | 10 | 0 % |
 | Backends y ejemplos | 8 | 0 % |
@@ -80,6 +80,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Botón: reposo, hover y activo comparados** — golden button_states
 - **Botón: borde de marco (FrameBorderSize)** — golden button_border
 - **Label y checkbox: rectángulo y alternancia** — golden widgets_basic
+- **Separador horizontal: ancho de la región de trabajo, grosor de SeparatorSize y avance de ítem** — golden separator (rectángulo del ítem, cursor tras dos separadores y lista completa)
 - **Slider: región de agarre, arrastre y redondeo** — golden slider_basic
 - **Campo de texto: marco, texto recortado al marco, cursor desde el clic y liberación al clicar fuera** — golden input_text (10 frames, 36202 bytes) + input_text::tests (4 casos)
 - **Edición por teclado: escribir, flechas, Home/End, Delete/Backspace, selección con Shift, resalte y scroll que sigue al cursor** — golden input_text_edit (21 frames, 123667 bytes)

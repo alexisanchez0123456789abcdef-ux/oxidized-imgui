@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **109 escenarios** más la **prueba negativa**.
+   que ejecuta **110 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,9 +46,9 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **118 PRs** fusionados.
-- **109 escenarios** con golden propio, todos en verde, más la prueba negativa.
-- **Reescritura: 68.1 %.** Proyecto (contando el arnés): **70.3 %**.
+- `master` limpio, **119 PRs** fusionados.
+- **110 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- **Reescritura: 68.3 %.** Proyecto (contando el arnés): **70.5 %**.
 - 39 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
@@ -111,7 +111,8 @@ corte de comandos de `_OnChangedClipRect` (`cmd_split`: el clip que no cambia no
 cambia sí, y el push/pop sin geometría se fusiona con el comando anterior).
 
 Widgets: botón (geometría, dibujo, estados, borde), label y checkbox, slider,
-**cabecera colapsable**, **nodos de árbol**, **región hija** (lista propia, recorte,
+**separador horizontal** (`separator`: ancho de la región de trabajo, grosor `SeparatorSize` y avance
+de ítem), **cabecera colapsable**, **nodos de árbol**, **región hija** (lista propia, recorte,
 borde en la lista del padre, scroll con rueda y arrastre), **Selectable**, **popup**,
 **clic en fila de popup**, **combo**, **tooltip**, **barra de menús**, **submenús
 desplegables** (ventana hija, columnas de menú, filas con etiqueta y atajo) y el
@@ -229,6 +230,21 @@ Golden `windows_set_pos`: una ventana con título y un botón, movida con `SetWi
   ventana abierta en el mismo frame es la misma, porque la memoria es la fuente.
 - No se modelan las condiciones (`ImGuiCond_Once`, `FirstUseEver`, `Appearing`): el escenario usa
   siempre la forma sin condición.
+
+### Separador horizontal (peso 1): cerrada
+
+Golden `separator`: tres etiquetas con un separador entre ellas en una ventana de 300×200 en (60,60).
+
+- El separador va del cursor a `WorkRect.Max.x`: con padding 8 y ancho 300 eso es **x 8..292**, y su
+  alto es `max(SeparatorSize, 1)` = **1** (`SeparatorSize` por defecto 1.0).
+- Se dibuja como **rectángulo relleno** con `ImGuiCol_Separator` (`0x80806E6E`), no como línea AA: no
+  necesita la tabla de líneas en el fixture.
+- `ItemSize((0, thickness))`: no aporta ancho al layout y avanza el cursor `thickness + ItemSpacing.y`
+  = 5 px. Medido: "A" ocupa `y 8..21`, el separador cae en `y 25..26`, "B" en `30..43`, el segundo
+  separador en `47..48`, "C" en `52..65` y el cursor queda en `y 69`.
+- El rectángulo del ítem es la línea (`(8,25)-(292,26)`), no la caja del texto: el golden lo imprime
+  tras cada `Separator`.
+- La forma **vertical** (layout horizontal, la barra de menús) y `SeparatorText` no están portados.
 
 ### Colapso de ventana por API (peso 1): cerrada
 
@@ -566,7 +582,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 109 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 110 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
