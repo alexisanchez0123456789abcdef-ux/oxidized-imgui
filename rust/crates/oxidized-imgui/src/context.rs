@@ -221,8 +221,17 @@ pub struct Window {
     clip_rect: Option<[f32; 4]>,
 }
 
+/// The ImGuiStyleVar_* entries whose value is a two-item vector.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum StyleVar {
+    ItemSpacing,
+    FramePadding,
+    WindowPadding,
+    ItemInnerSpacing,
+}
 /// Frame state, identifier stack, style, input state and the open window stack.
 #[derive(Debug)]
+
 pub struct Context {
     id_stack: Vec<ImGuiID>,
     frame_count: u64,
@@ -371,6 +380,8 @@ pub struct Context {
     /// `ImGui::PushItemWidth` stack: the widths later items take, zero meaning the default.
     /// ImGui::PushStyleColor stack: the colours to restore on each pop.
     color_stack: Vec<(crate::style::Col, u32)>,
+    /// `ImGui::PushStyleVar` stack: the values to restore on each pop.
+    style_var_stack: Vec<(StyleVar, Vec2)>,
     item_width_stack: Vec<f32>,
     /// `g.HoveredIdTimer`: how long the border under the mouse has been hovered. The reference
     /// waits WINDOWS_RESIZE_FROM_EDGES_FEEDBACK_TIMER before it reports a border, so brushing past
@@ -469,6 +480,7 @@ impl Default for Context {
             input_text_state: None,
             next_item_width: None,
             color_stack: Vec::new(),
+            style_var_stack: Vec::new(),
             item_width_stack: Vec::new(),
             last_popup_name: None,
             resize_grip_cols: [0; 2],
@@ -3073,6 +3085,33 @@ impl Context {
     pub fn pop_style_color(&mut self) {
         if let Some((col, previous)) = self.color_stack.pop() {
             self.style.colors[col.index()] = previous;
+        }
+    }
+
+    /// `ImGui::PushStyleVar` for the two-item vectors the port models: `ItemSpacing`,
+    /// `FramePadding`, `WindowPadding` and `ItemInnerSpacing`. The value lives until the pop, and
+    /// every widget that reads the style sees it.
+    pub fn push_style_var(&mut self, var: StyleVar, value: Vec2) {
+        let slot = match var {
+            StyleVar::ItemSpacing => &mut self.style.item_spacing,
+            StyleVar::FramePadding => &mut self.style.frame_padding,
+            StyleVar::WindowPadding => &mut self.style.window_padding,
+            StyleVar::ItemInnerSpacing => &mut self.style.item_inner_spacing,
+        };
+        self.style_var_stack.push((var, *slot));
+        *slot = value;
+    }
+
+    /// `ImGui::PopStyleVar`: restores the value the matching push replaced.
+    pub fn pop_style_var(&mut self) {
+        if let Some((var, previous)) = self.style_var_stack.pop() {
+            let slot = match var {
+                StyleVar::ItemSpacing => &mut self.style.item_spacing,
+                StyleVar::FramePadding => &mut self.style.frame_padding,
+                StyleVar::WindowPadding => &mut self.style.window_padding,
+                StyleVar::ItemInnerSpacing => &mut self.style.item_inner_spacing,
+            };
+            *slot = previous;
         }
     }
 

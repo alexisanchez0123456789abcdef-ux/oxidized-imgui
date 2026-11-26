@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **132 escenarios** más la **prueba negativa**.
+   que ejecuta **133 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **149 PRs** fusionados (el número sale de la búsqueda de la API: `is:pr is:merged`).
-- **132 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **150 PRs** fusionados (el número sale de la búsqueda de la API: `is:pr is:merged`).
+- **133 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 69.9 %.** Proyecto (contando el arnés): **71.8 %**.
 - 42 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
@@ -457,6 +457,16 @@ redondeo no pase desapercibido hasta el CI:
 - `color_u32_alpha(Text, 0.70)` da `0xB3FFFFFF` y no `0xB2`: es el redondeo por floats del reference.
 
 Los tests subieron de 39 a **42**.
+### Variables de estilo por ambito (peso 1): cerrada
+
+Golden `style_var`: tres botones con `PushStyleVar(ImGuiStyleVar_FramePadding, (4, 8))` alrededor del
+de en medio. Medido en el rectangulo del item: **15x19** por defecto, **15x29** dentro del ambito
+(13 + 2x8 de alto) y **15x19** otra vez tras el pop.
+
+Lo interesante es que el ancho **no** cambia: se empuja `FramePadding.x = 4`, el mismo valor por
+defecto, asi que solo se mueve el alto. El port modela el ambito con una pila de `(StyleVar, Vec2)`
+sobre las cuatro variables vectoriales que ya tiene (`ItemSpacing`, `FramePadding`, `WindowPadding`,
+`ItemInnerSpacing`); los widgets enmarcados leen `style.frame_padding` y crecen solos.
 ### Colores de estilo por ambito (peso 1): cerrada
 
 Golden `style_color`: tres botones, con `PushStyleColor(ImGuiCol_Button, rojo)` alrededor del de en
@@ -886,7 +896,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 132 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 133 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
