@@ -288,8 +288,11 @@ impl Table {
         let policy = self.flags & table_flags::SIZING_MASK;
         let min_column_width = frame_padding_x.max(1.0);
         let resizable = self.flags & table_flags::RESIZABLE != 0;
-        let mut sum_width_requests = 0.0f32;
-        let mut stretch_sum_weights = 0.0f32;
+        // [Part 3a] The width each column would need for its contents, and the sums the stretch
+        // policy needs: a column declared without a width flag follows the table policy, which is
+        // `SizingFixedFit` when the flags say nothing.
+        let mut stretch_sum_width_auto = 0.0f32;
+        let mut count_stretch = 0.0f32;
         for column in self.columns.iter_mut() {
             if column.flags & column_flags::WIDTH_MASK == 0 {
                 column.flags |= if policy == table_flags::SIZING_FIXED_FIT
@@ -300,24 +303,41 @@ impl Table {
                     column_flags::WIDTH_STRETCH
                 };
             }
+            // `TableGetColumnWidthAuto` from the extents the previous frame left behind. The minimum
+            // width is not applied here: on the first frame there is no measurement and the reference
+            // still divides by a zero sum, which is what leaves the columns at their minimum.
+            column.width_auto = column.content_width;
+            if column.flags & column_flags::WIDTH_STRETCH != 0 {
+                stretch_sum_width_auto += column.width_auto;
+                count_stretch += 1.0;
+            }
+        }
+
+        // [Part 3b] The request of each column and, for the stretch ones, its weight.
+        let mut sum_width_requests = 0.0f32;
+        let mut stretch_sum_weights = 0.0f32;
+        for column in self.columns.iter_mut() {
             if column.flags & column_flags::WIDTH_FIXED != 0 {
-                // `TableGetColumnWidthAuto` from the extents the previous frame left behind: a fixed
-                // column that cannot be resized tracks its contents, unless it was declared with an
-                // explicit width, which it then keeps.
-                let content_width = column.content_width.max(min_column_width);
-                column.width_auto = content_width;
+                // A fixed column that cannot be resized tracks its contents, unless it was declared
+                // with an explicit width, which it then keeps.
                 if column.init_width > 0.0 && !resizable {
                     column.width_auto = column.init_width;
                 }
                 if !resizable {
-                    column.width_request = column.width_auto;
+                    column.width_request = column.width_auto.max(min_column_width);
                 }
                 sum_width_requests += column.width_request;
             } else {
-                // `InitStretchWeightOrWidth` is the weight when the column asked for one; the
-                // content-derived weight of `SizingStretchProp` is not ported yet.
-                column.stretch_weight = if column.width_request > 0.0 {
-                    column.width_request
+                // `InitStretchWeightOrWidth` wins when the column asked for one; otherwise
+                // `SizingStretchProp` weighs the column by the width of its contents, and every
+                // other policy gives it an equal share.
+                column.stretch_weight = if column.init_width > 0.0 {
+                    column.init_width
+                } else if policy == table_flags::SIZING_STRETCH_PROP {
+                    // With no contents measured yet the sum is 0, so this is a NaN weight: the
+                    // reference relies on it (`NaN > 0` is false) to leave the columns at their
+                    // minimum width on the frame that has no measurements.
+                    (column.width_auto / stretch_sum_width_auto) * count_stretch
                 } else {
                     1.0
                 };
@@ -349,7 +369,10 @@ impl Table {
         }
 
         // [Part 5] The rounding remainder goes to the stretch columns, from right to left.
-        if width_remaining >= 1.0 && self.flags & table_flags::PRECISE_WIDTHS == 0 {
+        if width_remaining >= 1.0
+            && stretch_sum_weights > 0.0
+            && self.flags & table_flags::PRECISE_WIDTHS == 0
+        {
             for column in self.columns.iter_mut().rev() {
                 if width_remaining < 1.0 {
                     break;

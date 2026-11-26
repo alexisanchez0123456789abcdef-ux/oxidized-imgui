@@ -59,6 +59,7 @@ pub const SCENARIOS: &[&str] = &[
     "tables_header_hover",
     "tables_header_active",
     "tables_hovered",
+    "tables_stretch_prop",
     "text_draw",
     "button",
     "widgets_basic",
@@ -3017,6 +3018,86 @@ pub fn tables_hovered_dump() -> String {
         ctx.end_table();
         if frame == 3 {
             let full = dump("tables_hovered", ctx.draw_list());
+            for line in full.lines().skip(2) {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
+        ctx.end_window();
+        ctx.end_frame();
+    }
+    out
+}
+
+/// The `tables_stretch_prop` scenario: `SizingStretchProp` derives each stretch column's weight from
+/// the width its contents reached, so the columns end up proportional to their labels.
+pub fn tables_stretch_prop_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2, WindowFlags, table_flags};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/tables_stretch_prop.glyphs.txt"
+    );
+    let glyphs = std::fs::read_to_string(path).expect("glyph fixture");
+    let font = Font::from_pinned(&glyphs).expect("glyph fixture");
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    ctx.io_mut().delta_time = 0.1;
+    ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+    ctx.io_mut().mouse_down[0] = false;
+
+    let mut out = String::new();
+    let labels = ["A", "BB", "CCC"];
+    for frame in 0..3 {
+        ctx.begin_frame();
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+        );
+        ctx.begin_window_ex(
+            "W",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+            false,
+        );
+        if frame == 0 {
+            out.push_str(&format!(
+                "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+            ));
+            out.push_str("scenario tables_stretch_prop\n");
+        }
+        let window_pos = ctx.window().pos;
+        let local = |p: Vec2| Vec2 {
+            x: p.x - window_pos.x,
+            y: p.y - window_pos.y,
+        };
+        let began = ctx.begin_table("T", 3, table_flags::SIZING_STRETCH_PROP, Vec2::default());
+        if frame == 0 {
+            out.push_str(&format!("table begin {}\n", i32::from(began)));
+        }
+        ctx.table_setup_column("A", 0, 0.0);
+        ctx.table_setup_column("B", 0, 0.0);
+        ctx.table_setup_column("C", 0, 0.0);
+        ctx.table_next_row_min(20.0);
+        for (col, label) in labels.iter().enumerate() {
+            ctx.table_next_column();
+            let cursor = local(ctx.cursor_screen_pos());
+            out.push_str(&format!(
+                "frame {frame} cell {col} cursor {:08x} {:08x}\n",
+                bits(cursor.x),
+                bits(cursor.y)
+            ));
+            ctx.text(label);
+        }
+        ctx.end_table();
+        if frame == 2 {
+            let end_cursor = local(ctx.cursor_screen_pos());
+            out.push_str(&format!(
+                "after cursor {:08x} {:08x}\n",
+                bits(end_cursor.x),
+                bits(end_cursor.y)
+            ));
+            let full = dump("tables_stretch_prop", ctx.draw_list());
             for line in full.lines().skip(2) {
                 out.push_str(line);
                 out.push('\n');
@@ -6089,6 +6170,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "tables_header_hover" => Some(tables_header_hover_dump()),
         "tables_header_active" => Some(tables_header_active_dump()),
         "tables_hovered" => Some(tables_hovered_dump()),
+        "tables_stretch_prop" => Some(tables_stretch_prop_dump()),
         "text_draw" => Some(text_draw_dump()),
         "button" => Some(button_dump()),
         "widgets_basic" => Some(widgets_basic_dump()),

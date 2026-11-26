@@ -105,6 +105,7 @@ instead of against our own expectations:
 | Table header hover | a header is an `AllowOverlap` item, so it only reports hover when it already was the hovered id on the previous frame: with the mouse resting on the cell the `HeaderHovered` fill (`0xCCFA9642`) appears on the third frame, over the row's `TableHeaderBg` band | `tables_header_hover` golden |
 | Table header press | pressing a hovered header takes the active id until the button is released, so the cell is filled with `HeaderActive` (`0xFFFA9642`) for as long as it stays down | `tables_header_active` golden |
 | Table hovered column and row | `TableGetHoveredColumn` reports the column whose clip holds the mouse (the column count past the last one) on the same frame, while `TableGetHoveredRow` is one frame behind; both use the height the table had on the previous frame for the hit test | `tables_hovered` golden |
+| Table proportional stretch | `SizingStretchProp` weights each stretch column by the width its contents reached, so labels `A`, `BB` and `CCC` share the table 1:2:3 (44, 89 and 135 px); with no measurement yet the sum is zero and the NaN weight leaves every column at `MinColumnWidth` on the first frame | `tables_stretch_prop` golden |
 
 The conformance driver is compiled with `/DIMGUI_DISABLE_SSE`: the reference's default `ImRsqrtPrecise` uses the SSE reciprocal-square-root estimate, whose last bits depend on the CPU model, which would make every AA golden machine-specific. Both sides take the exact `1/sqrt` path instead.
 
