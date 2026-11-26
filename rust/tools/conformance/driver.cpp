@@ -1739,6 +1739,42 @@ static void DumpTablesStretchProp()
         ImGui::EndFrame();
     }
 }
+// tables_row_bg_color: `TableSetBgColor(RowBg0, ...)` paints one row with an explicit colour, with
+// no need for the `RowBg` flag; the next row goes back to having no background.
+static void DumpTablesRowBgColor()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario tables_row_bg_color\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground;
+    ImGui::Begin("W", NULL, flags);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+
+    const bool began = ImGui::BeginTable("T", 1, 0, ImVec2(0.0f, 0.0f), 0.0f);
+    printf("table begin %d\n", (int)began);
+    ImGui::TableSetupColumn("A", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+    for (int row = 0; row < 2; row++)
+    {
+        ImGui::TableNextRow(ImGuiTableRowFlags_None, 20.0f);
+        if (row == 0)
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, 0xFF336699u);
+        ImGui::TableNextColumn();
+        ImGui::Dummy(ImVec2(10.0f, 10.0f));
+    }
+    ImGui::EndTable();
+    DumpDrawListBody(*dl);
+    ImGui::End();
+    ImGui::EndFrame();
+}
 // tables_row_height: `TableNextRow(flags, min_height)` with a minimum taller than the cell contents.
 // Each row is 20 px instead of the 17 its text needs, and the rows below start lower.
 static void DumpTablesRowHeight()
@@ -5483,6 +5519,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "tables_set_column") == 0)
     {
         DumpTablesSetColumn();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "tables_row_bg_color") == 0)
+    {
+        DumpTablesRowBgColor();
         ImGui::DestroyContext();
         return 0;
     }
