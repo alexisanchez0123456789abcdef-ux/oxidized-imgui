@@ -2,9 +2,9 @@
 
 _Actualizado: 2026-11-26. Generado desde `docs/progress.json`: no editar a mano._
 
-## Reescritura a Rust: **67.4 %**
+## Reescritura a Rust: **68.1 %**
 
-Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 69.6 %.
+Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 70.3 %.
 
 Qué cuenta como hecho: solo lo que tiene una prueba que lo compara con el código C++ original.
 Un cambio de estado sin evidencia no sube el porcentaje.
@@ -13,7 +13,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 | --- | ---: | ---: |
 | Núcleo: contexto, IO, ventanas, identificadores, layout | 59 | 76 % |
 | Listas de dibujo y primitivas | 18 | 100 % |
-| Widgets | 30 | 93 % |
+| Widgets | 30 | 97 % |
 | Fuentes y texto | 13 | 15 % |
 | Docking y viewports | 10 | 0 % |
 | Backends y ejemplos | 8 | 0 % |
@@ -97,6 +97,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **Barra de menús: franja, recorte propio, layout horizontal y entradas** — golden menu_bar (5 frames, 23068 bytes)
 - **Columnas de menú: anchos por columna acumulados en el frame y bloqueados desde el anterior, espaciado solo entre columnas que existen** — menu_columns::tests (6 casos) + golden submenu
 - **Submenús desplegables: ventana hija propia bajo la barra, filas a todo el ancho con etiqueta y atajo en sus columnas, cierre al elegir y foco del anfitrión** — golden submenu (11 frames, lista completa de 72305 bytes)
+- **Tablas, primer corte: columnas fijas, filas que crecen con su contenido, relleno y espaciado de celda, y los índices agrupados por columna como el splitter** — golden tables_basic (3 columnas de 60/80/100 y dos filas de texto: cursor, rect de ítem, índices y cursor final)
 - **UVs de texto con el atlas fijado por fixture** — golden text_draw con UVs + fixture text_draw.glyphs.txt
 - **Medida de texto (CalcTextSize) con tabla de avances fijada** — golden font_metrics
 - **Oráculo de constantes y layouts desde el C++** — rust/tools/oracle

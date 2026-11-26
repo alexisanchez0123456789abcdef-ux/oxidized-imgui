@@ -90,6 +90,9 @@ pub struct Style {
     pub item_spacing: Vec2,
     pub frame_padding: Vec2,
     pub item_inner_spacing: Vec2,
+    /// `Style::CellPadding`: the padding of a table cell. The default is `(4, 2)`, which is **not**
+    /// `FramePadding`: a row holding 13 px of text is 17 px tall because of it.
+    pub cell_padding: Vec2,
     /// `Style::GrabMinSize`: the grab of a slider.
     pub grab_min_size: f32,
     /// `Style::IndentSpacing`: how far a tree node's children move right.
@@ -154,6 +157,7 @@ impl Default for Style {
             item_spacing: Vec2 { x: 8.0, y: 4.0 },
             frame_padding: Vec2 { x: 4.0, y: 3.0 },
             item_inner_spacing: Vec2 { x: 4.0, y: 4.0 },
+            cell_padding: Vec2 { x: 4.0, y: 2.0 },
             grab_min_size: 12.0,
             indent_spacing: 21.0,
             selectable_rounding: 0.0,

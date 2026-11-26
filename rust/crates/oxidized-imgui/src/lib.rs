@@ -29,6 +29,7 @@ pub mod input_text;
 pub mod io;
 pub mod menu_columns;
 pub mod style;
+pub mod tables;
 
 /// Matches `IMGUI_VERSION` in `imgui.h` of the reference this crate is checked against.
 pub const IMGUI_VERSION: &str = "1.93.1 WIP";
@@ -46,3 +47,4 @@ pub use input_text::InputTextState;
 pub use io::{Io, Key, KeyData};
 pub use menu_columns::MenuColumns;
 pub use style::{Col, Style};
+pub use tables::{Table, TableColumn, column_flags, table_flags};

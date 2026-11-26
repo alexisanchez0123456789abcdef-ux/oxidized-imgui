@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **69 escenarios** más la **prueba negativa**.
+   que ejecuta **70 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,10 +46,10 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **76 PRs** fusionados.
-- **69 escenarios** con golden propio, todos en verde, más la prueba negativa.
-- **Reescritura: 67.4 %.** Proyecto (contando el arnés): **69.6 %**.
-- 30 tests unitarios en 6 binarios.
+- `master` limpio, **77 PRs** fusionados.
+- **70 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- **Reescritura: 68.1 %.** Proyecto (contando el arnés): **70.3 %**.
+- 32 tests unitarios en 6 binarios.
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
 
 ## Método que funciona (y lo que cuesta caro)
@@ -102,50 +102,52 @@ cambia sí, y el push/pop sin geometría se fusiona con el comando anterior).
 Widgets: botón (geometría, dibujo, estados, borde), label y checkbox, slider,
 **cabecera colapsable**, **nodos de árbol**, **región hija** (lista propia, recorte,
 borde en la lista del padre, scroll con rueda y arrastre), **Selectable**, **popup**,
-**clic en fila de popup**, **combo**, **tooltip**, **barra de menús** y **submenús
-desplegables** (ventana hija, columnas de menú, filas con etiqueta y atajo).
+**clic en fila de popup**, **combo**, **tooltip**, **barra de menús**, **submenús
+desplegables** (ventana hija, columnas de menú, filas con etiqueta y atajo) y el
+**primer corte de las tablas** (`tables_basic`: columnas fijas, filas que crecen con su
+contenido y los índices agrupados por columna como el splitter).
 
 La tabla completa, con el nombre del golden de cada fila, está en `rust/README.md`.
 El detalle por pieza y su peso, en `docs/progress.json`.
 
 ## Pendiente, en el orden sugerido
 
-La entrada de texto (peso 4) y las curvas AA (peso 1) están cerradas y su sección queda más abajo
-como referencia de lo ya medido. Lo que queda:
+La entrada de texto (peso 4), las curvas AA (peso 1) y el primer corte de las tablas (peso 1) están
+cerradas y su sección queda más abajo como referencia de lo ya medido. Lo que queda:
 
-### Tablas (peso 2)
+### Tablas: lo que falta (peso 1)
 
-Sistema aparte, el más grande de todos. **Medido** (sonda `probe-tables`, ventana de 400×300 en
-(40,40), padding 8, fuente 13 px, `ItemSpacing` 8×4, `CellPadding` por defecto); las cifras están
-en coordenadas locales de la ventana:
+El primer corte (`tables_basic`: `BeginTable`, `TableSetupColumn`, `TableNextRow`,
+`TableNextColumn`, `EndTable` con columnas fijas y textos en las celdas) ya está. El resto del
+sistema, por orden de coste:
 
-- **`CellPadding` por defecto es (4, 3)**, el mismo `FramePadding`. Una columna `WidthFixed` de
-  `w` px mide `w + 2·CellPadding.x` entre `MinX` y `MaxX`: 60 px → 68 px de paso, 80 → 88, 100 → 108.
-- **Sin bordes, el contenido de la primera columna empieza en `x = 8`**, que es
-  `WindowPadding.x` (el `WorkMinX` de la columna coincide con el borde del contenido). La segunda
-  columna de 60 px empieza en **76**.
-- **Los bordes desplazan el contenido**: con `Borders`, la primera columna empieza en **13** y la
-  segunda en **82**. Es decir, 5 px de más al principio (borde exterior + celda) y 6 entre columnas.
-- **Fila de datos: 17 px de alto con texto de 13** (`13 + 2·CellPadding.y`); el alto de fila mínimo
-  sube a **21** con `CellPadding = (8, 4)`.
+- **Cabeceras** (`TableHeadersRow`/`TableHeader`): ocupan la primera fila de 17 px y
+  `TableGetRowIndex()` las cuenta (tras dos filas de datos vale **2**).
+- **Bordes** (`Borders`): desplazan el contenido 5 px al principio (borde exterior + celda) y 6 entre
+  columnas; con ellas la primera columna empieza en **13** y la segunda en **82** (medido en la
+  ventana de 400×300 en (40,40)).
+- **Políticas de tamaño**: sin `WidthFixed` la tabla reparte el ancho del contenido (en 384 px, dos
+  columnas de 192, la segunda empieza en **204**); falta también stretch y auto-fit.
+- **Reordenar, congelar y el scroll propio de la tabla** (la tabla con `ScrollX`/`ScrollY` crea una
+  ventana hija, con todo lo que eso arrastra).
+- `TableGetHoveredColumn`/`Row`, `TableSetBgColor` y los colores de fila.
+
+Cifras ya medidas que sirven de contrato (ventana de 400×300 en (40,40), padding 8, fuente 13 px):
+
+- **`CellPadding` por defecto es (4, 2)**, **no** `FramePadding` (que es (4, 3)): corregido con la
+  sonda `probe-tables2`. Una columna `WidthFixed` de `w` px mide `w + 2·CellPadding.x` entre `MinX` y
+  `MaxX`: 60 px → 68 px de paso, 80 → 88, 100 → 108.
+- **Sin bordes, el contenido de la primera columna empieza en `x = 8`**, que es `WindowPadding.x`.
+  La segunda columna de 60 px empieza en **76**.
+- **Fila de datos: 17 px de alto con texto de 13** (`13 + 2·CellPadding.y` = 13 + 4).
 - **El texto de una celda se coloca en el cursor tal cual**: la celda 0,0 pone el texto en
-  `(8, 10)` y deja el cursor en `(8, 27)`. La fila 1 repite en `y = 27`.
-- **Con `TableHeadersRow`** la primera fila de datos se va a `y = 27` y la segunda a `y = 44`
-  (la cabecera ocupa el primer hueco de 17 px), y `TableGetRowIndex()` cuenta la cabecera: tras dos
-  filas de datos vale **2**.
+  `(8, 10)` y el cursor de la fila siguiente arranca en `y = 27`.
 - **Un ancho explícito en `BeginTable` no cambia nada con columnas fijas**: 3 columnas de 60/80/100
   con `outer_size.x = 300` empiezan en 8, 76 y 164, igual que sin ese ancho.
-- **Con anchos automáticos** (sin `WidthFixed`) la tabla reparte el ancho del contenido: en 384 px
-  las dos columnas quedan de 192 y la segunda empieza en **204**.
 - Tras `EndTable` el cursor queda por debajo de la última fila: dos filas → `y = 46`; con cabecera,
   tres filas de hueco → `y = 63`.
-- **`GetItemRectMin()` es espacio de pantalla**, `GetCursorPos()` es local de la ventana: la sonda
-  imprime los dos y hay que restar la posición de la ventana para compararlos.
-
-Lo que un primer corte tiene que dejar clavado: `TableBegin` creando el estado y midiendo, el
-`TableUpdateLayout` que resuelve los anchos, `TableNextRow`/`TableNextColumn` colocando el cursor, y
-el `CellPadding`/`BorderInner` sumando donde dicen las cifras de arriba. Cabeceras, políticas de
-tamaño (stretch, auto-fit), reordenar, congelar y el scroll propio de la tabla vienen después.
+- **`GetItemRectMin()` es espacio de pantalla**, `GetCursorPos()` es local de la ventana: hay que
+  restar la posición de la ventana para compararlos.
 
 ## Lo cerrado, con su detalle medido
 
@@ -184,6 +186,27 @@ El golden `aa_circles` cubre rellenos y trazos por debajo de ese corte (radios 0
 radio, que colapsa en un disco. **No** cubre radios por encima del corte ni `num_segments`
 explícito: esos pasan por `_PathArcToN` (`ImCos`/`ImSin`), y hace falta paridad de trigonometría
 entre plataformas antes de fijarlos, igual que se hizo con las tablas de arco y de líneas.
+
+### Tablas, primer corte (peso 1)
+
+`Table::update_layout` en `rust/crates/oxidized-imgui/src/tables.rs` resuelve las columnas como
+`TableUpdateLayout` para el camino que el golden necesita, y `Context` coloca el cursor de cada celda
+y termina la tabla como un ítem de su tamaño final. El golden `tables_basic` pinna el cursor de cada
+celda, el rectángulo del texto, los índices de fila y columna y el cursor tras `EndTable`.
+
+Lo que costó, para no repetirlo:
+
+- **`CellPadding` es (4, 2), no (4, 3).** El traspaso anterior decía (4,3) "el mismo `FramePadding`" y
+  era falso: la fila mide 17 = 13 + 2·2 y el texto de la primera celda cae en `y = 10`, no en 11.
+- **Sin bordes verticales `CellPaddingX` es 0**: los 4 px de cada lado salen de `CellSpacingX1` y
+  `CellSpacingX2` (`= CellPadding.x`), no del relleno de la celda. La primera columna empieza 4 px
+  antes del contenido (`MinX = WorkRect.Min.x + OuterPaddingX - CellSpacingX1`).
+- **Los índices de una tabla no están en orden de dibujo.** `TableBeginCell` cambia el canal del
+  `ImDrawListSplitter` a la columna, y `EndTable` los fusiona por orden de columna: los vértices
+  quedan como se dibujaron, pero los índices se reagrupan (celdas de la columna 0, luego la 1...).
+  Sin ese detalle el golden falla sólo en la sección `idx`.
+- **El recorte de la tabla no parte comandos**: `PushClipRect` empuja el `InnerClipRect` de la
+  ventana, que es el clip en el que la lista ya está.
 
 ### Entrada de texto (peso 4): cerrada
 
@@ -276,7 +299,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 69 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 70 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
