@@ -457,6 +457,16 @@ redondeo no pase desapercibido hasta el CI:
 - `color_u32_alpha(Text, 0.70)` da `0xB3FFFFFF` y no `0xB2`: es el redondeo por floats del reference.
 
 Los tests subieron de 39 a **42**.
+### Auditoria del arnes: un golden que nadie comparaba (peso 0, es cobertura)
+
+`tests/golden/rect_stroke.txt` existia, `dump_for("rect_stroke")` funcionaba y `gen-golden.ps1` lo
+regeneraba, pero **no estaba en `SCENARIOS`**. La prueba `golden_matches_reference` recorre
+`SCENARIOS`, no el directorio, asi que ese golden **nunca se comparaba**: 137 comparaciones para 138
+ficheros. Anadido a la lista, el port coincide byte a byte, y ahora se comparan los 138.
+
+Regla que queda: al anadir un escenario hay que tocar **cuatro** sitios (driver, `dump_for`,
+`SCENARIOS` y `gen-golden.ps1`); si falta `SCENARIOS` el golden es decorativo y el `cargo test` no
+lo nota.
 ### SmallButton (peso 1): cerrada, con la regla medida
 
 Golden `small_button`: un `Button("A")` y un `SmallButton("A")` en la misma ventana. Medido: el boton

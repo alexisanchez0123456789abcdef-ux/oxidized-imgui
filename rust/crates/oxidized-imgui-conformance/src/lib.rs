@@ -25,6 +25,7 @@ pub const SCENARIOS: &[&str] = &[
     "prim_rect",
     "rect_filled",
     "line_h",
+    "rect_stroke",
     "window_layout",
     "io_mouse_events",
     "io_keyboard_events",
