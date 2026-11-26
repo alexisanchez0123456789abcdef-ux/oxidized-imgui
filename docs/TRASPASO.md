@@ -464,7 +464,11 @@ regeneraba, pero **no estaba en `SCENARIOS`**. La prueba `golden_matches_referen
 `SCENARIOS`, no el directorio, asi que ese golden **nunca se comparaba**: 137 comparaciones para 138
 ficheros. Anadido a la lista, el port coincide byte a byte, y ahora se comparan los 138.
 
-Regla que queda: al anadir un escenario hay que tocar **cuatro** sitios (driver, `dump_for`,
+Regla que queda, y ahora **guardada por una prueba**: `every_golden_is_listed_in_scenarios` recorre
+`tests/golden/` y falla si un `.txt` no esta en `SCENARIOS` o si los dos lados no tienen el mismo
+tamano. Asi, olvidar el cuarto sitio ya no puede pasar en silencio.
+
+Regla que queda: al anadir un escenario hay que tocar **cuatro** sitios (driver, ``dump_for``,
 `SCENARIOS` y `gen-golden.ps1`); si falta `SCENARIOS` el golden es decorativo y el `cargo test` no
 lo nota.
 ### SmallButton (peso 1): cerrada, con la regla medida

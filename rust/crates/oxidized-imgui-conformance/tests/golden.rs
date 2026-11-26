@@ -18,3 +18,38 @@ fn golden_matches_reference() {
         );
     }
 }
+
+/// The comparison above walks `SCENARIOS`, so a golden whose scenario is not listed is never
+/// compared and its drift goes unnoticed -- which is exactly how `rect_stroke` survived. This walks
+/// the directory instead and fails when the two lists disagree.
+#[test]
+fn every_golden_is_listed_in_scenarios() {
+    let dir = format!("{}/tests/golden", env!("CARGO_MANIFEST_DIR"));
+    let mut seen = Vec::new();
+    for entry in std::fs::read_dir(&dir).expect("golden directory") {
+        let path = entry.expect("golden entry").path();
+        let Some(name) = path.file_stem().and_then(|stem| stem.to_str()) else {
+            continue;
+        };
+        if path.extension().and_then(|extension| extension.to_str()) != Some("txt") {
+            continue;
+        }
+        seen.push(name.to_string());
+    }
+    seen.sort();
+    let mut unlisted = Vec::new();
+    for name in &seen {
+        if !SCENARIOS.contains(&name.as_str()) {
+            unlisted.push(name.clone());
+        }
+    }
+    assert!(
+        unlisted.is_empty(),
+        "goldens with no SCENARIOS entry, so nothing compares them: {unlisted:?}"
+    );
+    assert_eq!(
+        seen.len(),
+        SCENARIOS.len(),
+        "the golden directory and SCENARIOS must hold the same scenarios"
+    );
+}
