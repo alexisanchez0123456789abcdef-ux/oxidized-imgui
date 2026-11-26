@@ -75,6 +75,7 @@ pub const SCENARIOS: &[&str] = &[
     "popup",
     "popup_click",
     "combo",
+    "tooltip",
     "cmd_offsets",
     "scene_window_button",
     "button_states",
@@ -3334,6 +3335,70 @@ pub fn combo_dump() -> String {
     }
     out
 }
+/// The `tooltip` scenario: a tooltip is a window at the mouse that takes neither the mouse nor the
+/// keyboard, so the item under it keeps hovering while it shows.
+pub fn tooltip_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/tooltip.glyphs.txt"
+    );
+    let text = std::fs::read_to_string(path).expect("tooltip fixture");
+    let font = Font::from_pinned(&text).expect("font fixture");
+    let line_uvs = parse_line_uvs(&text);
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    ctx.set_line_uv_lines(line_uvs);
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario tooltip\n");
+
+    let moves = [
+        (0.0f32, 0.0f32),
+        (0.0, 0.0),
+        (80.0, 75.0),
+        (80.0, 75.0),
+        (400.0, 400.0),
+        (400.0, 400.0),
+    ];
+    for (n, (mx, my)) in moves.iter().enumerate() {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: *mx, y: *my });
+        ctx.io_mut().mouse_down[0] = false;
+        ctx.begin_frame();
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+        );
+        ctx.begin_window(
+            "W",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+        );
+        ctx.button("Hover");
+        if ctx.last_item_hovered() {
+            ctx.begin_tooltip();
+            ctx.text("Tip");
+            ctx.end_tooltip();
+        }
+        ctx.end_window();
+        ctx.end_frame();
+        let lists = ctx.render_lists();
+        out.push_str(&format!("frame {n} lists {}\n", lists.len()));
+        for (i, (name, list)) in lists.iter().enumerate() {
+            out.push_str(&format!("list {i} {name}\n"));
+            let body = dump("tooltip", list);
+            for line in body.lines().skip(2) {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
+    }
+    out
+}
 /// The dump for a scenario, whichever family it belongs to.
 pub fn dump_for(name: &str) -> Option<String> {
     match name {
@@ -3379,6 +3444,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "popup" => Some(popup_dump()),
         "popup_click" => Some(popup_click_dump()),
         "combo" => Some(combo_dump()),
+        "tooltip" => Some(tooltip_dump()),
         "cmd_offsets" => Some(cmd_offsets_dump()),
         "scene_window_button" => Some(scene_window_button_dump()),
         "button_states" => Some(button_states_dump()),
