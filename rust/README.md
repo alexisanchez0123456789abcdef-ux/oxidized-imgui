@@ -112,6 +112,7 @@ instead of against our own expectations:
 | Table hovered column flag | `TableGetColumnFlags` carries `IsHovered` (`1 << 27`) on the column whose clip holds the mouse, set on the same frame `TableGetHoveredColumn` reports it and cleared on the rest | `tables_column_hovered_flag` golden |
 | Table sort specs | a `Sortable` table exposes one spec per column declared with `DefaultSort` (ascending, in column order), `SpecsDirty` is set when the specs are built and cleared when they are handed out; a table that is not sortable returns none | `tables_sort_specs` golden |
 | Table sort specs with `SortTristate` | with no `DefaultSort` the first sortable column becomes the initial spec, so the specs are never empty when they are first handed out; `SortTristate` only allows them to empty later | `tables_sort_tristate` golden |
+| Table sorted column flag | `TableGetColumnFlags` carries `IsSorted` (`1 << 26`) on every column a sort spec points at, and the `DefaultSort` bit the column was declared with stays in its flags | `tables_column_sorted_flag` golden |
 
 The conformance driver is compiled with `/DIMGUI_DISABLE_SSE`: the reference's default `ImRsqrtPrecise` uses the SSE reciprocal-square-root estimate, whose last bits depend on the CPU model, which would make every AA golden machine-specific. Both sides take the exact `1/sqrt` path instead.
 

@@ -73,10 +73,12 @@ pub mod column_flags {
     pub const IS_ENABLED: u32 = 1 << 24;
     /// `ImGuiTableColumnFlags_IsVisible`.
     pub const IS_VISIBLE: u32 = 1 << 25;
+    /// `ImGuiTableColumnFlags_IsSorted`: the column a sort spec points at.
+    pub const IS_SORTED: u32 = 1 << 26;
     /// `ImGuiTableColumnFlags_IsHovered`: the column under the mouse.
     pub const IS_HOVERED: u32 = 1 << 27;
     /// `ImGuiTableColumnFlags_StatusMask_`, as far as this port sets it.
-    pub const STATUS_MASK: u32 = 1 << 24 | 1 << 25 | 1 << 27;
+    pub const STATUS_MASK: u32 = 1 << 24 | 1 << 25 | 1 << 26 | 1 << 27;
 }
 
 /// `TABLE_BORDER_SIZE`.
@@ -432,6 +434,9 @@ impl Table {
             // `TableUpdateLayout` clears the status bits and marks the column it lays out.
             column.flags &= !column_flags::STATUS_MASK;
             column.flags |= column_flags::IS_ENABLED | column_flags::IS_VISIBLE;
+            if self.sort_specs.iter().any(|(sorted, _)| *sorted == n) {
+                column.flags |= column_flags::IS_SORTED;
+            }
             column.next_enabled_column = if (n as i32) + 1 < columns_count {
                 n as i32 + 1
             } else {
