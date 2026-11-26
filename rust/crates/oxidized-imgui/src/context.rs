@@ -5086,7 +5086,7 @@ impl Context {
 
         if open {
             // `TreePushOverrideID`: indent the children and give them ids under this node.
-            self.indent(self.style.indent_spacing);
+            self.indent(None);
             self.push_override_id(id);
         }
         open
@@ -5095,11 +5095,12 @@ impl Context {
     /// `ImGui::TreePop`: undo what an open `tree_node` did.
     pub fn tree_pop(&mut self) {
         self.pop_id();
-        self.unindent(self.style.indent_spacing);
+        self.unindent(None);
     }
 
     /// `Indent`: move the layout's left edge right and put the cursor there.
-    fn indent(&mut self, width: f32) {
+    pub fn indent(&mut self, width: Option<f32>) {
+        let width = width.unwrap_or(self.style.indent_spacing);
         let Some(window) = self.windows.last_mut() else {
             return;
         };
@@ -5108,7 +5109,8 @@ impl Context {
     }
 
     /// `Unindent`.
-    fn unindent(&mut self, width: f32) {
+    pub fn unindent(&mut self, width: Option<f32>) {
+        let width = width.unwrap_or(self.style.indent_spacing);
         let Some(window) = self.windows.last_mut() else {
             return;
         };
