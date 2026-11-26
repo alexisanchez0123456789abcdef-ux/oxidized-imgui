@@ -2,9 +2,9 @@
 
 _Actualizado: 2026-11-26. Generado desde `docs/progress.json`: no editar a mano._
 
-## Reescritura a Rust: **62.5 %**
+## Reescritura a Rust: **62.8 %**
 
-Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 65.1 %.
+Del trabajo de reimplementación, esto es lo que está hecho **y demostrado**. El total del proyecto, contando la infraestructura que lo verifica, va al 65.3 %.
 
 Qué cuenta como hecho: solo lo que tiene una prueba que lo compara con el código C++ original.
 Un cambio de estado sin evidencia no sube el porcentaje.
@@ -12,7 +12,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 | Área | Peso | Avance |
 | --- | ---: | ---: |
 | Núcleo: contexto, IO, ventanas, identificadores, layout | 59 | 76 % |
-| Listas de dibujo y primitivas | 17 | 88 % |
+| Listas de dibujo y primitivas | 18 | 89 % |
 | Widgets | 29 | 79 % |
 | Fuentes y texto | 13 | 15 % |
 | Docking y viewports | 10 | 0 % |
@@ -72,6 +72,7 @@ Un cambio de estado sin evidencia no sube el porcentaje.
 - **AA: trazo cerrado con trazo interior (bordes)** — golden aa_border
 - **Estilo: colores, redondeos y bordes por defecto** — golden style_defaults
 - **Texto dibujado en la lista (geometría, sin UVs)** — golden text_draw (geometría; UVs omitidos por no ser reproducibles)
+- **Texto con CpuFineClip: glifos descartados fuera del recorte y quads y UVs recortados en el borde** — golden text_clip (5 recortes, 4279 bytes, con UVs)
 - **Botón: geometría, hover, estado activo y valor de retorno** — golden button
 - **Botón dibujado: relleno por estado, etiqueta y UVs** — golden button_draw
 - **Botón: reposo, hover y activo comparados** — golden button_states

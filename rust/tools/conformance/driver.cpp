@@ -836,6 +836,58 @@ static void DumpButtonDraw()
     ImGui::End();
     ImGui::EndFrame();
 }
+// text_clip: the same string under different cpu_fine_clip_rect values, which trim the quads and
+// their texture coordinates in software instead of leaving it to the GPU clip.
+static void DumpTextClip()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario text_clip\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[4] = { 'H', 'e', 'l', 'o' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    WriteGlyphFixture(font, bake_order, 4);
+
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground;
+    ImGui::Begin("W", NULL, flags);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImGuiContext& g = *GImGui;
+    const ImU32 col = IM_COL32(255, 255, 255, 255);
+    // No fine clip: the control, every glyph whole.
+    dl->AddText(g.Font, g.FontSize, ImVec2(68.0f, 70.0f), col, "Hello", NULL, 0.0f, NULL);
+    // Cut on both sides, through the middle of the first and last glyphs.
+    ImVec4 clip_x(70.0f, 0.0f, 96.0f, 720.0f);
+    dl->AddText(g.Font, g.FontSize, ImVec2(68.0f, 90.0f), col, "Hello", NULL, 0.0f, &clip_x);
+    // Cut on both sides vertically.
+    ImVec4 clip_y(0.0f, 112.0f, 1280.0f, 116.0f);
+    dl->AddText(g.Font, g.FontSize, ImVec2(68.0f, 110.0f), col, "Hello", NULL, 0.0f, &clip_y);
+    // Entirely below the text: the fast-forward consumes the line.
+    ImVec4 clip_below(0.0f, 200.0f, 1280.0f, 300.0f);
+    dl->AddText(g.Font, g.FontSize, ImVec2(68.0f, 130.0f), col, "Hello", NULL, 0.0f, &clip_below);
+    // Entirely to the left of the text.
+    ImVec4 clip_left(0.0f, 0.0f, 50.0f, 720.0f);
+    dl->AddText(g.Font, g.FontSize, ImVec2(100.0f, 150.0f), col, "Hello", NULL, 0.0f, &clip_left);
+    DumpDrawListBody(*dl);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
 // window_bg: a window background with no border.
 static void DumpWindowBg()
 {
@@ -3140,6 +3192,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "scene_window_button") == 0)
     {
         DumpSceneWindowButtonScenario();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "text_clip") == 0)
+    {
+        DumpTextClip();
         ImGui::DestroyContext();
         return 0;
     }

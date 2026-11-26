@@ -364,42 +364,117 @@ impl DrawList {
         col: ImU32,
         text: &str,
     ) {
+        self.add_text_in(font, size, pos, col, text, None, None);
+    }
+
+    /// `ImDrawList::AddText` with a `cpu_fine_clip_rect`: the same, and the cut glyphs also have
+    /// their texture coordinates trimmed.
+    pub fn add_text_clipped(
+        &mut self,
+        font: &crate::font::Font,
+        size: f32,
+        pos: Vec2,
+        col: ImU32,
+        text: &str,
+        clip: (Vec2, Vec2),
+    ) {
+        self.add_text_in(font, size, pos, col, text, None, Some(clip));
+    }
+
+    /// The body of `ImFont::RenderText`: `base_clip` is the rectangle the reference takes as an
+    /// argument (`window->ClipRect` when called through `ImDrawList::AddText`), and `fine_clip` is
+    /// the optional `cpu_fine_clip_rect`, which is intersected with it and also trims the texture
+    /// coordinates of the glyphs it cuts.
+    ///
+    /// A glyph whose quad falls outside the rectangle is dropped either way; one that straddles an
+    /// edge has its position *and its texture coordinates* trimmed only with a fine clip, so the
+    /// part outside does not bleed in.
+    ///
+    /// Single line only: the reference also handles `'\n'`, word wrap and the multi-line
+    /// fast-forward, none of which the port needs yet.
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_text_in(
+        &mut self,
+        font: &crate::font::Font,
+        size: f32,
+        pos: Vec2,
+        col: ImU32,
+        text: &str,
+        base_clip: Option<[f32; 4]>,
+        fine_clip: Option<(Vec2, Vec2)>,
+    ) {
         let scale = size / font.size;
-        let mut pen_x = pos.x;
+        // The effective clip: the rectangle the caller works with, narrowed by the fine clip.
+        let mut clip = base_clip.unwrap_or(self.current_clip);
+        if let Some((min, max)) = fine_clip {
+            clip[0] = clip[0].max(min.x);
+            clip[1] = clip[1].max(min.y);
+            clip[2] = clip[2].min(max.x);
+            clip[3] = clip[3].min(max.y);
+        }
+        let cpu_fine_clip = fine_clip.is_some();
+        // `IM_TRUNC(pos)`: text is snapped to whole pixels unless the list asks not to.
+        let mut x = pos.x.trunc();
+        let y = pos.y.trunc();
+        if y > clip[3] {
+            return;
+        }
+        // Fast-forward to the first visible line. The port draws one line, so this consumes it.
+        if y + size < clip[1] {
+            return;
+        }
         for ch in text.chars() {
             let Some(glyph) = font.glyph(ch) else {
                 continue;
             };
-            let x0 = pen_x + glyph.offset[0] * scale;
-            let y0 = pos.y + glyph.offset[1] * scale;
-            let x1 = pen_x + glyph.offset[2] * scale;
-            let y1 = pos.y + glyph.offset[3] * scale;
-            if x1 > x0 && y1 > y0 {
+            let char_width = glyph.advance_x * scale;
+            let mut x1 = x + glyph.offset[0] * scale;
+            let mut y1 = y + glyph.offset[1] * scale;
+            let mut x2 = x + glyph.offset[2] * scale;
+            let mut y2 = y + glyph.offset[3] * scale;
+            // A glyph with no area has nothing to draw, which is how the reference's `Visible` flag
+            // reports the space.
+            let visible = x2 > x1 && y2 > y1;
+            if visible && x1 <= clip[2] && x2 >= clip[0] {
+                let mut u1 = glyph.uv[0];
+                let mut v1 = glyph.uv[1];
+                let mut u2 = glyph.uv[2];
+                let mut v2 = glyph.uv[3];
+                if cpu_fine_clip {
+                    if x1 < clip[0] {
+                        u1 += (1.0 - (x2 - clip[0]) / (x2 - x1)) * (u2 - u1);
+                        x1 = clip[0];
+                    }
+                    if y1 < clip[1] {
+                        v1 += (1.0 - (y2 - clip[1]) / (y2 - y1)) * (v2 - v1);
+                        y1 = clip[1];
+                    }
+                    if x2 > clip[2] {
+                        u2 = u1 + ((clip[2] - x1) / (x2 - x1)) * (u2 - u1);
+                        x2 = clip[2];
+                    }
+                    if y2 > clip[3] {
+                        v2 = v1 + ((clip[3] - y1) / (y2 - y1)) * (v2 - v1);
+                        y2 = clip[3];
+                    }
+                    if y1 >= y2 {
+                        x += char_width;
+                        continue;
+                    }
+                }
                 self.prim_quad_uv(
-                    Vec2 { x: x0, y: y0 },
-                    Vec2 { x: x1, y: y0 },
                     Vec2 { x: x1, y: y1 },
-                    Vec2 { x: x0, y: y1 },
-                    Vec2 {
-                        x: glyph.uv[0],
-                        y: glyph.uv[1],
-                    },
-                    Vec2 {
-                        x: glyph.uv[2],
-                        y: glyph.uv[1],
-                    },
-                    Vec2 {
-                        x: glyph.uv[2],
-                        y: glyph.uv[3],
-                    },
-                    Vec2 {
-                        x: glyph.uv[0],
-                        y: glyph.uv[3],
-                    },
+                    Vec2 { x: x2, y: y1 },
+                    Vec2 { x: x2, y: y2 },
+                    Vec2 { x: x1, y: y2 },
+                    Vec2 { x: u1, y: v1 },
+                    Vec2 { x: u2, y: v1 },
+                    Vec2 { x: u2, y: v2 },
+                    Vec2 { x: u1, y: v2 },
                     col,
                 );
             }
-            pen_x += glyph.advance_x * scale;
+            x += char_width;
         }
     }
     /// `ImDrawList::AddConvexPolyFilled` with anti-aliasing, miter joins only (the branch a

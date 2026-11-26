@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **62 escenarios** más la **prueba negativa**.
+   que ejecuta **63 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,9 +46,9 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **69 PRs** fusionados.
-- **62 escenarios** con golden propio, todos en verde, más la prueba negativa.
-- **Reescritura: 62.5 %.** Proyecto (contando el arnés): **65.1 %**.
+- `master` limpio, **70 PRs** fusionados.
+- **63 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- **Reescritura: 62.8 %.** Proyecto (contando el arnés): **65.3 %**.
 - 21 tests unitarios en 6 binarios.
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
 
@@ -159,7 +159,7 @@ scroll interno. **Ya está medido con una sonda** (`InputText` de una línea, et
    y `IsKeyPressed`/`IsKeyReleased`/la repetición (`KeyRepeatDelay`/`KeyRepeatRate` con
    `CalcTypematicRepeatAmount`) están verificados en el golden `io_text_events`. Ojo: `KeyCtrl` sale
    **sólo** de `ModCtrl`, no de `LeftCtrl`; el golden lo demuestra.
-2. `add_text` con `CpuFineClip`: descartar quads fuera del rectángulo **sin** partir comandos.
+2. ~~`add_text` con `CpuFineClip`~~ **Hecho** (PR 72): `add_text_in` toma el recorte base y el `fine_clip`, descarta los quads fuera sin partir comandos y recorta posición **y UVs** en el borde; `text_clip` lo verifica con cinco recortes distintos.
 3. `InputTextState`: copia del buffer (`TextA`), `TextLen`, `Stb` (cursor, `select_start/end`),
    `Scroll`, `CursorAnim`, `CursorFollow`, y el manejo de teclas de `stb_textedit`
    (`ImStb::STB_TexteditState`).
@@ -198,7 +198,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 62 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 63 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```

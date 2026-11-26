@@ -54,7 +54,7 @@
     {
       "id": "draw",
       "title": "Listas de dibujo y primitivas",
-      "weight": 17,
+      "weight": 18,
       "infra": false,
       "items": [
         { "id": "layout_parity", "label": "Estructuras con el layout exacto de C++", "weight": 1, "done": true, "evidence": "draw_list::tests::layouts_match_reference" },
@@ -73,6 +73,7 @@
         { "id": "aa_curves", "label": "AA: círculos", "weight": 1, "done": false, "evidence": "" },
         { "id": "style_colors", "label": "Estilo: colores, redondeos y bordes por defecto", "weight": 1, "done": true, "evidence": "golden style_defaults" },
         { "id": "text_draw", "label": "Texto dibujado en la lista (geometría, sin UVs)", "weight": 1, "done": true, "evidence": "golden text_draw (geometría; UVs omitidos por no ser reproducibles)" },
+        { "id": "text_clip", "label": "Texto con CpuFineClip: glifos descartados fuera del recorte y quads y UVs recortados en el borde", "weight": 1, "done": true, "evidence": "golden text_clip (5 recortes, 4279 bytes, con UVs)" },
         { "id": "cmd_split", "label": "Cortes de comando y recorte por comando", "weight": 1, "done": false, "evidence": "" }
       ]
     },

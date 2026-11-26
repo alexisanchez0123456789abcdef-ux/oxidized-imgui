@@ -21,6 +21,7 @@ instead of against our own expectations:
 | Keyboard, text events | the character queue (`InputQueueCharacters`) keeps the code points of one frame in order, maps an astral one to U+FFFD exactly as the reference does, and is emptied at the end of the frame; a held key reports `DownDuration` and `DownDurationPrev`, releases once, and repeats after `KeyRepeatDelay` at `KeyRepeatRate`; `Key` is the whole `ImGuiKey` keyboard list, not a subset | `io_text_events` golden |
 | Text measurement | `CalcTextSize` over a pinned advance table (the atlas is **not** built: see `font.rs`) | `font_metrics` golden |
 | Text | glyph quads including UVs, from the pinned glyph table written by the reference run | `text_draw` golden + `tests/fixtures/text_draw.glyphs.txt` |
+| Text, CPU fine clip | `ImFont::RenderText`: glyphs outside the clip are dropped, and with a `cpu_fine_clip_rect` the straddling ones have their position **and UVs** trimmed; the effective rect is the current clip narrowed by the caller's, and one call can serve several clips | `text_clip` golden |
 | Button | item rect from text metrics, hover, active, release-inside result | `button` golden |
 | Button drawing | state colour fill plus the label with its atlas UVs | `button_draw` golden |
 | Button states | resting, hovered and held colours across four frames | `button_states` golden |
