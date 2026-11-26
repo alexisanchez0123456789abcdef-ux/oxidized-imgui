@@ -368,6 +368,8 @@ pub struct Context {
     input_text_state: Option<crate::input_text::InputTextState>,
     /// `SetNextItemWidth`: the width the next item asks for, consumed by the item that reads it.
     next_item_width: Option<f32>,
+    /// `ImGui::PushItemWidth` stack: the widths later items take, zero meaning the default.
+    item_width_stack: Vec<f32>,
     /// `g.HoveredIdTimer`: how long the border under the mouse has been hovered. The reference
     /// waits WINDOWS_RESIZE_FROM_EDGES_FEEDBACK_TIMER before it reports a border, so brushing past
     /// an edge on the way to a widget does not light it up.
@@ -464,6 +466,7 @@ impl Default for Context {
             menu_bar_clip_max_y: None,
             input_text_state: None,
             next_item_width: None,
+            item_width_stack: Vec::new(),
             last_popup_name: None,
             resize_grip_cols: [0; 2],
             resize_hover_timer: 0.0,
@@ -2994,12 +2997,29 @@ impl Context {
         self.next_item_width = Some(width);
     }
 
-    /// `ImGui::CalcItemWidth`: the width the next item takes when it does not ask for one. A window
-    /// with an explicit size gives 65 % of it, an auto-sized one sixteen font sizes.
+    /// `ImGui::CalcItemWidth`: the width the next item takes when it does not ask for one. The next
+    /// item's own width wins, then the one `PushItemWidth` left on the stack (zero meaning the
+    /// default), then the window's: 65 % of an explicitly sized window, sixteen font sizes otherwise.
+    /// A negative width is that much less than the content available from the cursor.
     fn calc_item_width(&mut self) -> f32 {
-        if let Some(width) = self.next_item_width.take() {
-            return width;
+        let width = match self.next_item_width.take() {
+            Some(width) => width,
+            None => match self.item_width_stack.last() {
+                Some(&width) if width != 0.0 => width,
+                _ => self.default_item_width(),
+            },
+        };
+        if width < 0.0 {
+            let window = self.window();
+            let region_max = window.content_origin.x + window.content_size.x;
+            return (region_max - window.cursor.x + width).max(1.0);
         }
+        width.trunc()
+    }
+
+    /// `window->DC.ItemWidthDefault`: 65 % of an explicitly sized window, sixteen font sizes when the
+    /// window sizes itself.
+    fn default_item_width(&self) -> f32 {
         let window = self.window();
         let resizable =
             window.size.x > 0.0 && !window.flags.contains(WindowFlags::ALWAYS_AUTO_RESIZE);
@@ -3008,6 +3028,17 @@ impl Context {
         } else {
             (self.font.size * 16.0).trunc()
         }
+    }
+
+    /// `ImGui::PushItemWidth`: the width later items take, remembered on a stack. Zero means the
+    /// window's default.
+    pub fn push_item_width(&mut self, width: f32) {
+        self.item_width_stack.push(width);
+    }
+
+    /// `ImGui::PopItemWidth`: back to the width before the matching `PushItemWidth`.
+    pub fn pop_item_width(&mut self) {
+        self.item_width_stack.pop();
     }
 
     /// The whole of `ItemHoverable` as far as the mouse is concerned: the mouse is inside the

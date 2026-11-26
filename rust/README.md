@@ -77,6 +77,7 @@ instead of against our own expectations:
 | Window close | clip starts below the title band; the empty command from the clip push is dropped and the pop adds one only after geometry | `window_bg`, `window_title` goldens |
 | Full scene | titled window with a button: background, band, border, title, fill, label and the three commands | `scene_window_button` golden |
 | Label, checkbox | text item rect; checkbox box from frame height plus inner spacing, toggling on release | `widgets_basic` golden |
+| Item width | `PushItemWidth` keeps a stack of widths that `CalcItemWidth` reads after the pending `SetNextItemWidth` and before the window default; zero means the default and a negative width is that much less than the content available from the cursor | `item_width` golden |
 | Item heights | `GetTextLineHeight` is the font size, the `WithSpacing` variants add `ItemSpacing.y`, and `GetFrameHeight` is `FontSize + FramePadding.y * 2` | `item_heights` golden |
 | Cursor by axis | `SetCursorPosX` and `SetCursorPosY` move one axis and leave the other where it was, which is how a custom layout nudges a single direction | `cursor_pos_xy` golden |
 | Cursor position | `GetCursorPos` reports the cursor relative to the window and `SetCursorPos` places it there without moving the line left edge, so the next item returns to the line start | `cursor_pos` golden |

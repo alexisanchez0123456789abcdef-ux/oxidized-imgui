@@ -5162,6 +5162,69 @@ static void DumpCursorPosXY()
     }
 }
 
+// item_width: PushItemWidth fixes the width the items take and PopItemWidth returns to the window
+// default, which LabelText shows in its value box.
+static void DumpItemWidth()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario item_width\n");
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[3] = { 'N', '4', '2' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    WriteGlyphFixture(font, bake_order, 3);
+
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
+    for (int frame = 0; frame < 2; frame++)
+    {
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+        ImGui::Begin("W", NULL, flags);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        const ImVec2 wpos = ImGui::GetWindowPos();
+        ImGui::LabelText("N", "42");
+        ImVec2 mn = PSub(ImGui::GetItemRectMin(), wpos);
+        ImVec2 mx = PSub(ImGui::GetItemRectMax(), wpos);
+        printf("frame %d default item %08x %08x %08x %08x\n", frame, Bits(mn.x), Bits(mn.y),
+            Bits(mx.x), Bits(mx.y));
+        ImGui::PushItemWidth(100.0f);
+        ImGui::LabelText("N", "42");
+        mn = PSub(ImGui::GetItemRectMin(), wpos);
+        mx = PSub(ImGui::GetItemRectMax(), wpos);
+        printf("frame %d pushed item %08x %08x %08x %08x\n", frame, Bits(mn.x), Bits(mn.y),
+            Bits(mx.x), Bits(mx.y));
+        ImGui::PushItemWidth(0.0f);
+        ImGui::LabelText("N", "42");
+        mn = PSub(ImGui::GetItemRectMin(), wpos);
+        mx = PSub(ImGui::GetItemRectMax(), wpos);
+        printf("frame %d zero item %08x %08x %08x %08x\n", frame, Bits(mn.x), Bits(mn.y),
+            Bits(mx.x), Bits(mx.y));
+        ImGui::PopItemWidth();
+        ImGui::PopItemWidth();
+        ImGui::LabelText("N", "42");
+        mn = PSub(ImGui::GetItemRectMin(), wpos);
+        mx = PSub(ImGui::GetItemRectMax(), wpos);
+        printf("frame %d popped item %08x %08x %08x %08x\n", frame, Bits(mn.x), Bits(mn.y),
+            Bits(mx.x), Bits(mx.y));
+        ImGui::End();
+        if (frame == 1)
+            DumpDrawListBody(*dl);
+        ImGui::EndFrame();
+    }
+}
+
 // windows_move: dragging a window by its title bar and by its body, and the clamp that keeps it
 // reachable when it is dragged off the display. Only the positions are dumped: the geometry of a
 // window is what windows_order already covers.
@@ -7050,6 +7113,13 @@ int main(int argc, char** argv)
         return 0;
     }
 
+
+    if (strcmp(name, "item_width") == 0)
+    {
+        DumpItemWidth();
+        ImGui::DestroyContext();
+        return 0;
+    }
 
     if (strcmp(name, "cursor_pos_xy") == 0)
     {
