@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **131 escenarios** más la **prueba negativa**.
+   que ejecuta **132 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **148 PRs** fusionados (el número sale de la búsqueda de la API: `is:pr is:merged`).
-- **131 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **149 PRs** fusionados (el número sale de la búsqueda de la API: `is:pr is:merged`).
+- **132 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 69.9 %.** Proyecto (contando el arnés): **71.8 %**.
 - 42 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
@@ -457,6 +457,15 @@ redondeo no pase desapercibido hasta el CI:
 - `color_u32_alpha(Text, 0.70)` da `0xB3FFFFFF` y no `0xB2`: es el redondeo por floats del reference.
 
 Los tests subieron de 39 a **42**.
+### Colores de estilo por ambito (peso 1): cerrada
+
+Golden `style_color`: tres botones, con `PushStyleColor(ImGuiCol_Button, rojo)` alrededor del de en
+medio. Medido: el relleno del boton central sale **0xFF0000FF** y los otros dos siguen en el color por
+defecto **0x66FA9642**; nada mas cambia en la lista.
+
+El port lo modela con una **pila de colores**: `push_style_color` guarda el valor anterior y escribe el
+nuevo en `style.colors`, `pop_style_color` restaura el guardado. Como todos los widgets leen el color
+por `style.color_u32`, el ambito funciona sin tocar ningun widget.
 ### Area de contenido disponible (peso 1): cerrada, y una correccion de modelo
 
 Golden `content_avail`: `GetContentRegionAvail` al empezar, tras un texto y tras `Indent(50)`. Medido:
@@ -877,7 +886,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 131 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 132 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
