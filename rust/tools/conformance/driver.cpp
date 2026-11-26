@@ -3925,6 +3925,63 @@ static void DumpWindowsFocus()
     DumpWindowOrderFrame(frame++, "idle_a_again");
 }
 
+// windows_collapse_api: `SetNextWindowCollapsed` collapses and expands a window without touching its
+// title bar arrow. A collapsed window draws only its bar and skips the items submitted into it.
+static void FrameCollapseApi(int collapsed_state)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    if (collapsed_state >= 0)
+        ImGui::SetNextWindowCollapsed(collapsed_state != 0);
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoScrollbar;
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("C", NULL, flags);
+    ImGui::Button("B");
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpWindowsCollapseApi()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario windows_collapse_api\n");
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[2] = { 'C', 'B' };
+    for (char ch : bake_order)
+        baked->FindGlyph((ImWchar)ch);
+
+    for (int i = 0; i < 6; i++)
+        FrameCollapseApi(-1);
+    // The collapse arrow is an anti-aliased stroke, so the fixture carries the line rows too.
+    ImGui::NewFrame();
+    ImGui::EndFrame();
+    WriteWindowIconsFixture(font, bake_order, 2);
+    int frame = 0;
+
+    FrameCollapseApi(-1);
+    DumpWindowOrderFrame(frame++, "expanded");
+    FrameCollapseApi(1);
+    DumpWindowOrderFrame(frame++, "collapse_api");
+    FrameCollapseApi(-1);
+    DumpWindowOrderFrame(frame++, "collapsed");
+    FrameCollapseApi(0);
+    DumpWindowOrderFrame(frame++, "expand_api");
+    FrameCollapseApi(-1);
+    DumpWindowOrderFrame(frame++, "expanded_again");
+}
+
 // windows_move: dragging a window by its title bar and by its body, and the clamp that keeps it
 // reachable when it is dragged off the display. Only the positions are dumped: the geometry of a
 // window is what windows_order already covers.
@@ -5992,6 +6049,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "windows_focus") == 0)
     {
         DumpWindowsFocus();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "windows_collapse_api") == 0)
+    {
+        DumpWindowsCollapseApi();
         ImGui::DestroyContext();
         return 0;
     }

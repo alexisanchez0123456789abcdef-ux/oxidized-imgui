@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **106 escenarios** más la **prueba negativa**.
+   que ejecuta **107 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **115 PRs** fusionados.
-- **106 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **116 PRs** fusionados.
+- **107 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 68.1 %.** Proyecto (contando el arnés): **70.3 %**.
 - 39 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
@@ -103,9 +103,9 @@ posición/tamaño/memoria, cursor y avance de ítems, ratón, tiempo, teclado (i
 caracteres y la repetición de una tecla mantenida), fondo, borde,
 barra de título, iconos y su interacción, arrastre de ventana, scroll (barra, arrastre,
 página, rueda, bloqueo de rueda), auto-ajuste de tamaño, tamaño mínimo, tiradores de
-redimensión (bordes, cursor, doble clic, autofit), orden de ventanas y foco por API
+redimensión (bordes, cursor, doble clic, autofit), orden de ventanas, foco por API
 (`windows_focus`: `SetNextWindowFocus` sube la ventana al frente y le da la barra activa en el mismo
-frame, sin clic), y todas las primitivas de dibujo y antialiasing, incluidos los círculos (`aa_circles`). Los recortes también
+frame, sin clic) y colapso por API (`windows_collapse_api`), y todas las primitivas de dibujo y antialiasing, incluidos los círculos (`aa_circles`). Los recortes también
 están cerrados: la pila de `PushClipRect`/`PopClipRect` con su intersección (`clip_stack`) y el
 corte de comandos de `_OnChangedClipRect` (`cmd_split`: el clip que no cambia no parte, el que
 cambia sí, y el push/pop sin geometría se fusiona con el comando anterior).
@@ -202,6 +202,21 @@ Cifras ya medidas que sirven de contrato (ventana de 400×300 en (40,40), paddin
   restar la posición de la ventana para compararlos.
 
 ## Lo cerrado, con su detalle medido
+
+### Colapso de ventana por API (peso 1): cerrada
+
+Golden `windows_collapse_api`: una ventana con título y un botón en el cuerpo, cinco frames que la
+colapsan y la expanden con `SetNextWindowCollapsed`.
+
+- `SetNextWindowCollapsed` deja `g.NextWindowData.CollapsedVal` y lo aplica el **mismo** `Begin`, no el
+  siguiente: el frame 1 ya se dibuja colapsado.
+- Colapsada, la ventana dibuja **sólo la barra de título** (con su flecha) y se salta los ítems: el
+  botón no se dibuja ni reporta pulsación (`SkipItems`). En el port, `button` ahora sale antes de
+  calcular nada si la ventana está colapsada.
+- La flecha de colapso es un **trazo AA** y muestrea la tabla de líneas: el fixture del escenario es
+  `WriteWindowIconsFixture` (glifos **y** filas de línea), no `WriteGlyphFixture`. Sin eso el port no
+  puede dibujar la flecha (es la trampa ya documentada arriba).
+- Medición: expandida 38 vértices; colapsada 26 (la barra más la flecha, sin fondo del cuerpo).
 
 ### Foco de ventana por API (peso 1): cerrada
 
@@ -524,7 +539,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 106 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 107 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```

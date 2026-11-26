@@ -302,6 +302,8 @@ pub struct Context {
     next_flags: Option<WindowFlags>,
     /// `SetNextWindowFocus` for the window about to start, which `Begin` applies as `FocusWindow`.
     next_focus: bool,
+    /// `SetNextWindowCollapsed`: the state `Begin` applies to the window it starts.
+    next_collapsed: Option<bool>,
     /// `g.Windows`, back to front: the order the lists are rendered in. It survives frames.
     display_order: Vec<String>,
     /// Names of the windows that were submitted on the previous frame (`WasActive`).
@@ -419,6 +421,7 @@ impl Default for Context {
             next_scroll: None,
             next_flags: None,
             next_focus: false,
+            next_collapsed: None,
             wheeling_window: None,
             wheeling_ref_mouse: Vec2::default(),
             wheeling_release_timer: 0.0,
@@ -683,6 +686,11 @@ impl Context {
     /// `ImGui::SetNextWindowFocus`: the next window `Begin` raises to the front and focuses.
     pub fn set_next_window_focus(&mut self) {
         self.next_focus = true;
+    }
+
+    /// `ImGui::SetNextWindowCollapsed`: the next window `Begin` starts collapsed or expanded.
+    pub fn set_next_window_collapsed(&mut self, collapsed: bool) {
+        self.next_collapsed = Some(collapsed);
     }
 
     /// The `ImGuiWindowFlags` of the next window, as `ImGui::Begin` takes them.
@@ -1106,6 +1114,11 @@ impl Context {
             collapsed = !collapsed;
         }
         want_collapse_toggle = false;
+        // `SetNextWindowCollapsed`: `Begin` applies the requested state to the window, which is the
+        // same field the title-bar arrow toggles.
+        if let Some(next_collapsed) = self.next_collapsed.take() {
+            collapsed = next_collapsed;
+        }
 
         let pad = self.style.window_padding;
         let title_height = if title.is_some() {
@@ -4332,6 +4345,16 @@ impl Context {
     }
     /// `ImGui::Button`: a framed label. Returns true on the frame the mouse is released inside.
     pub fn button(&mut self, label: &str) -> bool {
+        // `SkipItems`: a collapsed window lays nothing out, so an item submitted into it draws
+        // nothing and reports no press.
+        if self
+            .windows
+            .last()
+            .map(|window| window.collapsed)
+            .unwrap_or(false)
+        {
+            return false;
+        }
         let id = self.get_id(label);
         let padding = self.style.frame_padding;
         let text = self.font.calc_text_size(label, self.font.size);
