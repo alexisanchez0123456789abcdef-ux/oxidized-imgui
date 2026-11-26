@@ -110,6 +110,7 @@ pub const SCENARIOS: &[&str] = &[
     "label_text",
     "bullet_text",
     "separator_text_empty",
+    "spacing",
     "window_scroll",
     "window_scrollbar",
     "window_scrollbar_drag",
@@ -6259,6 +6260,70 @@ pub fn separator_text_empty_dump() -> String {
     out
 }
 
+/// The `spacing` scenario: `Spacing` is an empty item that closes the line and leaves one
+/// `ItemSpacing.y` gap, so the label after it starts a further line down.
+pub fn spacing_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2, WindowFlags};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/spacing.glyphs.txt"
+    );
+    let glyphs = std::fs::read_to_string(path).expect("spacing fixture");
+    let font = Font::from_pinned(&glyphs).expect("font fixture");
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario spacing\n");
+
+    for frame in 0..2 {
+        ctx.io_mut().delta_time = 0.1;
+        ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+        ctx.io_mut().mouse_down[0] = false;
+        ctx.begin_frame();
+        ctx.set_next_window_flags(
+            WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+        );
+        ctx.begin_window_ex(
+            "W",
+            Some(Vec2 { x: 60.0, y: 60.0 }),
+            Some(Vec2 { x: 300.0, y: 200.0 }),
+            true,
+        );
+        let window_pos = ctx.window().pos;
+        ctx.text("A");
+        ctx.spacing();
+        let after = ctx.cursor_screen_pos();
+        out.push_str(&format!(
+            "frame {frame} after spacing {:08x} {:08x}\n",
+            bits(after.x - window_pos.x),
+            bits(after.y - window_pos.y)
+        ));
+        ctx.text("B");
+        let end = ctx.cursor_screen_pos();
+        out.push_str(&format!(
+            "frame {frame} after cursor {:08x} {:08x}\n",
+            bits(end.x - window_pos.x),
+            bits(end.y - window_pos.y)
+        ));
+        ctx.end_window();
+        if frame == 1 {
+            let body = dump("spacing", ctx.draw_list());
+            for line in body.lines().skip(2) {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
+        ctx.end_frame();
+    }
+    out
+}
+
 /// The `windows_move` scenario: dragging one window by its title bar and by its body, and the clamp
 /// that keeps it reachable when it is dragged off the display.
 ///
@@ -8208,6 +8273,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "label_text" => Some(label_text_dump()),
         "bullet_text" => Some(bullet_text_dump()),
         "separator_text_empty" => Some(separator_text_empty_dump()),
+        "spacing" => Some(spacing_dump()),
         "window_scroll" => Some(window_scroll_dump()),
         "window_scrollbar" => Some(window_scrollbar_dump()),
         "window_scrollbar_drag" => Some(window_scrollbar_drag_dump()),

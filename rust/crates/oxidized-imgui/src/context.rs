@@ -3508,6 +3508,12 @@ impl Context {
         );
     }
 
+    /// `ImGui::Spacing`: an empty item of no size, which closes the current line and leaves the gap
+    /// of `ItemSpacing.y` below it.
+    pub fn spacing(&mut self) {
+        self.dummy(Vec2 { x: 0.0, y: 0.0 });
+    }
+
     /// `ImGui::Bullet`: a disc of radius `FontSize * 0.2` at the start of a line, with the next item
     /// kept on that same line, which is what makes it indent a list entry.
     pub fn bullet(&mut self) {
