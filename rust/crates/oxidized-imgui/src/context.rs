@@ -251,6 +251,11 @@ pub struct Context {
     table_id: Option<String>,
     /// `column->ContentMaxX*` from the last frame a table was built, by table identifier.
     table_content_max_x: std::collections::HashMap<String, Vec<f32>>,
+    /// `g.HoveredIdPreviousFrame` for the header cells: headers use `AllowOverlap`, so a header only
+    /// reports hover when it was the hovered item on the frame before.
+    header_hovered_last: Option<(String, usize)>,
+    /// The header the mouse is over on this frame, which becomes the previous frame's id at once.
+    header_hovered_next: Option<(String, usize)>,
     /// Per-window state between frames: position, size, scroll, content size and flags.
     memory: Vec<WindowMemory>,
     /// `SetNextWindowScroll` for the window about to start.
@@ -370,6 +375,8 @@ impl Default for Context {
             table: None,
             table_id: None,
             table_content_max_x: std::collections::HashMap::new(),
+            header_hovered_last: None,
+            header_hovered_next: None,
             table_host: None,
             table_indices: Vec::new(),
             table_bg_indices: Vec::new(),
@@ -1980,6 +1987,9 @@ impl Context {
         // by the widgets of this frame, so the next one starts empty. Done first because the rest
         // of this function returns early.
         self.io.input_queue_characters.clear();
+        // `g.HoveredIdPreviousFrame = g.HoveredId`: the header the mouse is over now is the one the
+        // next frame can report as hovered.
+        self.header_hovered_last = self.header_hovered_next.take();
         // `WasActive` for the next frame's hover search.
         self.last_frame_windows = self
             .frame_lists
@@ -3264,7 +3274,7 @@ impl Context {
     ///
     /// Hover, click, sorting and the reorder drag are not ported: this only lays the label out.
     pub fn table_header(&mut self, label: &str) {
-        let (cell, row_min_height, row_padding_y) = {
+        let (cell, row_min_height, row_padding_y, column_n) = {
             let Some(table) = self.table.as_ref() else {
                 return;
             };
@@ -3276,6 +3286,7 @@ impl Context {
                 table.cell_rect(column_n),
                 table.row_min_height,
                 table.row_cell_padding_y,
+                column_n,
             )
         };
         // `FindRenderedTextEnd`: everything after "##" identifies the column but is not drawn.
@@ -3298,16 +3309,31 @@ impl Context {
                     .max(cell.0.y + label_height + self.style.cell_padding.y * 2.0),
             },
         );
-        // A header submitted outside a header row still paints its cell, or the row would look
-        // plain where `TableHeadersRow` painted the others.
+        // `TableHeader` hover: the header is an `AllowOverlap` item, so it only reports hover when it
+        // already was the hovered item on the frame before; the mouse over it latches the id for the
+        // next frame either way.
+        let key = self.table_id.clone().map(|id| (id, column_n));
+        let over = self.hovered_in(bb.0, bb.1);
+        if let (true, Some(key)) = (over, key.clone()) {
+            self.header_hovered_next = Some(key);
+        }
+        let hovered = over && key.is_some() && self.header_hovered_last == key;
+        // A hovered cell takes `HeaderHovered`; a header outside a header row still paints its cell,
+        // or the row would look plain where `TableHeadersRow` painted the others.
         let not_a_header_row = self
             .table
             .as_ref()
             .map(|table| table.row_flags & crate::tables::table_flags::ROW_HEADERS == 0)
             .unwrap_or(false);
-        if not_a_header_row {
-            let header_bg = self.style.table_header_bg;
-            self.table_set_cell_bg_color(header_bg);
+        let bg = if hovered {
+            Some(self.style.header_hovered)
+        } else if not_a_header_row {
+            Some(self.style.table_header_bg)
+        } else {
+            None
+        };
+        if let Some(bg) = bg {
+            self.table_set_cell_bg_color(bg);
         }
         let colour = self.style.color_u32(crate::style::Col::Text);
         self.draw_list

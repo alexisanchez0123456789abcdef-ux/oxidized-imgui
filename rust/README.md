@@ -102,6 +102,7 @@ instead of against our own expectations:
 | Table column flags | `TableGetColumnFlags` reports the flags the table derived at declaration: the width kind from the sizing policy, `NoResize` when the table is not resizable, `IndentEnable` for the first column against `IndentDisable` for the rest, and the `IsEnabled`/`IsVisible` status bits once the layout ran | `tables_column_flags` golden |
 | Table row bands after a header row | the header row does not advance the `RowBg` counter, so the first data row keeps `TableRowBg` and the second one takes `TableRowBgAlt` | `tables_rowbg_headers` golden |
 | Table `TableNextColumn` walking | the cell advances inside the row until the last column; the call after it starts a new row and opens its first cell, so five calls on a two-column table fill two rows and open a third | `tables_next_column` golden |
+| Table header hover | a header is an `AllowOverlap` item, so it only reports hover when it already was the hovered id on the previous frame: with the mouse resting on the cell the `HeaderHovered` fill (`0xCCFA9642`) appears on the third frame, over the row's `TableHeaderBg` band | `tables_header_hover` golden |
 
 The conformance driver is compiled with `/DIMGUI_DISABLE_SSE`: the reference's default `ImRsqrtPrecise` uses the SSE reciprocal-square-root estimate, whose last bits depend on the CPU model, which would make every AA golden machine-specific. Both sides take the exact `1/sqrt` path instead.
 
