@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **127 escenarios** más la **prueba negativa**.
+   que ejecuta **128 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **141 PRs** fusionados (el número sale de la búsqueda de la API: `is:pr is:merged`).
-- **127 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **142 PRs** fusionados (el número sale de la búsqueda de la API: `is:pr is:merged`).
+- **128 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 69.9 %.** Proyecto (contando el arnés): **71.8 %**.
 - 42 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
@@ -431,6 +431,16 @@ redondeo no pase desapercibido hasta el CI:
 - `color_u32_alpha(Text, 0.70)` da `0xB3FFFFFF` y no `0xB2`: es el redondeo por floats del reference.
 
 Los tests subieron de 39 a **42**.
+### Alturas de item (peso 1): cerrada
+
+Golden `item_heights`: las cuatro consultas de altura del reference, con los bits crudos del float. Medido:
+`GetTextLineHeight` = **13**, `GetTextLineHeightWithSpacing` = **17**, `GetFrameHeight` = **19** y
+`GetFrameHeightWithSpacing` = **23**, es decir font mas `ItemSpacing.y` (4) y font mas `FramePadding.y * 2`
+(6) respectivamente.
+
+El port los expone como `text_line_height`, `text_line_height_with_spacing`, `frame_height_pub` y
+`frame_height_with_spacing`; los dos ultimos reutilizan el `frame_height()` interno que ya usaban los
+widgets enmarcados.
 ### Fondo de ventana translúcido (peso 1): cerrada
 
 Golden `window_bg_alpha`: la misma ventana con y sin `SetNextWindowBgAlpha(0.5)`. Medido: el primer
@@ -805,7 +815,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 127 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 128 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```

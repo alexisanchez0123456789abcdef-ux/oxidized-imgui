@@ -5075,6 +5075,46 @@ static void DumpWindowBgAlpha()
     }
 }
 
+// item_heights: GetTextLineHeight, GetTextLineHeightWithSpacing, GetFrameHeight and
+// GetFrameHeightWithSpacing, printed as raw float bits.
+static void DumpItemHeights()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario item_heights\n");
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[1] = { 'A' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    WriteGlyphFixture(font, bake_order, 1);
+
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    ImGui::Begin("W", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse);
+    const float line = ImGui::GetTextLineHeight();
+    const float line_spacing = ImGui::GetTextLineHeightWithSpacing();
+    const float frame = ImGui::GetFrameHeight();
+    const float frame_spacing = ImGui::GetFrameHeightWithSpacing();
+    printf("text line %08x\n", Bits(line));
+    printf("text line with spacing %08x\n", Bits(line_spacing));
+    printf("frame %08x\n", Bits(frame));
+    printf("frame with spacing %08x\n", Bits(frame_spacing));
+    ImGui::Text("A");
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
 // windows_move: dragging a window by its title bar and by its body, and the clamp that keeps it
 // reachable when it is dragged off the display. Only the positions are dumped: the geometry of a
 // window is what windows_order already covers.
@@ -6963,6 +7003,13 @@ int main(int argc, char** argv)
         return 0;
     }
 
+
+    if (strcmp(name, "item_heights") == 0)
+    {
+        DumpItemHeights();
+        ImGui::DestroyContext();
+        return 0;
+    }
 
     if (strcmp(name, "window_bg_alpha") == 0)
     {

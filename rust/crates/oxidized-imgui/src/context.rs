@@ -3066,6 +3066,25 @@ impl Context {
         self.window().last_max
     }
 
+    /// `GetTextLineHeight`: one line of text, which is the font size.
+    pub fn text_line_height(&self) -> f32 {
+        self.font.size
+    }
+
+    /// `GetTextLineHeightWithSpacing`: the line plus `ItemSpacing.y`.
+    pub fn text_line_height_with_spacing(&self) -> f32 {
+        self.font.size + self.style.item_spacing.y
+    }
+
+    /// `GetFrameHeight`: `FontSize + FramePadding.y * 2`, the height of a framed widget.
+    pub fn frame_height_pub(&self) -> f32 {
+        self.frame_height()
+    }
+
+    /// `GetFrameHeightWithSpacing`: the frame plus `ItemSpacing.y`.
+    pub fn frame_height_with_spacing(&self) -> f32 {
+        self.frame_height() + self.style.item_spacing.y
+    }
     /// `ImGui::Dummy`: an item of a given size that advances the cursor.
     /// `ImGui::OpenPopup`: remember that a popup is open. Its window is created by `begin_popup`.
     /// `ImGui::BeginCombo`: the framed box with its arrow. Returns true while its popup is open, and
