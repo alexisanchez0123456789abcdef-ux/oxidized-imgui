@@ -105,6 +105,8 @@ pub struct Style {
     pub menu_bar_bg: u32,
     /// `ImGuiCol_TableHeaderBg`: the band behind a table's header row.
     pub table_header_bg: u32,
+    /// `ImGuiCol_HeaderHovered`: the fill of a header cell under the mouse.
+    pub header_hovered: u32,
     /// `ImGuiCol_TableRowBg`: the even rows of a `RowBg` table. Fully transparent by default.
     pub table_row_bg: u32,
     /// `ImGuiCol_TableRowBgAlt`: the odd rows of a `RowBg` table, white at 6 % alpha.
@@ -174,6 +176,7 @@ impl Default for Style {
             popup_bg: 0xF0242424,
             menu_bar_bg: 0xFF242424,
             table_header_bg: 0xFF4A_4747,
+            header_hovered: 0xCCFA_9642,
             table_row_bg: 0x0000_0000,
             table_row_bg_alt: 0x0FFF_FFFF,
             table_border_strong: 0xFF73_6666,
