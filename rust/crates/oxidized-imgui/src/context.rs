@@ -3390,6 +3390,14 @@ impl Context {
         self.table.as_ref().map(|t| t.columns.len()).unwrap_or(0)
     }
 
+    /// `ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0)`: the colour of the current row, which
+    /// the public call can set without the `RowBg` flag.
+    pub fn table_set_row_bg_color(&mut self, color: u32) {
+        if let Some(table) = self.table.as_mut() {
+            table.row_bg0 = Some(color);
+        }
+    }
+
     /// `ImGui::TableGetHoveredColumn`: the column under the mouse, `-1` when the table is not
     /// hovered and the column count in the unused space after the last column.
     pub fn table_get_hovered_column(&self) -> i32 {

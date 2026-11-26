@@ -60,6 +60,7 @@ pub const SCENARIOS: &[&str] = &[
     "tables_header_active",
     "tables_hovered",
     "tables_stretch_prop",
+    "tables_row_bg_color",
     "text_draw",
     "button",
     "widgets_basic",
@@ -3106,6 +3107,55 @@ pub fn tables_stretch_prop_dump() -> String {
         ctx.end_window();
         ctx.end_frame();
     }
+    out
+}
+
+/// The `tables_row_bg_color` scenario: `TableSetBgColor(RowBg0, ...)` paints one row with an explicit
+/// colour, with no need for the `RowBg` flag; the next row goes back to having no background.
+pub fn tables_row_bg_color_dump() -> String {
+    use oxidized_imgui::{Context, Vec2, WindowFlags, column_flags};
+
+    let mut ctx = Context::new();
+    ctx.io_mut().delta_time = 0.1;
+    ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+    ctx.io_mut().mouse_down[0] = false;
+    ctx.begin_frame();
+    ctx.set_next_window_flags(
+        WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+    );
+    ctx.begin_window_ex(
+        "W",
+        Some(Vec2 { x: 60.0, y: 60.0 }),
+        Some(Vec2 { x: 300.0, y: 200.0 }),
+        false,
+    );
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario tables_row_bg_color\n");
+
+    let began = ctx.begin_table("T", 1, 0, Vec2::default());
+    out.push_str(&format!("table begin {}\n", i32::from(began)));
+    ctx.table_setup_column("A", column_flags::WIDTH_FIXED, 60.0);
+    for row in 0..2 {
+        ctx.table_next_row_min(20.0);
+        if row == 0 {
+            ctx.table_set_row_bg_color(0xFF33_6699);
+        }
+        ctx.table_next_column();
+        ctx.dummy(Vec2 { x: 10.0, y: 10.0 });
+    }
+    ctx.end_table();
+
+    let full = dump("tables_row_bg_color", ctx.draw_list());
+    for line in full.lines().skip(2) {
+        out.push_str(line);
+        out.push('\n');
+    }
+    ctx.end_window();
+    ctx.end_frame();
     out
 }
 
@@ -6171,6 +6221,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "tables_header_active" => Some(tables_header_active_dump()),
         "tables_hovered" => Some(tables_hovered_dump()),
         "tables_stretch_prop" => Some(tables_stretch_prop_dump()),
+        "tables_row_bg_color" => Some(tables_row_bg_color_dump()),
         "text_draw" => Some(text_draw_dump()),
         "button" => Some(button_dump()),
         "widgets_basic" => Some(widgets_basic_dump()),
