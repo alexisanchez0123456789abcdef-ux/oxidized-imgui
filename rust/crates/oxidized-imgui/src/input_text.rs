@@ -57,14 +57,6 @@ impl InputTextState {
         self.cursor_anim = -0.30;
     }
 
-    /// `CursorClamp`: a stale state cannot point past the text.
-    pub fn cursor_clamp(&mut self) {
-        let len = self.text.len();
-        self.cursor = self.cursor.min(len);
-        self.select_start = self.select_start.min(len);
-        self.select_end = self.select_end.min(len);
-    }
-
     /// `SelectAll`.
     pub fn select_all(&mut self) {
         self.select_start = 0;
@@ -92,6 +84,207 @@ impl InputTextState {
     /// last character".
     pub fn locate_coord(&self, x: f32, font: &Font, size: f32) -> usize {
         locate_coord_in(&self.text, x, font, size)
+    }
+}
+
+/// The cursor movements and edits the field models, named after the fake keys `stb_textedit` uses.
+/// Shift, arrows, Home/End, Delete and Backspace are the whole catalogue for a single-line field.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum EditKey {
+    Left,
+    Right,
+    Home,
+    End,
+    Delete,
+    Backspace,
+}
+
+impl InputTextState {
+    /// `stb_textedit_clamp`: the cursor and the selection stay inside the text.
+    pub fn cursor_clamp(&mut self) {
+        let len = self.text.len();
+        self.cursor = self.cursor.min(len);
+        self.select_start = self.select_start.min(len);
+        self.select_end = self.select_end.min(len);
+    }
+
+    /// `STB_TEXTEDIT_GETPREVCHARINDEX`: the previous character boundary, in bytes.
+    fn prev_index(&self, index: usize) -> usize {
+        let mut i = index.min(self.text.len());
+        while i > 0 {
+            i -= 1;
+            if self.text.is_char_boundary(i) {
+                return i;
+            }
+        }
+        0
+    }
+
+    /// `STB_TEXTEDIT_GETNEXTCHARINDEX`: the next character boundary, in bytes.
+    fn next_index(&self, index: usize) -> usize {
+        let len = self.text.len();
+        if index >= len {
+            return len;
+        }
+        let mut i = index + 1;
+        while i < len && !self.text.is_char_boundary(i) {
+            i += 1;
+        }
+        i
+    }
+
+    /// `stb_textedit_delete`: take `len` bytes out at `where`.
+    fn delete(&mut self, where_: usize, len: usize) {
+        self.text.replace_range(where_..where_ + len, "");
+    }
+
+    /// `stb_textedit_delete_selection`: remove what is selected, leaving the caret where it was.
+    pub fn delete_selection(&mut self) {
+        self.cursor_clamp();
+        if !self.has_selection() {
+            return;
+        }
+        if self.select_start < self.select_end {
+            self.delete(self.select_start, self.select_end - self.select_start);
+            self.select_end = self.select_start;
+            self.cursor = self.select_start;
+        } else {
+            self.delete(self.select_end, self.select_start - self.select_end);
+            self.select_start = self.select_end;
+            self.cursor = self.select_end;
+        }
+    }
+
+    /// `stb_textedit_prep_selection_at_cursor`: an arrow with Shift starts a selection here.
+    fn prep_selection_at_cursor(&mut self) {
+        if self.has_selection() {
+            self.cursor = self.select_end;
+        } else {
+            self.select_start = self.cursor;
+            self.select_end = self.cursor;
+        }
+    }
+
+    /// `stb_textedit_move_to_first`: collapse the selection to its start.
+    fn move_to_first(&mut self) {
+        if self.has_selection() {
+            if self.select_end < self.select_start {
+                core::mem::swap(&mut self.select_start, &mut self.select_end);
+            }
+            self.cursor = self.select_start;
+            self.select_end = self.select_start;
+        }
+    }
+
+    /// `stb_textedit_move_to_last`: collapse the selection to its end.
+    fn move_to_last(&mut self) {
+        if self.has_selection() {
+            if self.select_end < self.select_start {
+                core::mem::swap(&mut self.select_start, &mut self.select_end);
+            }
+            self.cursor_clamp();
+            self.cursor = self.select_end;
+            self.select_start = self.select_end;
+        }
+    }
+
+    /// `ImGuiInputTextState::OnCharPressed`: insert a character at the caret, replacing whatever is
+    /// selected.
+    pub fn on_char_pressed(&mut self, c: char) {
+        // A single-line field refuses the newline.
+        if c == '\n' {
+            return;
+        }
+        self.delete_selection();
+        self.text.insert(self.cursor, c);
+        self.cursor += c.len_utf8();
+        self.cursor_follow = true;
+        self.cursor_anim_reset();
+    }
+
+    /// `ImGuiInputTextState::OnKeyPressed` for [`EditKey`]: the movement and the two deletions.
+    ///
+    /// `shift` is `STB_TEXTEDIT_K_SHIFT`: with it the movement drags the selection instead of
+    /// collapsing it. Every key asks the view to follow the caret and restarts the blink.
+    pub fn on_key(&mut self, key: EditKey, shift: bool) {
+        match key {
+            EditKey::Left => {
+                if shift {
+                    self.cursor_clamp();
+                    self.prep_selection_at_cursor();
+                    if self.select_end > 0 {
+                        self.select_end = self.prev_index(self.select_end);
+                    }
+                    self.cursor = self.select_end;
+                } else if self.has_selection() {
+                    self.move_to_first();
+                } else if self.cursor > 0 {
+                    self.cursor = self.prev_index(self.cursor);
+                }
+            }
+            EditKey::Right => {
+                if shift {
+                    self.prep_selection_at_cursor();
+                    self.select_end = self.next_index(self.select_end);
+                    self.cursor_clamp();
+                    self.cursor = self.select_end;
+                } else {
+                    if self.has_selection() {
+                        self.move_to_last();
+                    } else {
+                        self.cursor = self.next_index(self.cursor);
+                    }
+                    self.cursor_clamp();
+                }
+            }
+            EditKey::Home => {
+                // `STB_TEXTEDIT_K_LINESTART`: on a single line this is the start of the text.
+                self.cursor_clamp();
+                if shift {
+                    self.prep_selection_at_cursor();
+                    self.cursor = 0;
+                    self.select_end = 0;
+                } else {
+                    self.move_to_first();
+                    self.cursor = 0;
+                }
+            }
+            EditKey::End => {
+                // `STB_TEXTEDIT_K_LINEEND`: on a single line this is the end of the text.
+                self.cursor_clamp();
+                let len = self.text.len();
+                if shift {
+                    self.prep_selection_at_cursor();
+                    self.cursor = len;
+                    self.select_end = len;
+                } else {
+                    self.move_to_last();
+                    self.cursor = len;
+                }
+            }
+            EditKey::Backspace => {
+                if self.has_selection() {
+                    self.delete_selection();
+                } else {
+                    self.cursor_clamp();
+                    if self.cursor > 0 {
+                        let prev = self.prev_index(self.cursor);
+                        self.delete(prev, self.cursor - prev);
+                        self.cursor = prev;
+                    }
+                }
+            }
+            EditKey::Delete => {
+                if self.has_selection() {
+                    self.delete_selection();
+                } else if self.cursor < self.text.len() {
+                    let next = self.next_index(self.cursor);
+                    self.delete(self.cursor, next - self.cursor);
+                }
+            }
+        }
+        self.cursor_follow = true;
+        self.cursor_anim_reset();
     }
 }
 

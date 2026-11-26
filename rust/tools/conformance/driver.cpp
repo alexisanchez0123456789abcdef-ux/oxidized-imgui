@@ -958,6 +958,116 @@ static void DumpInputText()
         FrameInputText(f, steps[f][0], steps[f][1], steps[f][2] != 0.0f);
 }
 
+// input_text_edit: the keyboard half of the field. Prints the edit state and the draw list per
+// frame while the test types, moves the caret, drags a selection and deletes.
+static void FrameInputTextEdit(int frame, float mx, float my, bool down, const float* key_events,
+    int key_count, const char* chars)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = down;
+    for (int i = 0; i < key_count; i++)
+        io.AddKeyEvent((ImGuiKey)(int)key_events[i * 2], key_events[i * 2 + 1] != 0.0f);
+    if (chars != NULL && chars[0] != 0)
+        io.AddInputCharactersUTF8(chars);
+
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground;
+    ImGui::Begin("W", NULL, flags);
+    static char buf[128] = "Hello world, this is a long line.";
+    ImGui::SetNextItemWidth(150.0f);
+    ImGui::InputText("##field", buf, IM_ARRAYSIZE(buf));
+    ImGuiWindow* w = ImGui::GetCurrentWindow();
+    ImGuiContext& g = *GImGui;
+    const ImGuiID id = w->GetID("##field");
+    ImGuiInputTextState* state = ImGui::GetInputTextState(id);
+    printf("frame %d active %d", frame, (int)(g.ActiveId == id));
+    if (state != NULL)
+        printf(" len %d sel %d scroll %08x anim %08x", state->TextLen, state->HasSelection() ? 1 : 0,
+            Bits(state->Scroll.x), Bits(state->CursorAnim));
+    printf("\n");
+    DumpDrawListBody(*w->DrawList);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpInputTextEdit()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario input_text_edit\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    // Every letter of "Hello world, this is a long line." plus the ones the test types.
+    const char bake_order[20] = { 'H', 'e', 'l', 'o', ' ', 'w', 'r', 'd', ',', '.',
+        't', 'h', 'i', 's', 'a', 'n', 'g', 'X', 'Y', 'Z' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    WriteGlyphFixture(font, bake_order, 20);
+
+    const float shift_right_down[4] = { (float)ImGuiMod_Shift, 1.0f, (float)ImGuiKey_RightArrow, 1.0f };
+    const float shift_right_up[4] = { (float)ImGuiMod_Shift, 0.0f, (float)ImGuiKey_RightArrow, 0.0f };
+    const float left_down[2] = { (float)ImGuiKey_LeftArrow, 1.0f };
+    const float left_up[2] = { (float)ImGuiKey_LeftArrow, 0.0f };
+    const float home_down[2] = { (float)ImGuiKey_Home, 1.0f };
+    const float home_up[2] = { (float)ImGuiKey_Home, 0.0f };
+    const float right_down[2] = { (float)ImGuiKey_RightArrow, 1.0f };
+    const float right_up[2] = { (float)ImGuiKey_RightArrow, 0.0f };
+    const float end_down[2] = { (float)ImGuiKey_End, 1.0f };
+    const float end_up[2] = { (float)ImGuiKey_End, 0.0f };
+    const float delete_down[2] = { (float)ImGuiKey_Delete, 1.0f };
+
+    // 1: a click activates the field with the caret after "Hell". 3: two characters are typed.
+    // 4..7: the caret walks left twice. 8..11: Home, then one to the right. 12..14: Shift+Right
+    // selects one character and typing replaces it. 15: End scrolls to the far end. 17: Home brings
+    // the scroll back. 19: Delete removes the first character. 20: a click elsewhere releases.
+    const float steps[21][3] = {
+        { 0.0f, 0.0f, 0.0f },       // 0 idle
+        { 100.0f, 75.0f, 1.0f },    // 1 activate
+        { 100.0f, 75.0f, 0.0f },    // 2 release
+        { 100.0f, 75.0f, 0.0f },    // 3 typing
+        { 100.0f, 75.0f, 0.0f },    // 4 left
+        { 100.0f, 75.0f, 0.0f },    // 5 left up
+        { 100.0f, 75.0f, 0.0f },    // 6 left
+        { 100.0f, 75.0f, 0.0f },    // 7 left up
+        { 100.0f, 75.0f, 0.0f },    // 8 home
+        { 100.0f, 75.0f, 0.0f },    // 9 home up
+        { 100.0f, 75.0f, 0.0f },    // 10 right
+        { 100.0f, 75.0f, 0.0f },    // 11 right up
+        { 100.0f, 75.0f, 0.0f },    // 12 shift+right
+        { 100.0f, 75.0f, 0.0f },    // 13 shift+right up
+        { 100.0f, 75.0f, 0.0f },    // 14 typing over the selection
+        { 100.0f, 75.0f, 0.0f },    // 15 end
+        { 100.0f, 75.0f, 0.0f },    // 16 end up
+        { 100.0f, 75.0f, 0.0f },    // 17 home
+        { 100.0f, 75.0f, 0.0f },    // 18 home up
+        { 100.0f, 75.0f, 0.0f },    // 19 delete
+        { 300.0f, 200.0f, 1.0f },   // 20 click elsewhere
+    };
+    const int key_counts[21] = { 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 0, 1, 1, 1, 1, 1, 0 };
+    const float* keys[21] = { NULL, NULL, NULL, NULL, left_down, left_up, left_down, left_up,
+        home_down, home_up, right_down, right_up, shift_right_down, shift_right_up, NULL, end_down,
+        end_up, home_down, home_up, delete_down, NULL };
+    const char* chars[21] = { NULL, NULL, NULL, "XY", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, "Z", NULL, NULL, NULL, NULL, NULL, NULL };
+
+    for (int f = 0; f < 21; f++)
+        FrameInputTextEdit(f, steps[f][0], steps[f][1], steps[f][2] != 0.0f, keys[f], key_counts[f],
+            chars[f]);
+}
+
 // window_bg: a window background with no border.
 static void DumpWindowBg()
 {
@@ -3262,6 +3372,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "scene_window_button") == 0)
     {
         DumpSceneWindowButtonScenario();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "input_text_edit") == 0)
+    {
+        DumpInputTextEdit();
         ImGui::DestroyContext();
         return 0;
     }
