@@ -61,6 +61,7 @@ pub const SCENARIOS: &[&str] = &[
     "tables_hovered",
     "tables_stretch_prop",
     "tables_row_bg_color",
+    "tables_column_bounds",
     "text_draw",
     "button",
     "widgets_basic",
@@ -3159,6 +3160,71 @@ pub fn tables_row_bg_color_dump() -> String {
     out
 }
 
+/// The `tables_column_bounds` scenario: `TableNextColumn` called before any row starts one, so the
+/// caller does not need `TableNextRow` at all.
+pub fn tables_column_bounds_dump() -> String {
+    use oxidized_imgui::{Context, Vec2, WindowFlags, column_flags};
+
+    let mut ctx = Context::new();
+    ctx.io_mut().delta_time = 0.1;
+    ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+    ctx.io_mut().mouse_down[0] = false;
+    ctx.begin_frame();
+    ctx.set_next_window_flags(
+        WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+    );
+    ctx.begin_window_ex(
+        "W",
+        Some(Vec2 { x: 60.0, y: 60.0 }),
+        Some(Vec2 { x: 300.0, y: 200.0 }),
+        false,
+    );
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario tables_column_bounds\n");
+
+    let window_pos = ctx.window().pos;
+    let local = |p: Vec2| Vec2 {
+        x: p.x - window_pos.x,
+        y: p.y - window_pos.y,
+    };
+    let began = ctx.begin_table("T", 2, 0, Vec2::default());
+    out.push_str(&format!("table begin {}\n", i32::from(began)));
+    ctx.table_setup_column("A", column_flags::WIDTH_FIXED, 60.0);
+    ctx.table_setup_column("B", column_flags::WIDTH_FIXED, 80.0);
+
+    let first = ctx.table_next_column();
+    let cursor = local(ctx.cursor_screen_pos());
+    out.push_str(&format!(
+        "next column outside a row {} row {} col {} cursor {:08x} {:08x}\n",
+        i32::from(first),
+        ctx.table_get_row_index(),
+        ctx.table_get_column_index(),
+        bits(cursor.x),
+        bits(cursor.y)
+    ));
+
+    ctx.end_table();
+    let end_cursor = local(ctx.cursor_screen_pos());
+    out.push_str(&format!(
+        "after cursor {:08x} {:08x}\n",
+        bits(end_cursor.x),
+        bits(end_cursor.y)
+    ));
+
+    let full = dump("tables_column_bounds", ctx.draw_list());
+    for line in full.lines().skip(2) {
+        out.push_str(line);
+        out.push('\n');
+    }
+    ctx.end_window();
+    ctx.end_frame();
+    out
+}
+
 /// The `text_draw` scenario: glyph quads for a short string.
 ///
 /// UVs are **omitted on purpose**: the atlas coordinates depend on the reference's internal
@@ -6222,6 +6288,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "tables_hovered" => Some(tables_hovered_dump()),
         "tables_stretch_prop" => Some(tables_stretch_prop_dump()),
         "tables_row_bg_color" => Some(tables_row_bg_color_dump()),
+        "tables_column_bounds" => Some(tables_column_bounds_dump()),
         "text_draw" => Some(text_draw_dump()),
         "button" => Some(button_dump()),
         "widgets_basic" => Some(widgets_basic_dump()),
