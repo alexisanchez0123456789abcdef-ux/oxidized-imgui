@@ -4196,6 +4196,8 @@ impl Context {
             state.cursor_anim_reset();
             // `state->TextToRevertTo`: what Escape goes back to, taken when the field takes over.
             state.revert_to = buffer.clone();
+            // `state->Scroll = ImVec2(0, 0)`: a field that takes the keyboard starts unscrolled.
+            state.scroll_x = 0.0;
             self.input_text_state = Some(state);
             self.active_id = Some(id);
             active = true;
@@ -4226,7 +4228,6 @@ impl Context {
         // The edit: `g.ActiveId == id && !g.ActiveIdIsJustActivated`. Characters first, then at most
         // one key, in the reference's priority order.
         let mut validated = false;
-        let mut revert_edit = false;
         // `render_cursor` is decided before the edit, and Escape turns it off for its own frame.
         let mut render_cursor = active;
         if active && !just_activated && !release {
@@ -4259,7 +4260,8 @@ impl Context {
             } else {
                 None
             };
-            let is_enter = io.is_key_pressed_repeat(Key::Enter) || io.is_key_pressed_repeat(Key::KeypadEnter);
+            let is_enter =
+                io.is_key_pressed_repeat(Key::Enter) || io.is_key_pressed_repeat(Key::KeypadEnter);
             let is_escape = io.is_key_pressed_repeat(Key::Escape);
             // `Shortcut(ImGuiMod_Ctrl | key)`: the key with Control as its only modifier.
             let ctrl_mods = io.key_ctrl && !io.key_shift && !io.key_alt && !io.key_super;
@@ -4292,7 +4294,6 @@ impl Context {
                     let revert = state.revert_to.clone();
                     state.replace_text(&revert);
                 }
-                revert_edit = true;
                 release = true;
                 render_cursor = false;
             } else if shortcut == Shortcut::SelectAll {
@@ -4336,10 +4337,10 @@ impl Context {
             }
         }
 
-        // `value_changed = (validated || clear_active_id || revert_edit) && text differs`: the edit
-        // is applied when the field is validated or loses the focus, never before.
+        // `ImGuiItemFlags_LiveEditOnInputText` is on by default, so the working copy is written to
+        // the caller's buffer as soon as it differs, and the widget reports the change that frame.
         let mut value_changed = false;
-        if active && (validated || release || revert_edit) {
+        if active {
             if let Some(state) = self.input_text_state.as_ref() {
                 if state.text != *buffer {
                     *buffer = state.text.clone();
@@ -4386,7 +4387,7 @@ impl Context {
         let offset_x = (font.calc_text_size(&text[..cursor], font.size).x + 0.999_99).trunc();
         // `if (render_cursor && state->CursorFollow)`: only the keyboard moves the scroll, in steps of
         // a quarter of the field's width, and it catches the caret up on the frame it moved.
-        if active && cursor_follow {
+        if render_cursor && cursor_follow {
             let inner_width = frame_size.x;
             let scroll_increment_x = inner_width * 0.25;
             let visible_width = inner_width - pad.x;
@@ -4400,6 +4401,7 @@ impl Context {
                 state.cursor_follow = false;
             }
         }
+        let scroll_x = if render_cursor { scroll_x } else { 0.0 };
         let text_x = draw_pos.x - scroll_x;
         // The selection, drawn before the text: `TextSelectedBg` from `draw_pos.y - 1` to
         // `draw_pos.y + 2 + FontSize`, as wide as the selected characters.

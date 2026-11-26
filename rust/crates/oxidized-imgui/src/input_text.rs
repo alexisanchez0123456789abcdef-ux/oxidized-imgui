@@ -213,8 +213,9 @@ impl InputTextState {
             self.select_all();
         }
         self.delete_selection();
+        // Only `OnKeyPressed`/`OnCharPressed` restart the blink; cut and paste just ask the view to
+        // follow the caret.
         self.cursor_follow = true;
-        self.cursor_anim_reset();
     }
 
     /// `stb_textedit_paste`: replace the selection with `text`.
@@ -223,7 +224,6 @@ impl InputTextState {
         self.text.insert_str(self.cursor, text);
         self.cursor += text.len();
         self.cursor_follow = true;
-        self.cursor_anim_reset();
     }
 
     /// `stb_textedit_replace`: the text becomes `text` and the caret and selection are clamped into

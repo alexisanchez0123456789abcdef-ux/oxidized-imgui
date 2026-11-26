@@ -1068,6 +1068,122 @@ static void DumpInputTextEdit()
             chars[f]);
 }
 
+// input_text_clipboard: Ctrl+A/C/X/V, Escape and Enter. Prints the edit state, the caller's buffer
+// (so the write-back on validate is visible) and the draw list per frame.
+static void FrameInputTextClipboard(int frame, float mx, float my, bool down, const float* key_events,
+    int key_count, const char* chars)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(mx, my);
+    io.MouseDown[0] = down;
+    for (int i = 0; i < key_count; i++)
+        io.AddKeyEvent((ImGuiKey)(int)key_events[i * 2], key_events[i * 2 + 1] != 0.0f);
+    if (chars != NULL && chars[0] != 0)
+        io.AddInputCharactersUTF8(chars);
+
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground;
+    ImGui::Begin("W", NULL, flags);
+    static char buf[128] = "Hello world";
+    ImGui::SetNextItemWidth(150.0f);
+    ImGui::InputText("##field", buf, IM_ARRAYSIZE(buf));
+    ImGuiWindow* w = ImGui::GetCurrentWindow();
+    ImGuiContext& g = *GImGui;
+    const ImGuiID id = w->GetID("##field");
+    ImGuiInputTextState* state = ImGui::GetInputTextState(id);
+    printf("frame %d active %d", frame, (int)(g.ActiveId == id));
+    if (state != NULL)
+        printf(" len %d sel %d scroll %08x anim %08x", state->TextLen, state->HasSelection() ? 1 : 0,
+            Bits(state->Scroll.x), Bits(state->CursorAnim));
+    printf(" buf \"%s\"\n", buf);
+    DumpDrawListBody(*w->DrawList);
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpInputTextClipboard()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario input_text_clipboard\n");
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    // Every letter of "Hello world" plus the ones the test types.
+    const char bake_order[12] = { 'H', 'e', 'l', 'o', ' ', 'w', 'r', 'd', 'W', 'X', 'Y', 'Z' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+    WriteGlyphFixture(font, bake_order, 12);
+
+    const float ctrl_a_down[4] = { (float)ImGuiMod_Ctrl, 1.0f, (float)ImGuiKey_A, 1.0f };
+    const float ctrl_a_up[4] = { (float)ImGuiMod_Ctrl, 0.0f, (float)ImGuiKey_A, 0.0f };
+    const float ctrl_c_down[4] = { (float)ImGuiMod_Ctrl, 1.0f, (float)ImGuiKey_C, 1.0f };
+    const float ctrl_c_up[4] = { (float)ImGuiMod_Ctrl, 0.0f, (float)ImGuiKey_C, 0.0f };
+    const float ctrl_v_down[4] = { (float)ImGuiMod_Ctrl, 1.0f, (float)ImGuiKey_V, 1.0f };
+    const float ctrl_v_up[4] = { (float)ImGuiMod_Ctrl, 0.0f, (float)ImGuiKey_V, 0.0f };
+    const float ctrl_x_down[4] = { (float)ImGuiMod_Ctrl, 1.0f, (float)ImGuiKey_X, 1.0f };
+    const float ctrl_x_up[4] = { (float)ImGuiMod_Ctrl, 0.0f, (float)ImGuiKey_X, 0.0f };
+    const float end_down[2] = { (float)ImGuiKey_End, 1.0f };
+    const float end_up[2] = { (float)ImGuiKey_End, 0.0f };
+    const float esc_down[2] = { (float)ImGuiKey_Escape, 1.0f };
+    const float esc_up[2] = { (float)ImGuiKey_Escape, 0.0f };
+    const float enter_down[2] = { (float)ImGuiKey_Enter, 1.0f };
+    const float enter_up[2] = { (float)ImGuiKey_Enter, 0.0f };
+
+    // 1: activate with the caret after "Hell". 3: select all. 5: copy. 7: End. 9: paste (the text
+    // doubles). 11: select all again. 13: cut (the text empties). 15: paste it back. 17: type a
+    // character. 18: Escape, which goes back to the value the field held when it was activated.
+    // 20: activate again and type. 23: Enter, which applies the edit and reports it.
+    const float steps[25][3] = {
+        { 0.0f, 0.0f, 0.0f },       // 0
+        { 100.0f, 75.0f, 1.0f },    // 1 activate
+        { 100.0f, 75.0f, 0.0f },    // 2
+        { 100.0f, 75.0f, 0.0f },    // 3 Ctrl+A
+        { 100.0f, 75.0f, 0.0f },    // 4
+        { 100.0f, 75.0f, 0.0f },    // 5 Ctrl+C
+        { 100.0f, 75.0f, 0.0f },    // 6
+        { 100.0f, 75.0f, 0.0f },    // 7 End
+        { 100.0f, 75.0f, 0.0f },    // 8
+        { 100.0f, 75.0f, 0.0f },    // 9 Ctrl+V
+        { 100.0f, 75.0f, 0.0f },    // 10
+        { 100.0f, 75.0f, 0.0f },    // 11 Ctrl+A
+        { 100.0f, 75.0f, 0.0f },    // 12
+        { 100.0f, 75.0f, 0.0f },    // 13 Ctrl+X
+        { 100.0f, 75.0f, 0.0f },    // 14
+        { 100.0f, 75.0f, 0.0f },    // 15 Ctrl+V
+        { 100.0f, 75.0f, 0.0f },    // 16
+        { 100.0f, 75.0f, 0.0f },    // 17 type Z
+        { 100.0f, 75.0f, 0.0f },    // 18 Escape
+        { 100.0f, 75.0f, 0.0f },    // 19
+        { 100.0f, 75.0f, 1.0f },    // 20 activate again
+        { 100.0f, 75.0f, 0.0f },    // 21
+        { 100.0f, 75.0f, 0.0f },    // 22 type W
+        { 100.0f, 75.0f, 0.0f },    // 23 Enter
+        { 100.0f, 75.0f, 0.0f },    // 24
+    };
+    const int key_counts[25] = { 0, 0, 0, 2, 2, 2, 2, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 0, 1, 1, 0, 0, 0, 1, 1 };
+    const float* keys[25] = { NULL, NULL, NULL, ctrl_a_down, ctrl_a_up, ctrl_c_down, ctrl_c_up,
+        end_down, end_up, ctrl_v_down, ctrl_v_up, ctrl_a_down, ctrl_a_up, ctrl_x_down, ctrl_x_up,
+        ctrl_v_down, ctrl_v_up, NULL, esc_down, esc_up, NULL, NULL, NULL, enter_down, enter_up };
+    const char* chars[25] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, NULL, "Z", NULL, NULL, NULL, NULL, "W", NULL, NULL };
+
+    for (int f = 0; f < 25; f++)
+        FrameInputTextClipboard(f, steps[f][0], steps[f][1], steps[f][2] != 0.0f, keys[f],
+            key_counts[f], chars[f]);
+}
+
 // window_bg: a window background with no border.
 static void DumpWindowBg()
 {
@@ -3372,6 +3488,13 @@ int main(int argc, char** argv)
     if (strcmp(name, "scene_window_button") == 0)
     {
         DumpSceneWindowButtonScenario();
+        ImGui::DestroyContext();
+        return 0;
+    }
+
+    if (strcmp(name, "input_text_clipboard") == 0)
+    {
+        DumpInputTextClipboard();
         ImGui::DestroyContext();
         return 0;
     }
