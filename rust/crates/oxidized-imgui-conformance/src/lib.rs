@@ -55,6 +55,7 @@ pub const SCENARIOS: &[&str] = &[
     "tables_header_inrow",
     "tables_column_flags",
     "tables_rowbg_headers",
+    "tables_next_column",
     "text_draw",
     "button",
     "widgets_basic",
@@ -2778,6 +2779,74 @@ pub fn tables_rowbg_headers_dump() -> String {
     ctx.end_table();
 
     let full = dump("tables_rowbg_headers", ctx.draw_list());
+    for line in full.lines().skip(2) {
+        out.push_str(line);
+        out.push('\n');
+    }
+    ctx.end_window();
+    ctx.end_frame();
+    out
+}
+
+/// The `tables_next_column` scenario: `TableNextColumn` walks the row and, past the last column,
+/// starts a new row by itself. Five calls on a two-column table fill two rows and open a third.
+pub fn tables_next_column_dump() -> String {
+    use oxidized_imgui::{Context, Vec2, WindowFlags, column_flags};
+
+    let mut ctx = Context::new();
+    ctx.io_mut().delta_time = 0.1;
+    ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+    ctx.io_mut().mouse_down[0] = false;
+    ctx.begin_frame();
+    ctx.set_next_window_flags(
+        WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+    );
+    ctx.begin_window_ex(
+        "W",
+        Some(Vec2 { x: 60.0, y: 60.0 }),
+        Some(Vec2 { x: 300.0, y: 200.0 }),
+        false,
+    );
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario tables_next_column\n");
+
+    let window_pos = ctx.window().pos;
+    let local = |p: Vec2| Vec2 {
+        x: p.x - window_pos.x,
+        y: p.y - window_pos.y,
+    };
+    let began = ctx.begin_table("T", 2, 0, Vec2::default());
+    out.push_str(&format!("table begin {}\n", i32::from(began)));
+    ctx.table_setup_column("A", column_flags::WIDTH_FIXED, 60.0);
+    ctx.table_setup_column("B", column_flags::WIDTH_FIXED, 80.0);
+
+    for n in 0..5 {
+        let visible = ctx.table_next_column();
+        let cursor = local(ctx.cursor_screen_pos());
+        out.push_str(&format!(
+            "cell {n} visible {} row {} col {} cursor {:08x} {:08x}\n",
+            i32::from(visible),
+            ctx.table_get_row_index(),
+            ctx.table_get_column_index(),
+            bits(cursor.x),
+            bits(cursor.y)
+        ));
+        ctx.dummy(Vec2 { x: 10.0, y: 10.0 });
+    }
+
+    ctx.end_table();
+    let end_cursor = local(ctx.cursor_screen_pos());
+    out.push_str(&format!(
+        "after cursor {:08x} {:08x}\n",
+        bits(end_cursor.x),
+        bits(end_cursor.y)
+    ));
+
+    let full = dump("tables_next_column", ctx.draw_list());
     for line in full.lines().skip(2) {
         out.push_str(line);
         out.push('\n');
@@ -5844,6 +5913,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "tables_header_inrow" => Some(tables_header_inrow_dump()),
         "tables_column_flags" => Some(tables_column_flags_dump()),
         "tables_rowbg_headers" => Some(tables_rowbg_headers_dump()),
+        "tables_next_column" => Some(tables_next_column_dump()),
         "text_draw" => Some(text_draw_dump()),
         "button" => Some(button_dump()),
         "widgets_basic" => Some(widgets_basic_dump()),
