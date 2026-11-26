@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **113 escenarios** más la **prueba negativa**.
+   que ejecuta **114 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,9 +46,9 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **122 PRs** fusionados.
-- **113 escenarios** con golden propio, todos en verde, más la prueba negativa.
-- **Reescritura: 68.6 %.** Proyecto (contando el arnés): **70.7 %**.
+- `master` limpio, **123 PRs** fusionados.
+- **114 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- **Reescritura: 68.8 %.** Proyecto (contando el arnés): **70.9 %**.
 - 39 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
@@ -113,7 +113,7 @@ cambia sí, y el push/pop sin geometría se fusiona con el comando anterior).
 Widgets: botón (geometría, dibujo, estados, borde), label y checkbox, slider,
 **separador horizontal** (`separator`: ancho de la región de trabajo, grosor `SeparatorSize` y avance
 de ítem) y **`SeparatorText`** (`separator_text`: etiqueta entre dos líneas con centro sesgado),
-**`BeginDisabled`/`EndDisabled`** (`disabled`),
+**`BeginDisabled`/`EndDisabled`** (`disabled`) y **`Bullet`** (`bullet`),
 **cabecera colapsable**, **nodos de árbol**, **región hija** (lista propia, recorte,
 borde en la lista del padre, scroll con rueda y arrastre), **Selectable**, **popup**,
 **clic en fila de popup**, **combo**, **tooltip**, **barra de menús**, **submenús
@@ -247,6 +247,17 @@ Golden `separator`: tres etiquetas con un separador entre ellas en una ventana d
 - El rectángulo del ítem es la línea (`(8,25)-(292,26)`), no la caja del texto: el golden lo imprime
   tras cada `Separator`.
 - La forma **vertical** (la barra de menús) tiene su propia sección más abajo.
+
+### Bullet (peso 1): cerrada
+
+Golden `bullet`: "A", `Bullet()` y "B" en la misma ventana de 300×200.
+
+- El ítem del bullet es **cuadrado con el tamaño de la fuente**: `(8,25)-(21,38)` (13×13), con la
+  altura de la línea acotada a `imax(imin(CurrLineSize.y, FontSize + FramePadding.y*2), FontSize)`.
+- El disco va en `bb.Min + (FramePadding.x + FontSize*0.5, line_height*0.5)` = (8+4+6.5, 25+6.5) con
+  radio `FontSize * 0.2` = 2.6 y **8 segmentos** (`RenderBullet`), que es el camino AA ya portado.
+- `SameLine(0, FramePadding.x * 2)` deja el cursor en `x = 21 + 8 = 29`, así que "B" sale sangrada en
+  la misma línea y la línea siguiente empieza en `y 42`.
 
 ### BeginDisabled / EndDisabled (peso 1): cerrada
 
@@ -639,7 +650,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 113 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 114 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```

@@ -80,7 +80,7 @@
     {
       "id": "widgets",
       "title": "Widgets",
-      "weight": 32,
+      "weight": 33,
       "infra": false,
       "items": [
         { "id": "w_button", "label": "Botón: geometría, hover, estado activo y valor de retorno", "weight": 2, "done": true, "evidence": "golden button" },
@@ -88,6 +88,7 @@
         { "id": "w_button_states", "label": "Botón: reposo, hover y activo comparados", "weight": 2, "done": true, "evidence": "golden button_states" },
         { "id": "w_button_border", "label": "Botón: borde de marco (FrameBorderSize)", "weight": 1, "done": true, "evidence": "golden button_border" },
         { "id": "w_label_checkbox", "label": "Label y checkbox: rectángulo y alternancia", "weight": 1, "done": true, "evidence": "golden widgets_basic" },
+        { "id": "w_bullet", "label": "Bullet: disco AA de FontSize*0.2, ítem cuadrado con el tamaño de la fuente y SameLine que sangra la entrada", "weight": 1, "done": true, "evidence": "golden bullet (ítem, cursor tras el bullet y el texto en la misma línea, y lista completa)" },
         { "id": "w_disabled", "label": "BeginDisabled/EndDisabled: Style::Alpha por DisabledAlpha (0.6) en todos los colores y ítems que no hoveran ni pulsan", "weight": 1, "done": true, "evidence": "golden disabled (4 frames: reposo, pulsación y suelta sobre el botón deshabilitado, y hover sobre el siguiente, con los valores de retorno)" },
         { "id": "w_separator", "label": "Separador: horizontal en layout vertical, vertical en la barra de menús, y SeparatorText con etiqueta entre dos líneas", "weight": 1, "done": true, "evidence": "goldens separator (ítem, cursor y lista), separator_text (ítem, cursor y líneas con centro sesgado) y menu_bar_separator (la forma vertical: alto de la línea de la barra)" },
         { "id": "w_slider", "label": "Slider: región de agarre, arrastre y redondeo", "weight": 3, "done": true, "evidence": "golden slider_basic" },
