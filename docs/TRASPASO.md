@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **66 escenarios** más la **prueba negativa**.
+   que ejecuta **67 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,9 +46,9 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **73 PRs** fusionados.
-- **66 escenarios** con golden propio, todos en verde, más la prueba negativa.
-- **Reescritura: 65.2 %.** Proyecto (contando el arnés): **67.6 %**.
+- `master` limpio, **74 PRs** fusionados.
+- **67 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- **Reescritura: 65.9 %.** Proyecto (contando el arnés): **68.2 %**.
 - 30 tests unitarios en 6 binarios.
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
 
@@ -163,7 +163,7 @@ scroll interno. **Ya está medido con una sonda** (`InputText` de una línea, et
 3. ~~`InputTextState` y el widget, mitad de ratón~~ **Hecho** (PR 73): `InputTextState` con la copia del buffer, cursor, selección, `Scroll`, `CursorAnim` y `CursorFollow`; el campo dibuja marco, texto recortado al marco, cursor y se activa/libera con el ratón (`input_text`, 10 frames). Queda el teclado.
    `Scroll`, `CursorAnim`, `CursorFollow`, y el manejo de teclas de `stb_textedit`
    (`ImStb::STB_TexteditState`).
-4. ~~El widget~~ **Hecho** (PR 74): teclado (escribir, flechas, Home/End, Delete/Backspace), selección con Shift y su resalte, y el scroll horizontal que sólo mueve el teclado (`input_text_edit`, 21 frames). ~~Queda el portapapeles y Enter/Escape~~ **Hecho** (PR 75). Queda la selección con el ratón (arrastre y doble clic por palabra) y el deshacer.
+4. ~~El widget~~ **Hecho** (PR 74): teclado (escribir, flechas, Home/End, Delete/Backspace), selección con Shift y su resalte, y el scroll horizontal que sólo mueve el teclado (`input_text_edit`, 21 frames). ~~Queda el portapapeles y Enter/Escape~~ **Hecho** (PR 75). ~~Queda la selección con el ratón y el deshacer~~ **Hecho** (PR 76): arrastre, doble clic por palabra y la pila de deshacer/rehacer completa. La entrada de texto queda cerrada.
 
 Quedan fuera de este primer corte: multilínea, `Password`, `Hint`, `ReadOnly`, callbacks y
 portapapeles.
@@ -198,7 +198,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 66 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 67 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
