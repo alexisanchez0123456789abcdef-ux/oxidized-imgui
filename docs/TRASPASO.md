@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **72 escenarios** más la **prueba negativa**.
+   que ejecuta **73 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **79 PRs** fusionados.
-- **72 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **80 PRs** fusionados.
+- **73 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 68.1 %.** Proyecto (contando el arnés): **70.3 %**.
 - 32 tests unitarios en 6 binarios.
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
@@ -106,7 +106,8 @@ borde en la lista del padre, scroll con rueda y arrastre), **Selectable**, **pop
 desplegables** (ventana hija, columnas de menú, filas con etiqueta y atajo) y el
 **primer corte de las tablas** (`tables_basic`: columnas fijas y filas que crecen con su
 contenido; `tables_headers`: la fila de cabecera con su banda y sus nombres, contada por
-`TableGetRowIndex`; `tables_rowbg`: las bandas alternas de `RowBg`, que saltan la cabecera).
+`TableGetRowIndex`; `tables_rowbg`: las bandas alternas de `RowBg`, que saltan la cabecera;
+`tables_cellbg`: el fondo de celda de `TableSetBgColor`, pintado al cerrar la fila).
 
 La tabla completa, con el nombre del golden de cada fila, está en `rust/README.md`.
 El detalle por pieza y su peso, en `docs/progress.json`.
@@ -130,7 +131,7 @@ Están hechos el primer corte (`tables_basic`: `BeginTable`, `TableSetupColumn`,
 - **Reordenar, congelar y el scroll propio de la tabla** (la tabla con `ScrollX`/`ScrollY` crea una
   ventana hija, con todo lo que eso arrastra).
 - Hover y clic de la cabecera (resalte `HeaderHovered`/`HeaderActive`, ordenar y arrastrar para
-  reordenar), `TableGetHoveredColumn`/`Row` y `TableSetBgColor` de celda.
+  reordenar) y `TableGetHoveredColumn`/`Row`.
 
 Cifras ya medidas que sirven de contrato (ventana de 400×300 en (40,40), padding 8, fuente 13 px):
 
@@ -308,7 +309,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 72 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 73 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```

@@ -41,6 +41,7 @@ pub const SCENARIOS: &[&str] = &[
     "tables_basic",
     "tables_headers",
     "tables_rowbg",
+    "tables_cellbg",
     "text_draw",
     "button",
     "widgets_basic",
@@ -1575,6 +1576,103 @@ pub fn tables_rowbg_dump() -> String {
     ));
 
     let full = dump("tables_rowbg", ctx.draw_list());
+    for line in full.lines().skip(2) {
+        out.push_str(line);
+        out.push('\n');
+    }
+    ctx.end_window();
+    ctx.end_frame();
+    out
+}
+
+/// The `tables_cellbg` scenario: `TableSetBgColor` for the background of two cells of the first row.
+///
+/// The fills are collected while the cells are submitted and painted when the row closes, into the
+/// background channel, each clipped to its own column.
+pub fn tables_cellbg_dump() -> String {
+    use oxidized_imgui::{Context, Font, Vec2, WindowFlags, column_flags};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/tables_cellbg.glyphs.txt"
+    );
+    let glyphs = std::fs::read_to_string(path).expect("glyph fixture");
+    let font = Font::from_pinned(&glyphs).expect("glyph fixture");
+
+    let mut ctx = Context::new();
+    ctx.set_font_for_drawing(font);
+    ctx.io_mut().delta_time = 0.1;
+    ctx.io_mut().mouse_pos = Some(Vec2 { x: 0.0, y: 0.0 });
+    ctx.io_mut().mouse_down[0] = false;
+    ctx.begin_frame();
+    ctx.set_next_window_flags(
+        WindowFlags::NO_MOVE | WindowFlags::NO_SCROLLBAR | WindowFlags::NO_RESIZE,
+    );
+    ctx.begin_window_ex(
+        "W",
+        Some(Vec2 { x: 60.0, y: 60.0 }),
+        Some(Vec2 { x: 300.0, y: 200.0 }),
+        false,
+    );
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "header imgui {IMGUI_VERSION} {IMGUI_VERSION_NUM}\n"
+    ));
+    out.push_str("scenario tables_cellbg\n");
+
+    let window_pos = ctx.window().pos;
+    let local = |p: Vec2| Vec2 {
+        x: p.x - window_pos.x,
+        y: p.y - window_pos.y,
+    };
+    let began = ctx.begin_table("T", 3, 0, Vec2::default());
+    out.push_str(&format!("table begin {}\n", i32::from(began)));
+    ctx.table_setup_column("A", column_flags::WIDTH_FIXED, 60.0);
+    ctx.table_setup_column("B", column_flags::WIDTH_FIXED, 80.0);
+    ctx.table_setup_column("C", column_flags::WIDTH_FIXED, 100.0);
+
+    for row in 0..2 {
+        ctx.table_next_row();
+        for col in 0..3 {
+            let visible = ctx.table_next_column();
+            if row == 0 && col == 0 {
+                ctx.table_set_cell_bg_color(0xFF28_28C8);
+            }
+            if row == 0 && col == 2 {
+                ctx.table_set_cell_bg_color(0xFF28_C828);
+            }
+            let cursor = local(ctx.cursor_screen_pos());
+            out.push_str(&format!(
+                "cell {row} {col} visible {} cursor {:08x} {:08x} rowindex {} colindex {}\n",
+                i32::from(visible),
+                bits(cursor.x),
+                bits(cursor.y),
+                ctx.table_get_row_index(),
+                ctx.table_get_column_index()
+            ));
+            ctx.text(&format!("A{row}{col}"));
+            let min = local(ctx.item_rect_min());
+            let max = local(ctx.item_rect_max());
+            out.push_str(&format!(
+                "cell {row} {col} item {:08x} {:08x} {:08x} {:08x}\n",
+                bits(min.x),
+                bits(min.y),
+                bits(max.x),
+                bits(max.y)
+            ));
+        }
+    }
+
+    ctx.end_table();
+    let end_cursor = local(ctx.cursor_screen_pos());
+    out.push_str(&format!(
+        "after cursor {:08x} {:08x}\n",
+        bits(end_cursor.x),
+        bits(end_cursor.y)
+    ));
+
+    let full = dump("tables_cellbg", ctx.draw_list());
     for line in full.lines().skip(2) {
         out.push_str(line);
         out.push('\n');
@@ -4627,6 +4725,7 @@ pub fn dump_for(name: &str) -> Option<String> {
         "tables_basic" => Some(tables_basic_dump()),
         "tables_headers" => Some(tables_headers_dump()),
         "tables_rowbg" => Some(tables_rowbg_dump()),
+        "tables_cellbg" => Some(tables_cellbg_dump()),
         "text_draw" => Some(text_draw_dump()),
         "button" => Some(button_dump()),
         "widgets_basic" => Some(widgets_basic_dump()),

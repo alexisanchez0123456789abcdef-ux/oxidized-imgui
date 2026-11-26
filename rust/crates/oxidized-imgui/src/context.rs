@@ -3285,6 +3285,14 @@ impl Context {
         }
     }
 
+    /// `ImGui::TableSetBgColor` for the current cell: the fill is collected now and painted when the
+    /// row closes, because the row height is not known yet.
+    pub fn table_set_cell_bg_color(&mut self, color: u32) {
+        if let Some(table) = self.table.as_mut() {
+            table.set_cell_bg(color);
+        }
+    }
+
     /// `ImGui::EndTable`: closes the row, finishes the table's height and lays the whole table out
     /// as one item, which leaves the cursor below it.
     pub fn end_table(&mut self) {
@@ -3374,6 +3382,19 @@ impl Context {
             if color != 0 && min.y < max.y {
                 let start = self.draw_list.idx_buffer.len();
                 self.draw_list.add_rect_filled(min, max, color);
+                let tail = self.draw_list.idx_buffer.split_off(start);
+                if let Some(cmd) = self.draw_list.cmd_buffer.last_mut() {
+                    cmd.elem_count -= tail.len() as u32;
+                }
+                self.table_bg_indices.extend_from_slice(&tail);
+            }
+        }
+        // `TableEndRow` paints the cell backgrounds in submission order, in the same channel.
+        for (column, color) in table.row_cells.clone() {
+            let rect = table.cell_bg_rect(column);
+            if rect.0.y < rect.1.y {
+                let start = self.draw_list.idx_buffer.len();
+                self.draw_list.add_rect_filled(rect.0, rect.1, color);
                 let tail = self.draw_list.idx_buffer.split_off(start);
                 if let Some(cmd) = self.draw_list.cmd_buffer.last_mut() {
                     cmd.elem_count -= tail.len() as u32;
