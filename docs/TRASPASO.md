@@ -51,7 +51,7 @@ comparar.
   (`is:pr is:merged`). Si lees esto mucho despues, consultalo en vez de fiarte de la cifra.
 - **141 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 69.9 %.** Proyecto (contando el arnés): **71.8 %**.
-- 42 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
+- 43 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
 - La rama concreta está en el último commit de `master`; compruébala con `git log --oneline -1`.
 
@@ -521,6 +521,21 @@ reference (`cross_extent = FontSize * 0.5 * 0.7071 - 1`).
 Lo cubren los goldens `window_icons`, `window_icons_states` y `window_icons_drag` (hover, pulsado y
 arrastre sobre el aspa). Consecuencia: **no hay que "portar CloseButton"**; si alguna vez hace falta un aspa
 suelta, lo correcto es exponer un `button` con ese dibujo, no duplicar el de la ventana.
+### FrameRounding en el marco de un boton (peso 1): cerrada
+
+`RenderFrame` del reference usa el camino **antialiased** cuando `FrameRounding` es al menos medio pixel, y
+el `PrimRect` alineado a pixel cuando no. El port ya tenia `add_rect_filled_aa_rounded`; lo que faltaba era
+consultar el estilo, y ahora `button` lo hace.
+
+- **Prueba**: `frame_rounding_switches_the_button_frame_to_the_aa_path` mide los indices del marco cuadrado y
+  del redondeado en la misma ventana y exige que el redondeado necesite mas (los arcos de esquina). No afirma
+  un `== 6` porque la lista tambien lleva los glifos de la etiqueta: compara las dos formas, que es lo que la
+  prueba puede sostener.
+- El estilo por defecto tiene `FrameRounding = 0`, asi que **los 141 goldens no cambian** y la ruta nueva
+  queda inerte hasta que alguien suba el estilo (o use `push_style_var_f32(ScalarStyleVar::FrameRounding, n)`,
+  variante nueva de esta ronda).
+- Pendiente: un golden contra el reference para el marco redondeado; necesita un escenario de driver con
+  `PushStyleVar(ImGuiStyleVar_FrameRounding, 6)`, que es la mitad C++ que esta ronda no cubrio.
 ### Relleno AA (peso 2): cerrada
 
 Golden `rect_filled_aa`: un solo `AddRectFilled` de `(10.5,20.5)` a `(30.5,50.5)`. Medido y ahora
