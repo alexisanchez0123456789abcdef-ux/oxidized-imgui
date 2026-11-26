@@ -4845,6 +4845,70 @@ static void DumpInvisibleButton()
     }
 }
 
+// windows_set_collapsed: SetWindowCollapsed by name applies the state at the window's next Begin, the
+// remembered one, so the bar-only frame comes without touching the title bar arrow.
+static void FrameSetWindowCollapsed(int collapsed_state)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DeltaTime = 0.1f;
+    io.MousePos = ImVec2(0.0f, 0.0f);
+    io.MouseDown[0] = false;
+    ImGui::NewFrame();
+    if (collapsed_state >= 0)
+        ImGui::SetWindowCollapsed("C", collapsed_state != 0);
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoScrollbar;
+    ImGui::Begin("C", NULL, flags);
+    ImGui::Button("B");
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+static void DumpWindowsSetCollapsed()
+{
+    printf("header imgui %s %d\n", IMGUI_VERSION, IMGUI_VERSION_NUM);
+    printf("scenario windows_set_collapsed\n");
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.Fonts->Build() || io.Fonts->Fonts.Size == 0)
+    {
+        printf("font build failed\n");
+        return;
+    }
+    ImFont* font = io.Fonts->Fonts[0];
+    ImFontBaked* baked = font->GetFontBaked(13.0f);
+    const char bake_order[2] = { 'C', 'B' };
+    for (char c : bake_order)
+        baked->FindGlyph((ImWchar)c);
+
+    // The first frames place the window explicitly so both sides start from the same memory.
+    for (int i = 0; i < 6; i++)
+    {
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(60.0f, 60.0f));
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+        ImGui::Begin("C", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoScrollbar);
+        ImGui::Button("B");
+        ImGui::End();
+        ImGui::EndFrame();
+    }
+    ImGui::NewFrame();
+    ImGui::EndFrame();
+    WriteWindowIconsFixture(font, bake_order, 2);
+    int frame = 0;
+
+    FrameSetWindowCollapsed(-1);
+    DumpWindowOrderFrame(frame++, "expanded");
+    FrameSetWindowCollapsed(1);
+    DumpWindowOrderFrame(frame++, "collapse_api");
+    FrameSetWindowCollapsed(-1);
+    DumpWindowOrderFrame(frame++, "collapsed");
+    FrameSetWindowCollapsed(0);
+    DumpWindowOrderFrame(frame++, "expand_api");
+    FrameSetWindowCollapsed(-1);
+    DumpWindowOrderFrame(frame++, "expanded_again");
+}
+
 // windows_move: dragging a window by its title bar and by its body, and the clamp that keeps it
 // reachable when it is dragged off the display. Only the positions are dumped: the geometry of a
 // window is what windows_order already covers.
@@ -6733,6 +6797,13 @@ int main(int argc, char** argv)
         return 0;
     }
 
+
+    if (strcmp(name, "windows_set_collapsed") == 0)
+    {
+        DumpWindowsSetCollapsed();
+        ImGui::DestroyContext();
+        return 0;
+    }
 
     if (strcmp(name, "invisible_button") == 0)
     {

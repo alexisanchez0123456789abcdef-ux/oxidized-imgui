@@ -722,6 +722,14 @@ impl Context {
         self.next_collapsed = Some(collapsed);
     }
 
+    /// `ImGui::SetWindowCollapsed(name, collapsed)` without the condition: the window takes the
+    /// state at its next `Begin`, which reads the remembered collapsed flag.
+    pub fn set_window_collapsed(&mut self, name: &str, collapsed: bool) {
+        if let Some(memory) = WindowMemory::find_mut(&mut self.memory, name) {
+            memory.collapsed = collapsed;
+        }
+    }
+
     /// `ImGui::SetWindowSize(name, size, cond)` without the condition: the window resizes now, which
     /// the port keeps in the memory it reads at the next `Begin`. Only the positive form is modelled:
     /// the reference truncates the size, and a non-positive axis turns on auto-fit.

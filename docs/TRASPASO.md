@@ -33,7 +33,7 @@ comparar.
    ```powershell
    .\rust\tools\conformance\gen-golden.ps1
    ```
-   que ejecuta **123 escenarios** más la **prueba negativa**.
+   que ejecuta **124 escenarios** más la **prueba negativa**.
 5. Al terminar `gen-golden.ps1`, restaurar los fixtures (los reescribe el driver):
    ```powershell
    git checkout -- rust/crates/oxidized-imgui-conformance/tests/fixtures/
@@ -46,8 +46,8 @@ comparar.
 
 ## Estado al escribir esto
 
-- `master` limpio, **132 PRs** fusionados.
-- **123 escenarios** con golden propio, todos en verde, más la prueba negativa.
+- `master` limpio, **133 PRs** fusionados.
+- **124 escenarios** con golden propio, todos en verde, más la prueba negativa.
 - **Reescritura: 69.9 %.** Proyecto (contando el arnés): **71.8 %**.
 - 39 tests unitarios en 6 binarios (7 de ellos cubren la lógica pura de tablas: linealización de
   órdenes, direcciones disponibles, append con Shift, orden de display y estado persistido).
@@ -420,6 +420,17 @@ Golden `separator_text`: "A", `SeparatorText("S")` y "B" en la misma ventana de 
   dibuja **una sola línea** de extremo a extremo, con su propio golden (`separator_text_empty`):
   el ítem sigue midiendo `max(label + padding, border)` de alto, así que el cursor avanza igual.
 
+### Colapso de ventana por nombre (peso 1): cerrada
+
+Golden `windows_set_collapsed`: la misma ventana de `windows_collapse_api`, ahora con
+`SetWindowCollapsed("C", ...)` en vez de `SetNextWindowCollapsed`.
+
+- La diferencia es de **almacenamiento**: `SetNextWindowCollapsed` deja una petición para el próximo
+  `Begin`, y `SetWindowCollapsed` escribe directamente el estado recordado de la ventana. El port ya
+  lee esa memoria al empezar, así que el método es un `memory.collapsed = collapsed`.
+- Medido, igual que la variante de "siguiente ventana": 38 vértices expandida, 26 colapsada (barra +
+  flecha), y vuelve a 38; los ítems del cuerpo se siguen saltando.
+
 ### Colapso de ventana por API (peso 1): cerrada
 
 Golden `windows_collapse_api`: una ventana con título y un botón en el cuerpo, cinco frames que la
@@ -756,7 +767,7 @@ Fuentes y texto (15 %), docking y viewports (0 %), backends y ejemplos (0 %).
 
 ```powershell
 cd "D:\Espacio de trabajo\oxidized-imgui"
-.\rust\tools\conformance\gen-golden.ps1          # 123 escenarios + negativa
+.\rust\tools\conformance\gen-golden.ps1          # 124 escenarios + negativa
 pwsh -NoProfile -File .\rust\tools\progress\report.ps1 -Check   # ESTADO al día
 cd rust; cargo test; cargo clippy --all-targets -- -D warnings  # tests y lints
 ```
