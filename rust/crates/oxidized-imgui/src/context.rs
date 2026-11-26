@@ -228,6 +228,7 @@ pub struct Window {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ScalarStyleVar {
     Alpha,
+    FrameRounding,
     DisabledAlpha,
     FrameBorderSize,
     IndentSpacing,
@@ -3144,6 +3145,7 @@ impl Context {
     pub fn push_style_var_f32(&mut self, var: ScalarStyleVar, value: f32) {
         let slot = match var {
             ScalarStyleVar::Alpha => &mut self.style.alpha,
+            ScalarStyleVar::FrameRounding => &mut self.style.frame_rounding,
             ScalarStyleVar::DisabledAlpha => &mut self.style.disabled_alpha,
             ScalarStyleVar::FrameBorderSize => &mut self.style.frame_border_size,
             ScalarStyleVar::IndentSpacing => &mut self.style.indent_spacing,
@@ -3158,6 +3160,7 @@ impl Context {
         if let Some((var, previous)) = self.scalar_style_var_stack.pop() {
             let slot = match var {
                 ScalarStyleVar::Alpha => &mut self.style.alpha,
+                ScalarStyleVar::FrameRounding => &mut self.style.frame_rounding,
                 ScalarStyleVar::DisabledAlpha => &mut self.style.disabled_alpha,
                 ScalarStyleVar::FrameBorderSize => &mut self.style.frame_border_size,
                 ScalarStyleVar::IndentSpacing => &mut self.style.indent_spacing,
@@ -5062,7 +5065,18 @@ impl Context {
         } else {
             self.style.color_u32(crate::style::Col::Button)
         };
-        self.draw_list.prim_rect(min, max, frame_color);
+        // `RenderFrame`: a rounded frame takes the antialiased path, a square one the pixel-aligned
+        // `PrimRect`, which is why the default style (rounding 0) keeps the goldens unchanged.
+        if self.style.frame_rounding >= 0.5 {
+            self.draw_list.add_rect_filled_aa_rounded(
+                min,
+                max,
+                self.style.frame_rounding,
+                frame_color,
+            );
+        } else {
+            self.draw_list.prim_rect(min, max, frame_color);
+        }
         // A frame border, when the style asks for one, is the same aligned two-ring frame a window
         // border uses.
         if self.style.frame_border_size > 0.0 {
@@ -6823,5 +6837,44 @@ mod tests {
         assert_eq!(ctx.window().pos, Vec2 { x: 60.0, y: 60.0 });
         assert_eq!(ctx.window().size, Vec2 { x: 300.0, y: 200.0 });
         ctx.end_window();
+    }
+
+    /// `RenderFrame` takes the antialiased path when `FrameRounding` is at least half a pixel, and the
+    /// pixel-aligned `PrimRect` otherwise. The default style has rounding 0, which is why the goldens do
+    /// not move; this pins the routing that a rounded style would use.
+    #[test]
+    fn frame_rounding_switches_the_button_frame_to_the_aa_path() {
+        let mut ctx = Context::new();
+        ctx.begin_frame();
+        ctx.begin_window_ex(
+            "W",
+            Some(Vec2 { x: 0.0, y: 0.0 }),
+            Some(Vec2 { x: 200.0, y: 200.0 }),
+            true,
+        );
+        ctx.button("A");
+        let square = ctx.draw_list().idx_buffer.len();
+        ctx.end_window();
+        ctx.end_frame();
+
+        ctx.begin_frame();
+        ctx.begin_window_ex(
+            "W",
+            Some(Vec2 { x: 0.0, y: 0.0 }),
+            Some(Vec2 { x: 200.0, y: 200.0 }),
+            true,
+        );
+        ctx.push_style_var_f32(ScalarStyleVar::FrameRounding, 6.0);
+        ctx.button("A");
+        let rounded = ctx.draw_list().idx_buffer.len();
+        ctx.pop_style_var_f32();
+        ctx.end_window();
+        ctx.end_frame();
+
+        // The list also holds the label glyphs, so only the comparison between the two shapes matters.
+        assert!(
+            rounded > square,
+            "a rounded frame needs the corner arcs: {rounded} vs {square}"
+        );
     }
 }
